@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>ENOENT: no such file or directory – Node.js Fix</title>
+  <meta name="description" content="Node.js throws ENOENT: no such file or directory when a file system operation targets a path that does not exist. Learn every cause and how to fix it." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ENOENT/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="ENOENT: no such file or directory – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws ENOENT: no such file or directory when a file system operation targets a path that does not exist. Learn every cause and how to fix it." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ENOENT/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "ENOENT: no such file or directory – Node.js Fix",
+    "description": "Node.js throws ENOENT: no such file or directory when a file system operation targets a path that does not exist.",
+    "url": "https://nodejs-errors.dev/ENOENT/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-09",
+    "dateModified": "2026-05-09"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ENOENT in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ENOENT stands for 'Error NO ENTry' — a POSIX error code meaning the file or directory named in the path does not exist. Node.js surfaces it as 'Error: ENOENT: no such file or directory' whenever a file system operation (readFile, writeFile, stat, unlink, readdir, etc.) targets a path that cannot be found."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What causes ENOENT: no such file or directory?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Common causes: (1) the file or directory does not exist at that path; (2) a typo in the path string; (3) wrong working directory — the path is correct relative to a different directory; (4) an intermediate directory in the path is missing; (5) async race condition — the file has not been created yet when the read runs; (6) case-sensitivity mismatch on Linux."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ENOENT: no such file or directory?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "1. Print the full resolved path with path.resolve() and verify it exists. 2. Check process.cwd() to confirm the working directory. 3. Fix any typos in the path. 4. Create missing directories with fs.mkdirSync(dir, { recursive: true }). 5. Guard file reads with fs.existsSync() or a try/catch block."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I create a directory if it does not exist in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Use fs.mkdirSync(path, { recursive: true }) or fs.mkdir(path, { recursive: true }, callback). The recursive option creates all intermediate directories and does not throw if the directory already exists."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ENOENT", "item": "https://nodejs-errors.dev/ENOENT/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix ENOENT: no such file or directory in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Print the resolved path", "text": "Use console.log(path.resolve('./your/path')) to print the absolute path Node.js will look up and verify it exists." },
+      { "@type": "HowToStep", "position": 2, "name": "Check the working directory", "text": "Run console.log(process.cwd()) to confirm the directory Node.js is running from, as relative paths resolve from there." },
+      { "@type": "HowToStep", "position": 3, "name": "Fix typos in the path", "text": "Compare the resolved path character-by-character against the actual path on disk, including file extension and case." },
+      { "@type": "HowToStep", "position": 4, "name": "Create missing directories", "text": "Use fs.mkdirSync(dir, { recursive: true }) to create the directory and all intermediate directories before writing to it." },
+      { "@type": "HowToStep", "position": 5, "name": "Guard with existsSync or try/catch", "text": "Before reading, check if (fs.existsSync(filePath)) or wrap the fs call in a try/catch to handle the missing file gracefully." },
+      { "@type": "HowToStep", "position": 6, "name": "Fix case sensitivity on Linux", "text": "Linux filesystems are case-sensitive. Ensure the case of every directory and filename in the path exactly matches what is on disk." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ENOENT</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>ENOENT: no such file or directory</h1>
+  <span class="error-code">error code: <code>ENOENT</code></span>
+  <p>Complete reference — what it means, every cause, and how to fix it.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js throws <code>Error: ENOENT: no such file or directory</code> when a file system operation targets a path that does not exist. Fix it by verifying the path with <code>path.resolve()</code>, checking <code>process.cwd()</code>, or creating missing directories with <code>fs.mkdirSync(dir, { recursive: true })</code>.
+  </div>
+
+  <h2>What is ENOENT?</h2>
+  <p>
+    <strong>ENOENT</strong> stands for <em>Error NO ENTry</em> — a
+    <a href="https://nodejs.org/api/errors.html#common-system-errors" rel="noopener noreferrer">POSIX system error code</a>
+    meaning the named file or directory does not exist. Node.js surfaces it whenever a
+    file system operation — <code>readFile</code>, <code>writeFile</code>, <code>stat</code>,
+    <code>unlink</code>, <code>readdir</code>, <code>rename</code>, and others — cannot find the
+    path you provided.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error messages you will see:</strong><br>
+    <code>Error: ENOENT: no such file or directory, open '/project/config.json'</code><br>
+    <code>Error: ENOENT: no such file or directory, scandir '/project/uploads'</code><br>
+    <code>Error: ENOENT: no such file or directory, stat '/project/public/logo.png'</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>Error: ENOENT: no such file or directory, open '/project/config.json'
+    at Object.openSync (node:fs:596:3)
+    at Object.readFileSync (node:fs:464:35)
+    at Object.&lt;anonymous&gt; (/project/app.js:3:19) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/project/config.json'
+}</code></pre>
+
+  <p>
+    The error object includes three diagnostic fields:
+  </p>
+  <table>
+    <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>code</code></td><td><code>'ENOENT'</code> — the error type</td></tr>
+      <tr><td><code>syscall</code></td><td>The fs operation that failed: <code>open</code>, <code>stat</code>, <code>scandir</code>, <code>unlink</code>, etc.</td></tr>
+      <tr><td><code>path</code></td><td>The <strong>exact resolved path</strong> Node.js tried to access — use this to debug</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Common Causes &amp; Fixes</h2>
+
+  <h3>Cause 1 – Typo in the path</h3>
+  <p>A single wrong character, missing extension, or incorrect directory name produces ENOENT. Always print the resolved path before assuming the file should exist.</p>
+  <pre><code>const path = require('path');
+const fs = require('fs');
+
+const filePath = path.resolve('./conifg.json'); // typo: conifg
+console.log(filePath);                          // print to verify before using
+const data = fs.readFileSync(filePath, 'utf8');</code></pre>
+
+  <h3>Cause 2 – Wrong working directory</h3>
+  <p>
+    Relative paths are resolved against <code>process.cwd()</code> — the directory Node.js was
+    launched from, not the location of the source file. Running a script from a different
+    directory changes every relative path.
+  </p>
+  <pre><code>// Diagnose
+console.log('cwd:', process.cwd());
+console.log('resolved:', path.resolve('./config.json'));
+
+// Fix: use __dirname to anchor paths to the source file's location
+const filePath = path.join(__dirname, 'config.json');</code></pre>
+
+  <h3>Cause 3 – Intermediate directory doesn't exist</h3>
+  <p>
+    Writing a file to <code>./output/reports/summary.csv</code> fails if
+    <code>output/</code> or <code>output/reports/</code> do not exist yet.
+    Create the full directory tree before writing.
+  </p>
+  <pre><code>const fs = require('fs');
+const path = require('path');
+
+const outputDir = path.join(__dirname, 'output', 'reports');
+fs.mkdirSync(outputDir, { recursive: true }); // creates all missing dirs
+fs.writeFileSync(path.join(outputDir, 'summary.csv'), data);</code></pre>
+
+  <h3>Cause 4 – Async race condition</h3>
+  <p>
+    Reading a file immediately after triggering an async operation that creates it can fail
+    if the write hasn't finished yet. Always <code>await</code> the write before reading.
+  </p>
+  <pre><code>// Wrong – read may run before write completes
+fs.writeFile('./data.json', content, () => {});
+const result = fs.readFileSync('./data.json'); // ENOENT possible
+
+// Correct – await the write
+await fs.promises.writeFile('./data.json', content);
+const result = await fs.promises.readFile('./data.json', 'utf8');</code></pre>
+
+  <h3>Cause 5 – Case sensitivity on Linux</h3>
+  <p>
+    macOS and Windows are case-insensitive — <code>Config.json</code> and <code>config.json</code>
+    are the same file. Linux (including most CI/CD and production servers) is case-sensitive.
+    Code that works locally can throw ENOENT in production.
+  </p>
+  <pre><code>// Wrong on Linux (file on disk is config.json)
+const data = fs.readFileSync('./Config.json');
+
+// Correct – match the filename exactly
+const data = fs.readFileSync('./config.json');</code></pre>
+
+  <h3>Cause 6 – Hardcoded absolute paths</h3>
+  <p>
+    Absolute paths like <code>/home/alice/project/data.csv</code> only work on one machine.
+    Use <code>__dirname</code> or environment variables to make paths portable.
+  </p>
+  <pre><code>// Wrong – breaks on every other machine or in Docker
+const data = fs.readFileSync('/home/alice/project/data.csv');
+
+// Correct
+const data = fs.readFileSync(path.join(__dirname, 'data.csv'));</code></pre>
+
+  <h2>Safe File Access Patterns</h2>
+
+  <h3>Check before reading</h3>
+  <pre><code>if (fs.existsSync(filePath)) {
+  const data = fs.readFileSync(filePath, 'utf8');
+} else {
+  console.warn('File not found:', filePath);
+}</code></pre>
+
+  <h3>Handle the error gracefully with try/catch</h3>
+  <pre><code>try {
+  const data = await fs.promises.readFile(filePath, 'utf8');
+} catch (err) {
+  if (err.code === 'ENOENT') {
+    console.error('File not found:', err.path);
+  } else {
+    throw err; // re-throw unexpected errors
+  }
+}</code></pre>
+
+  <h3>Ensure directory exists before writing</h3>
+  <pre><code>async function writeFileSafe(filePath, content) {
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.promises.writeFile(filePath, content);
+}</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read <code>err.path</code> from the error object — it shows the exact path Node.js tried.</li>
+    <li>Print <code>process.cwd()</code> to confirm the working directory at runtime.</li>
+    <li>Print <code>path.resolve('./your/path')</code> to see the absolute path before using it.</li>
+    <li>Check <code>err.syscall</code> to know which fs operation failed.</li>
+    <li>Verify the file exists on disk and that the case matches exactly.</li>
+    <li>In Docker/CI, confirm the file is actually copied into the container/workspace.</li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Common mistake:</strong> Using <code>fs.existsSync()</code> as a guard and then
+    calling <code>fs.readFileSync()</code> is still vulnerable to a race condition in concurrent
+    code — another process can delete the file between the two calls. Prefer
+    <code>try/catch</code> with <code>err.code === 'ENOENT'</code>.
+  </div>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><code>EACCES: permission denied</code> — the path exists but the process lacks read/write permission</li>
+    <li><code>ENOTDIR: not a directory</code> — a path component exists as a file, not a directory</li>
+    <li><code>EEXIST: file already exists</code> — thrown by exclusive create operations when the path already exists</li>
+    <li><a href="https://nodejs-errors.dev/MODULE_NOT_FOUND/"><code>MODULE_NOT_FOUND</code></a> — similar "not found" error but from the module loader, not the fs module</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-09 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#common-system-errors">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

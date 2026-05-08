@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>EADDRINUSE: address already in use – Node.js Port Fix</title>
+  <meta name="description" content="Node.js throws EADDRINUSE: address already in use when another process is already listening on the same port. Learn how to find the process, kill it, and prevent the error." />
+  <link rel="canonical" href="https://nodejs-errors.dev/EADDRINUSE/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="EADDRINUSE: address already in use – Node.js Port Fix" />
+  <meta property="og:description" content="Node.js throws EADDRINUSE: address already in use when another process is already listening on the same port. Learn how to find the process, kill it, and prevent the error." />
+  <meta property="og:url" content="https://nodejs-errors.dev/EADDRINUSE/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "EADDRINUSE: address already in use – Node.js Port Fix",
+    "description": "Node.js throws EADDRINUSE when another process is already listening on the requested port.",
+    "url": "https://nodejs-errors.dev/EADDRINUSE/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-09",
+    "dateModified": "2026-05-09"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is EADDRINUSE in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "EADDRINUSE stands for 'Error ADDRess IN USE'. Node.js throws it as 'Error: listen EADDRINUSE: address already in use :::PORT' when a server tries to bind to a port that is already occupied by another process."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix EADDRINUSE: address already in use?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Find and kill the process using the port. On macOS/Linux run: lsof -ti:3000 | xargs kill. On Windows run: netstat -ano | findstr :3000, then taskkill /PID &lt;pid&gt; /F. Alternatively, change your server's port to a free one."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I find which process is using a port on macOS or Linux?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Run: lsof -i :3000 to see which process is listening on port 3000. Use lsof -ti:3000 | xargs kill to kill it in one command."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I find which process is using a port on Windows?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Run: netstat -ano | findstr :3000 to find the PID, then: taskkill /PID &lt;pid&gt; /F to kill it."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "EADDRINUSE", "item": "https://nodejs-errors.dev/EADDRINUSE/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix EADDRINUSE: address already in use in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Find the process on macOS/Linux", "text": "Run: lsof -i :3000 (replace 3000 with your port) to see which process is using it." },
+      { "@type": "HowToStep", "position": 2, "name": "Kill the process on macOS/Linux", "text": "Run: lsof -ti:3000 | xargs kill to find and kill the process in one command. Use kill -9 if the process ignores SIGTERM." },
+      { "@type": "HowToStep", "position": 3, "name": "Find and kill the process on Windows", "text": "Run: netstat -ano | findstr :3000 to find the PID, then: taskkill /PID &lt;pid&gt; /F" },
+      { "@type": "HowToStep", "position": 4, "name": "Change the port", "text": "Use a different port number or read it from an environment variable: const PORT = process.env.PORT || 3001" },
+      { "@type": "HowToStep", "position": 5, "name": "Add graceful shutdown", "text": "Handle process.on('SIGTERM') and process.on('SIGINT') to close the server cleanly, preventing orphaned processes." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">EADDRINUSE</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>EADDRINUSE: address already in use</h1>
+  <span class="error-code">error code: <code>EADDRINUSE</code></span>
+  <p>Complete reference — what it means, how to find the conflicting process, and how to fix it.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js throws <code>Error: listen EADDRINUSE: address already in use :::3000</code> when another process is already bound to that port. On macOS/Linux, run <code>lsof -ti:3000 | xargs kill</code> to free it instantly. On Windows, use <code>netstat -ano | findstr :3000</code> then <code>taskkill /PID &lt;pid&gt; /F</code>.
+  </div>
+
+  <h2>What is EADDRINUSE?</h2>
+  <p>
+    <strong>EADDRINUSE</strong> stands for <em>Error ADDRess IN USE</em> — a
+    <a href="https://nodejs.org/api/errors.html#common-system-errors" rel="noopener noreferrer">POSIX system error</a>
+    thrown when a server attempts to <code>listen()</code> on a TCP/UDP port that is already
+    bound by another process. Only one process can own a port at a time.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error message you will see:</strong><br>
+    <code>Error: listen EADDRINUSE: address already in use :::3000</code><br>
+    <code>Error: listen EADDRINUSE: address already in use 0.0.0.0:8080</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1872:16)
+    at listenInCluster (node:net:1920:12)
+    at Server.listen (node:net:2008:7)
+    at Function.listen (/project/node_modules/express/lib/application.js:635:24)
+    at Object.&lt;anonymous&gt; (/project/app.js:10:5) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}</code></pre>
+
+  <p>
+    The <code>port</code> field in the error object tells you exactly which port is conflicted —
+    use that number in the kill commands below.
+  </p>
+
+  <h2>Fix 1 – Kill the process using the port</h2>
+
+  <h3>macOS / Linux</h3>
+  <pre><code># Find which process is using port 3000
+lsof -i :3000
+
+# Kill it in one command (replace 3000 with your port)
+lsof -ti:3000 | xargs kill
+
+# Force kill if it doesn't stop
+lsof -ti:3000 | xargs kill -9</code></pre>
+
+  <h3>Windows (Command Prompt)</h3>
+  <pre><code>:: Find the PID using port 3000
+netstat -ano | findstr :3000
+
+:: Kill by PID (replace 12345 with the actual PID)
+taskkill /PID 12345 /F</code></pre>
+
+  <h3>Windows (PowerShell)</h3>
+  <pre><code># One-liner: find and kill process on port 3000
+Get-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess | Stop-Process -Force</code></pre>
+
+  <h2>Fix 2 – Change the port</h2>
+  <p>
+    If you don't control the other process (a system service, another app), use a different port.
+    Always read the port from an environment variable so it's easy to change without touching code.
+  </p>
+  <pre><code>const PORT = process.env.PORT || 3001; // fallback to 3001 if 3000 is taken
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});</code></pre>
+
+  <h2>Fix 3 – Handle the error and retry automatically</h2>
+  <p>
+    For development tools or CLIs that need to find a free port automatically:
+  </p>
+  <pre><code>function startServer(port) {
+  const server = app.listen(port)
+    .on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`Port ${port} in use, trying ${port + 1}...`);
+        startServer(port + 1);
+      } else {
+        throw err;
+      }
+    })
+    .on('listening', () => {
+      console.log(`Server started on port ${port}`);
+    });
+}
+startServer(3000);</code></pre>
+
+  <h2>Prevention – Graceful shutdown</h2>
+  <p>
+    The most common cause of EADDRINUSE in development is a previous Node.js process that
+    crashed or was force-quit without releasing the port. A proper shutdown handler prevents
+    this by closing the server cleanly before the process exits.
+  </p>
+  <pre><code>const server = app.listen(3000);
+
+function shutdown() {
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+}
+
+process.on('SIGTERM', shutdown); // Docker stop, Kubernetes
+process.on('SIGINT',  shutdown); // Ctrl+C in terminal</code></pre>
+
+  <h2>Common causes</h2>
+  <table>
+    <thead><tr><th>Situation</th><th>Solution</th></tr></thead>
+    <tbody>
+      <tr><td>Previous dev server crashed without releasing port</td><td>Kill with <code>lsof -ti:PORT | xargs kill</code></td></tr>
+      <tr><td>Two terminals running the same project</td><td>Close one, or use different ports per terminal</td></tr>
+      <tr><td>Another app (nginx, Apache, Postgres) using the port</td><td>Change your app's port</td></tr>
+      <tr><td>nodemon restarting before old process fully exits</td><td>Add <code>--delay 1000</code> to nodemon or add graceful shutdown</td></tr>
+      <tr><td>Docker container port already bound on host</td><td>Change the host port mapping in <code>docker run -p HOST:CONTAINER</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read <code>err.port</code> from the error object to confirm which port is conflicted.</li>
+    <li>Run <code>lsof -i :PORT</code> (macOS/Linux) or <code>netstat -ano | findstr :PORT</code> (Windows) to identify the process.</li>
+    <li>Check if you have multiple terminal tabs running the same project.</li>
+    <li>Check if a system service (web server, database) uses that port by default.</li>
+    <li>Add a graceful shutdown handler to prevent leaving orphaned processes.</li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Common mistake:</strong> Using <code>kill -9</code> (or <code>taskkill /F</code> on Windows)
+    as the first resort skips the graceful shutdown signal. Always try <code>kill</code> (SIGTERM)
+    first — it allows the process to close connections cleanly.
+  </div>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><code>ECONNREFUSED: connection refused</code> — the opposite: nothing is listening on the port you are trying to connect to</li>
+    <li><code>EACCES: permission denied</code> — trying to bind to a privileged port (below 1024) without root/administrator rights</li>
+    <li><code>ENOTFOUND</code> — DNS resolution failure when connecting to a hostname</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-09 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#common-system-errors">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

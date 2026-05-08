@@ -8,7 +8,6 @@
   <meta name="description" content="Authoritative reference for Node.js error messages. Each page covers the exact error message, root cause, and step-by-step fixes with code examples." />
   <link rel="canonical" href="https://nodejs-errors.dev/" />
 
-  <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Node.js Error Reference – Causes, Fixes &amp; Examples" />
   <meta property="og:description" content="Authoritative reference for Node.js error messages. Each page covers the exact error message, root cause, and step-by-step fixes with code examples." />
@@ -30,23 +29,14 @@
     "@context": "https://schema.org",
     "@type": "ItemList",
     "name": "Node.js Error Reference",
-    "description": "A list of common Node.js errors with causes, fixes, and code examples.",
     "url": "https://nodejs-errors.dev/",
     "itemListElement": [
-      {
-        "@type": "ListItem",
-        "position": 1,
-        "name": "Error: Cannot find module (MODULE_NOT_FOUND)",
-        "description": "Thrown when require() cannot locate an npm package or local file path.",
-        "url": "https://nodejs-errors.dev/MODULE_NOT_FOUND/"
-      },
-      {
-        "@type": "ListItem",
-        "position": 2,
-        "name": "ERR_PACKAGE_PATH_NOT_EXPORTED",
-        "description": "Thrown when importing a subpath not listed in the package's exports map in package.json.",
-        "url": "https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/"
-      }
+      { "@type": "ListItem", "position": 1, "name": "Error: Cannot find module (MODULE_NOT_FOUND)", "url": "https://nodejs-errors.dev/MODULE_NOT_FOUND/" },
+      { "@type": "ListItem", "position": 2, "name": "ERR_PACKAGE_PATH_NOT_EXPORTED", "url": "https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/" },
+      { "@type": "ListItem", "position": 3, "name": "ERR_REQUIRE_ESM", "url": "https://nodejs-errors.dev/ERR_REQUIRE_ESM/" },
+      { "@type": "ListItem", "position": 4, "name": "ENOENT: no such file or directory", "url": "https://nodejs-errors.dev/ENOENT/" },
+      { "@type": "ListItem", "position": 5, "name": "EADDRINUSE: address already in use", "url": "https://nodejs-errors.dev/EADDRINUSE/" },
+      { "@type": "ListItem", "position": 6, "name": "TypeError: Cannot read properties of undefined", "url": "https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/" }
     ]
   }
   </script>
@@ -63,22 +53,11 @@
       padding: 2rem 1.5rem 4rem;
     }
     header { border-bottom: 3px solid #d63031; padding-bottom: 1.25rem; margin-bottom: 2.5rem; }
-    header .site-badge {
-      display: inline-block;
-      background: #d63031;
-      color: #fff;
-      font-size: 0.75rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      padding: 0.2rem 0.6rem;
-      border-radius: 3px;
-      margin-bottom: 0.5rem;
-      text-transform: uppercase;
-    }
+    header .site-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
     h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #1a1a1a; }
     h1 span { color: #d63031; }
     .subtitle { margin-top: 0.5rem; color: #555; font-size: 1rem; }
-    h2 { font-size: 1rem; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin: 2rem 0 0.75rem; }
+    h2 { font-size: 0.8rem; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; margin: 2.25rem 0 0.75rem; }
     /* ── Error card grid ── */
     .error-grid {
       display: grid;
@@ -97,14 +76,6 @@
     .error-card:hover {
       border-color: #d63031;
       box-shadow: 0 2px 10px rgba(214,48,49,0.08);
-    }
-    .error-card .card-category {
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: #aaa;
-      margin-bottom: 0.35rem;
     }
     .error-card .card-name {
       font-size: 1rem;
@@ -125,8 +96,9 @@
       font-size: 0.8rem;
       font-weight: 700;
       color: #d63031;
-      letter-spacing: 0.02em;
     }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    .card-desc code { background: #f0f0f0; padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.85em; }
     footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
   </style>
 </head>
@@ -140,34 +112,89 @@
 
 <main>
 
+  <!-- ═══════════════════════════════════════════════════════
+       To add a new error page:
+       1. Create ERROR_NAME/index.html (copy an existing page as template)
+       2. Add an <a class="error-card"> block in the right category below
+       3. Add a <url> entry to sitemap.xml
+       4. Add a line to llms.txt
+       5. Add a row to the README.md table
+  ════════════════════════════════════════════════════════ -->
+
   <h2>Module Resolution</h2>
   <div class="error-grid">
 
-    <!-- ═══════════════════════════════════════════════════
-         To add a new error page:
-         1. Copy one <a class="error-card"> block below
-         2. Update href, card-category, card-name, card-desc
-         3. Add the new URL to sitemap.xml and llms.txt
-    ════════════════════════════════════════════════════ -->
-
     <a class="error-card" href="https://nodejs-errors.dev/MODULE_NOT_FOUND/">
-      <div class="card-category">Module Resolution</div>
       <div class="card-name">Error: Cannot find module</div>
       <div class="card-desc">
         Thrown by <code>require()</code> when it cannot locate an npm package or local file.
         The most common Node.js error — caused by missing <code>npm install</code>, typos,
-        wrong paths, or Docker misconfigurations.
+        wrong paths, TypeScript aliases, or Docker misconfigurations.
       </div>
       <span class="card-cta">View causes &amp; fixes →</span>
     </a>
 
     <a class="error-card" href="https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/">
-      <div class="card-category">Module Resolution</div>
       <div class="card-name">ERR_PACKAGE_PATH_NOT_EXPORTED</div>
       <div class="card-desc">
         Thrown when importing a subpath (e.g. <code>pkg/lib/utils</code>) that is not listed
         in the package's <code>"exports"</code> field in <code>package.json</code>. Common
         after upgrading packages that added a strict exports map.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/">
+      <div class="card-name">ERR_REQUIRE_ESM</div>
+      <div class="card-desc">
+        Thrown when <code>require()</code> is used to load a pure ES module package.
+        Increasingly common as popular packages like <code>chalk</code>, <code>node-fetch</code>,
+        and <code>nanoid</code> drop CommonJS support.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+  </div>
+
+  <h2>File System</h2>
+  <div class="error-grid">
+
+    <a class="error-card" href="https://nodejs-errors.dev/ENOENT/">
+      <div class="card-name">ENOENT: no such file or directory</div>
+      <div class="card-desc">
+        Thrown by any <code>fs</code> operation when the target path does not exist.
+        Caused by path typos, wrong working directory, missing intermediate directories,
+        or case-sensitivity mismatches on Linux.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+  </div>
+
+  <h2>Network</h2>
+  <div class="error-grid">
+
+    <a class="error-card" href="https://nodejs-errors.dev/EADDRINUSE/">
+      <div class="card-name">EADDRINUSE: address already in use</div>
+      <div class="card-desc">
+        Thrown when a server tries to <code>listen()</code> on a port already occupied by
+        another process. Usually a leftover dev server or multiple running instances of
+        the same app.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+  </div>
+
+  <h2>Runtime</h2>
+  <div class="error-grid">
+
+    <a class="error-card" href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/">
+      <div class="card-name">TypeError: Cannot read properties of undefined</div>
+      <div class="card-desc">
+        Thrown when a property is accessed on a value that is <code>undefined</code>.
+        The most universal JavaScript error — fix with optional chaining (<code>obj?.prop</code>),
+        null checks, or by ensuring async data has loaded.
       </div>
       <span class="card-cta">View causes &amp; fixes →</span>
     </a>

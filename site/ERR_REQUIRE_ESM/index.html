@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>ERR_REQUIRE_ESM – require() of ES Module not supported: Fix</title>
+  <meta name="description" content="Node.js throws ERR_REQUIRE_ESM when require() is used to load a pure ES module. Learn why it happens, which packages trigger it, and how to fix it with dynamic import()." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="ERR_REQUIRE_ESM – require() of ES Module not supported: Fix" />
+  <meta property="og:description" content="Node.js throws ERR_REQUIRE_ESM when require() is used to load a pure ES module. Learn why it happens, which packages trigger it, and how to fix it with dynamic import()." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ERR_REQUIRE_ESM/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "ERR_REQUIRE_ESM – require() of ES Module not supported: Fix",
+    "description": "Node.js throws ERR_REQUIRE_ESM when require() is used to load a pure ES module.",
+    "url": "https://nodejs-errors.dev/ERR_REQUIRE_ESM/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-09",
+    "dateModified": "2026-05-09"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ERR_REQUIRE_ESM?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_REQUIRE_ESM is a Node.js error thrown when require() is used to load a package or file that is a pure ES module. ES modules cannot be loaded synchronously with require() — they must be loaded with the asynchronous import() function or by converting the project to ESM."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What causes ERR_REQUIRE_ESM?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The error is caused by calling require() on a package that has 'type': 'module' in its package.json, or on a file with a .mjs extension. Many popular packages — including chalk v5+, node-fetch v3+, nanoid v4+, got v12+, and execa v6+ — dropped CommonJS support and are now ESM-only."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_REQUIRE_ESM?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The cleanest fix is to replace require() with dynamic import(): const pkg = await import('package-name'). Alternatively, convert your whole project to ESM by adding 'type': 'module' to package.json and changing require() to import. You can also pin to an older CommonJS version of the package."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Which popular npm packages are ESM-only?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Packages that dropped CommonJS and are now ESM-only include: chalk v5+, node-fetch v3+, nanoid v4+, got v12+, execa v6+, p-map v5+, ora v6+, open v9+, figures v5+, and most packages by Sindre Sorhus. Pin to the last CJS version to avoid the error without changing your code."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ERR_REQUIRE_ESM", "item": "https://nodejs-errors.dev/ERR_REQUIRE_ESM/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix ERR_REQUIRE_ESM in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Use dynamic import()", "text": "Replace require('pkg') with const pkg = await import('pkg'). Wrap in an async function or top-level await if your project supports it." },
+      { "@type": "HowToStep", "position": 2, "name": "Convert your project to ESM", "text": "Add 'type': 'module' to package.json and convert all require() calls to import statements." },
+      { "@type": "HowToStep", "position": 3, "name": "Pin to the last CJS version", "text": "Install the last version of the package that shipped a CommonJS build, e.g. npm install chalk@4." },
+      { "@type": "HowToStep", "position": 4, "name": "Use an async wrapper", "text": "Wrap your entry point in an immediately-invoked async function to enable top-level await for the dynamic import." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ERR_REQUIRE_ESM</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>ERR_REQUIRE_ESM</h1>
+  <p>Complete reference for <code>require() of ES Module ... not supported</code> — what it means, why it happens, and how to fix it.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js throws <code>ERR_REQUIRE_ESM</code> when <code>require()</code> is used to load a package that is a pure ES module. The fastest fix is replacing <code>require('pkg')</code> with <code>const pkg = await import('pkg')</code>, or pinning to the last CommonJS version of the package.
+  </div>
+
+  <h2>What is ERR_REQUIRE_ESM?</h2>
+  <p>
+    <code>ERR_REQUIRE_ESM</code> is thrown when the
+    <a href="https://nodejs.org/api/esm.html" rel="noopener noreferrer">CommonJS loader</a>
+    encounters a package or file that is a <strong>pure ES module</strong> — one that uses
+    <code>import</code>/<code>export</code> syntax and cannot be loaded synchronously.
+    <code>require()</code> is synchronous by design; ES modules are inherently asynchronous,
+    so Node.js forbids mixing them this way.
+  </p>
+
+  <div class="callout">
+    <strong>Error message you will see:</strong><br>
+    <code>Error [ERR_REQUIRE_ESM]: require() of ES Module .../node_modules/chalk/source/index.js not supported.</code><br>
+    <code>chalk is an ES module and cannot be required. Instead use dynamic import():</code><br>
+    <code>const chalk = await import('chalk');</code>
+  </div>
+
+  <p>Node.js helpfully includes the exact <code>import()</code> fix right in the error message.</p>
+
+  <h2>Full Error Example</h2>
+  <pre><code>Error [ERR_REQUIRE_ESM]: require() of ES Module
+/project/node_modules/chalk/source/index.js
+from /project/app.js not supported.
+chalk is an ES module and cannot be required.
+Instead use dynamic import():
+  const chalk = await import('chalk');
+    at Object.load (node:internal/modules/cjs/loader:1277:19)
+    at Function.Module._resolveFilename (node:internal/modules/cjs/loader:1039:15)
+    at Function.Module._load (node:internal/modules/cjs/loader:885:27)
+    ...</code></pre>
+
+  <h2>Root Cause</h2>
+  <p>
+    A package is a <strong>pure ES module</strong> when its <code>package.json</code> contains
+    <code>"type": "module"</code>, or when it ships only <code>.mjs</code> files with no
+    CommonJS fallback. From that point on, <code>require()</code> cannot load it.
+  </p>
+  <pre><code>// node_modules/chalk/package.json (v5+)
+{
+  "name": "chalk",
+  "type": "module"   // ← makes the entire package ESM-only
+}</code></pre>
+
+  <h2>Fixes</h2>
+
+  <h3>Fix 1 – Use dynamic <code>import()</code> (recommended)</h3>
+  <p>
+    Replace <code>require()</code> with <code>import()</code>. This works in any CommonJS file
+    — no project-wide changes needed.
+  </p>
+  <pre><code>// Before (broken)
+const chalk = require('chalk');
+
+// After – dynamic import returns a Promise
+const { default: chalk } = await import('chalk');
+
+// If you are not in an async context, wrap in an async IIFE:
+(async () => {
+  const { default: chalk } = await import('chalk');
+  console.log(chalk.green('Hello'));
+})();</code></pre>
+
+  <div class="callout">
+    <strong>Named vs default exports:</strong> ESM packages often use a default export.
+    Use <code>{ default: chalk }</code> destructuring to get the default export,
+    or use the module namespace: <code>const chalkModule = await import('chalk'); chalkModule.default</code>.
+  </div>
+
+  <h3>Fix 2 – Convert your project to ESM</h3>
+  <p>
+    If your codebase is entirely your own, converting to ESM is the cleanest long-term solution.
+  </p>
+  <pre><code>// 1. Add to your package.json:
+{ "type": "module" }
+
+// 2. Change require() to import:
+import chalk from 'chalk';
+
+// 3. Change module.exports to export:
+export function myFunction() { ... }</code></pre>
+  <p>Note: converting to ESM disables <code>__dirname</code> and <code>__filename</code> — use <code>import.meta.url</code> with the <code>URL</code> constructor as a replacement.</p>
+  <pre><code>import { fileURLToPath } from 'url';
+import path from 'path';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));</code></pre>
+
+  <h3>Fix 3 – Pin to the last CJS version</h3>
+  <p>
+    The easiest zero-code-change fix. Install the last version of the package that still
+    shipped a CommonJS build.
+  </p>
+  <table>
+    <thead><tr><th>Package</th><th>Last CJS version</th><th>First ESM-only version</th></tr></thead>
+    <tbody>
+      <tr><td><code>chalk</code></td><td><code>npm install chalk@4</code></td><td>v5</td></tr>
+      <tr><td><code>node-fetch</code></td><td><code>npm install node-fetch@2</code></td><td>v3</td></tr>
+      <tr><td><code>nanoid</code></td><td><code>npm install nanoid@3</code></td><td>v4</td></tr>
+      <tr><td><code>got</code></td><td><code>npm install got@11</code></td><td>v12</td></tr>
+      <tr><td><code>execa</code></td><td><code>npm install execa@5</code></td><td>v6</td></tr>
+      <tr><td><code>p-map</code></td><td><code>npm install p-map@4</code></td><td>v5</td></tr>
+      <tr><td><code>ora</code></td><td><code>npm install ora@5</code></td><td>v6</td></tr>
+      <tr><td><code>open</code></td><td><code>npm install open@8</code></td><td>v9</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Fix 4 – Use a CJS-compatible alternative</h3>
+  <p>For some packages, a maintained CJS alternative exists:</p>
+  <ul>
+    <li><code>node-fetch</code> → use the built-in <code>fetch</code> (Node.js 18+) or <code>axios</code></li>
+    <li><code>chalk</code> → use <code>kleur</code> or <code>colorette</code> (both ship CJS)</li>
+    <li><code>nanoid</code> → use <code>uuid</code> or <code>crypto.randomUUID()</code> (Node.js 14.17+)</li>
+  </ul>
+
+  <h2>How to identify if a package is ESM-only</h2>
+  <pre><code># Check the package.json of the installed version
+cat node_modules/chalk/package.json | grep '"type"'
+# "type": "module"  ← ESM-only</code></pre>
+  <p>
+    Also look for the absence of a <code>"main"</code> field pointing to a <code>.js</code> file,
+    or the presence of only <code>"exports"</code> with <code>"import"</code> conditions and no
+    <code>"require"</code> condition.
+  </p>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read the error message — Node.js often prints the exact <code>import()</code> fix.</li>
+    <li>Check <code>node_modules/&lt;package&gt;/package.json</code> for <code>"type": "module"</code>.</li>
+    <li>Check the package's changelog for the version that went ESM-only.</li>
+    <li>Decide: use <code>import()</code>, convert to ESM, or pin to the last CJS version.</li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Common mistake:</strong> Pinning to an old CJS version is quick but means missing
+    security patches and new features. Migrating to <code>import()</code> or full ESM is the
+    better long-term choice.
+  </div>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/"><code>ERR_PACKAGE_PATH_NOT_EXPORTED</code></a> — the package is installed but the subpath is not in its <code>exports</code> map</li>
+    <li><a href="https://nodejs-errors.dev/MODULE_NOT_FOUND/"><code>MODULE_NOT_FOUND</code></a> — the package cannot be found at all</li>
+    <li><code>ERR_IMPORT_ASSERTION_TYPE_MISSING</code> — missing import assertion for JSON modules in ESM</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-09 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#err_require_esm">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>
