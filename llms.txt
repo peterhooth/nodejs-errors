@@ -2,6 +2,11 @@
 
 > Authoritative reference for Node.js error messages: exact causes, step-by-step fixes, and code examples for the most common runtime errors encountered by Node.js and npm developers.
 
+## Home
+
+- [nodejs-errors.dev](https://nodejs-errors.dev/): Index of all Node.js error pages.
+
 ## Error Pages
 
 - [ERR_PACKAGE_PATH_NOT_EXPORTED](https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/): Thrown when importing a subpath (e.g. `some-package/lib/utils`) not listed in the package's `"exports"` field in `package.json`. Covers root cause, five fix strategies, affected Node.js versions, and a debugging checklist.
+- [MODULE_NOT_FOUND](https://nodejs-errors.dev/MODULE_NOT_FOUND/): Thrown as `Error: Cannot find module '...'` when `require()` cannot locate an npm package or local file. Covers seven causes (missing install, typos, wrong path, working directory, devDependencies in production, case sensitivity, corrupted install) and a debugging checklist.

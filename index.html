@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Node.js Error Reference – Causes, Fixes &amp; Examples</title>
+  <meta name="description" content="Authoritative reference for Node.js error messages. Each page covers the exact error message, root cause, and step-by-step fixes with code examples." />
+  <link rel="canonical" href="https://nodejs-errors.dev/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Node.js Error Reference – Causes, Fixes &amp; Examples" />
+  <meta property="og:description" content="Authoritative reference for Node.js error messages. Each page covers the exact error message, root cause, and step-by-step fixes with code examples." />
+  <meta property="og:url" content="https://nodejs-errors.dev/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "nodejs-errors.dev",
+    "url": "https://nodejs-errors.dev/",
+    "description": "Authoritative reference for Node.js error messages: exact causes, step-by-step fixes, and code examples for the most common Node.js runtime errors."
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "name": "Node.js Error Reference",
+    "description": "A list of common Node.js errors with causes, fixes, and code examples.",
+    "url": "https://nodejs-errors.dev/",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Error: Cannot find module (MODULE_NOT_FOUND)",
+        "description": "Thrown when require() cannot locate an npm package or local file path.",
+        "url": "https://nodejs-errors.dev/MODULE_NOT_FOUND/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "ERR_PACKAGE_PATH_NOT_EXPORTED",
+        "description": "Thrown when importing a subpath not listed in the package's exports map in package.json.",
+        "url": "https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/"
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.7;
+      color: #1a1a1a;
+      background: #fff;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1.25rem; margin-bottom: 2.5rem; }
+    header .site-badge {
+      display: inline-block;
+      background: #d63031;
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 0.2rem 0.6rem;
+      border-radius: 3px;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+    }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #1a1a1a; }
+    h1 span { color: #d63031; }
+    .subtitle { margin-top: 0.5rem; color: #555; font-size: 1rem; }
+    h2 { font-size: 1rem; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin: 2rem 0 0.75rem; }
+    /* ── Error card grid ── */
+    .error-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1rem;
+    }
+    .error-card {
+      display: block;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 1.25rem 1.25rem 1rem;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .error-card:hover {
+      border-color: #d63031;
+      box-shadow: 0 2px 10px rgba(214,48,49,0.08);
+    }
+    .error-card .card-category {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #aaa;
+      margin-bottom: 0.35rem;
+    }
+    .error-card .card-name {
+      font-size: 1rem;
+      font-weight: 800;
+      color: #d63031;
+      word-break: break-all;
+      line-height: 1.3;
+      margin-bottom: 0.5rem;
+    }
+    .error-card .card-desc {
+      font-size: 0.875rem;
+      color: #444;
+      line-height: 1.55;
+    }
+    .error-card .card-cta {
+      display: inline-block;
+      margin-top: 0.85rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #d63031;
+      letter-spacing: 0.02em;
+    }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="site-badge">nodejs-errors.dev</span>
+  <h1>Node.js <span>Error</span> Reference</h1>
+  <p class="subtitle">Exact causes, step-by-step fixes, and code examples for the most common Node.js runtime errors.</p>
+</header>
+
+<main>
+
+  <h2>Module Resolution</h2>
+  <div class="error-grid">
+
+    <!-- ═══════════════════════════════════════════════════
+         To add a new error page:
+         1. Copy one <a class="error-card"> block below
+         2. Update href, card-category, card-name, card-desc
+         3. Add the new URL to sitemap.xml and llms.txt
+    ════════════════════════════════════════════════════ -->
+
+    <a class="error-card" href="https://nodejs-errors.dev/MODULE_NOT_FOUND/">
+      <div class="card-category">Module Resolution</div>
+      <div class="card-name">Error: Cannot find module</div>
+      <div class="card-desc">
+        Thrown by <code>require()</code> when it cannot locate an npm package or local file.
+        The most common Node.js error — caused by missing <code>npm install</code>, typos,
+        wrong paths, or Docker misconfigurations.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/">
+      <div class="card-category">Module Resolution</div>
+      <div class="card-name">ERR_PACKAGE_PATH_NOT_EXPORTED</div>
+      <div class="card-desc">
+        Thrown when importing a subpath (e.g. <code>pkg/lib/utils</code>) that is not listed
+        in the package's <code>"exports"</code> field in <code>package.json</code>. Common
+        after upgrading packages that added a strict exports map.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+  </div>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p><a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; Node.js error reference</p>
+  </address>
+</footer>
+
+</body>
+</html>

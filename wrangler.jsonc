@@ -6,7 +6,7 @@
     "enabled": true
   },
   "assets": {
-    "directory": "ERR_PACKAGE_PATH_NOT_EXPORTED"
+    "directory": "/"
   },
   "compatibility_flags": [
     "nodejs_compat"
