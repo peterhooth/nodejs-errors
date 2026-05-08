@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ERR_PACKAGE_PATH_NOT_EXPORTED – Causes, Fixes &amp; Examples</title>
+  <meta name="description" content="ERR_PACKAGE_PATH_NOT_EXPORTED is a Node.js error thrown when you import a subpath that the package's exports field does not expose. Learn the exact cause and how to fix it." />
+  <meta name="keywords" content="ERR_PACKAGE_PATH_NOT_EXPORTED, Node.js error, package exports, subpath exports, ESM, CommonJS, fix" />
+  <link rel="canonical" href="https://error-seo.pages.dev/" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "ERR_PACKAGE_PATH_NOT_EXPORTED – Causes, Fixes & Examples",
+    "description": "ERR_PACKAGE_PATH_NOT_EXPORTED is a Node.js error thrown when you import a subpath that the package's exports field does not expose.",
+    "author": { "@type": "Organization", "name": "error-seo" },
+    "datePublished": "2026-05-08",
+    "dateModified": "2026-05-08"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ERR_PACKAGE_PATH_NOT_EXPORTED?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_PACKAGE_PATH_NOT_EXPORTED is a Node.js runtime error that occurs when code tries to import or require a file path inside an npm package that is not listed in that package's exports field in package.json. Node.js enforces the exports map strictly: any path not explicitly exported is treated as private and inaccessible."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What causes ERR_PACKAGE_PATH_NOT_EXPORTED?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The error is caused by importing a deep subpath (e.g. package/lib/utils) from a package whose package.json defines an exports map that does not include that subpath. It is also triggered when a package migrates from no exports field to a strict exports map, breaking existing deep imports."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_PACKAGE_PATH_NOT_EXPORTED?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "1. Import only the package's public API (e.g. import pkg from 'package'). 2. Check the package's changelog for the correct replacement path. 3. If you control the package, add the missing subpath to the exports field in package.json. 4. Pin to an older version of the package that did not use a strict exports map."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.7;
+      color: #1a1a1a;
+      background: #fff;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge {
+      display: inline-block;
+      background: #d63031;
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 0.2rem 0.6rem;
+      border-radius: 3px;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+    }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 0.875rem;
+      margin: 0.5rem 0 1rem;
+    }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code {
+      background: #f0f0f0;
+      padding: 0.15em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    .callout {
+      border-left: 4px solid #0984e3;
+      background: #f0f7ff;
+      padding: 0.75rem 1rem;
+      border-radius: 0 6px 6px 0;
+      margin: 1rem 0;
+    }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>ERR_PACKAGE_PATH_NOT_EXPORTED</h1>
+  <p>Complete reference: what it means, why it happens, and how to fix it.</p>
+</header>
+
+<main>
+
+  <h2>What is ERR_PACKAGE_PATH_NOT_EXPORTED?</h2>
+  <p>
+    <code>ERR_PACKAGE_PATH_NOT_EXPORTED</code> is a <strong>Node.js runtime error</strong> thrown when your
+    code attempts to import or <code>require()</code> a file path inside an npm package that the package
+    intentionally does not expose. Node.js enforces the <code>exports</code> map in
+    <code>package.json</code> strictly: any subpath not listed there is treated as private and
+    inaccessible, even if the file physically exists on disk.
+  </p>
+
+  <div class="callout">
+    <strong>Error message you will see:</strong><br>
+    <code>Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath './lib/internal/foo' is not defined by "exports" in …/node_modules/some-package/package.json</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>node:internal/modules/esm/resolve:265
+    throw new ERR_PACKAGE_PATH_NOT_EXPORTED(pkgPath, subpath, base);
+          ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath './lib/utils' is not defined
+by "exports" in /project/node_modules/some-package/package.json
+
+    at exportsNotExported (node:internal/modules/esm/resolve:265:13)
+    at packageExportsResolve (node:internal/modules/esm/resolve:591:13)
+    ...</code></pre>
+
+  <h2>Root Cause</h2>
+  <p>
+    The error originates from Node.js's <strong>package exports map</strong> feature, introduced in
+    Node.js 12 and enforced strictly from Node.js 12+. When a <code>package.json</code> contains an
+    <code>"exports"</code> field, Node.js uses it as the <em>sole</em> source of truth for which paths
+    are importable. Deep imports that previously worked (before the package added an exports map)
+    suddenly fail.
+  </p>
+
+  <h3>Example: package that triggers the error</h3>
+  <pre><code>// node_modules/some-package/package.json
+{
+  "name": "some-package",
+  "exports": {
+    ".": "./dist/index.js"
+  }
+}
+</code></pre>
+  <pre><code>// your code – this BREAKS
+import { helper } from 'some-package/lib/utils';
+// → ERR_PACKAGE_PATH_NOT_EXPORTED</code></pre>
+
+  <p>
+    Only the root export (<code>"."</code>) is defined. The subpath <code>./lib/utils</code> is not
+    in the <code>exports</code> map, so Node.js refuses to load it.
+  </p>
+
+  <h2>Common Triggers</h2>
+  <ul>
+    <li>Upgrading a package that added an <code>exports</code> field in a minor/patch version</li>
+    <li>Importing internal paths like <code>package/lib/…</code>, <code>package/src/…</code>, or <code>package/dist/…</code></li>
+    <li>Using ESM <code>import</code> statements for paths that were only reachable via CommonJS <code>require</code></li>
+    <li>Mixing ESM and CJS in a monorepo with strict package boundaries</li>
+    <li>Packages that intentionally removed deep-import support as a breaking change</li>
+  </ul>
+
+  <h2>How to Fix ERR_PACKAGE_PATH_NOT_EXPORTED</h2>
+
+  <h3>Fix 1 – Use only the package's public API</h3>
+  <p>Check the package's README or changelog for the intended public import path.</p>
+  <pre><code>// Before (broken)
+import { helper } from 'some-package/lib/utils';
+
+// After (correct)
+import { helper } from 'some-package';
+// or the documented subpath, e.g.:
+import { helper } from 'some-package/utils';</code></pre>
+
+  <h3>Fix 2 – Add the missing export (if you own the package)</h3>
+  <pre><code>// package.json – add the subpath you need to expose
+{
+  "exports": {
+    ".": "./dist/index.js",
+    "./utils": "./dist/utils.js",
+    "./lib/*": "./dist/lib/*.js"
+  }
+}</code></pre>
+
+  <h3>Fix 3 – Pin to an older version</h3>
+  <p>
+    If the package added the <code>exports</code> map in a recent release and broke your import,
+    pin to the last version that did not have it while you migrate:
+  </p>
+  <pre><code>npm install some-package@2.3.0</code></pre>
+
+  <h3>Fix 4 – Patch with <code>patch-package</code></h3>
+  <p>
+    If you cannot change your import path and cannot upgrade, use
+    <code>patch-package</code> to temporarily add the missing export to the dependency's
+    <code>package.json</code>:
+  </p>
+  <pre><code>npx patch-package some-package</code></pre>
+
+  <h3>Fix 5 – Alias via bundler (webpack / Vite / esbuild)</h3>
+  <p>Map the private path to a public one inside your bundler config instead of importing it directly.</p>
+  <pre><code>// vite.config.ts
+resolve: {
+  alias: {
+    'some-package/lib/utils': 'some-package/utils'
+  }
+}</code></pre>
+
+  <h2>Condition / Conditional Exports</h2>
+  <p>
+    Modern packages use <strong>conditional exports</strong> to serve different files to ESM and CJS
+    consumers. A misconfigured conditions map is another source of this error:
+  </p>
+  <pre><code>{
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/index.js"
+    }
+  }
+}</code></pre>
+  <p>
+    If your environment doesn't match any condition and no <code>"default"</code> is set, Node.js
+    throws <code>ERR_PACKAGE_PATH_NOT_EXPORTED</code>.
+  </p>
+
+  <h2>Affected Node.js Versions</h2>
+  <table>
+    <thead>
+      <tr><th>Node.js version</th><th>Behaviour</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>&lt; 12.7</td><td><code>exports</code> field ignored; deep imports always work</td></tr>
+      <tr><td>12.7 – 12.16</td><td><code>exports</code> honoured but with warnings</td></tr>
+      <tr><td>12.17+ / 14+</td><td><code>exports</code> strictly enforced; error thrown on violation</td></tr>
+      <tr><td>16, 18, 20, 22 (LTS)</td><td>Strict enforcement; no opt-out</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read the error message – it tells you the exact subpath that is missing.</li>
+    <li>Open <code>node_modules/&lt;package&gt;/package.json</code> and inspect the <code>exports</code> field.</li>
+    <li>Check the package's GitHub releases/changelog for migration notes.</li>
+    <li>Search for the package name + <code>ERR_PACKAGE_PATH_NOT_EXPORTED</code> in the package's issue tracker.</li>
+    <li>Run <code>node --version</code> – confirm you are on a version that enforces exports.</li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Common mistake:</strong> Adding <code>"./lib/*": "./lib/*"</code> wildcard exports
+    fixes the error locally but exposes all internal files publicly. Only export paths you intend
+    to be part of your public API.
+  </div>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><code>ERR_PACKAGE_IMPORT_NOT_DEFINED</code> – the imports map (self-referencing) equivalent</li>
+    <li><code>MODULE_NOT_FOUND</code> – the file doesn't exist at all (vs. existing but not exported)</li>
+    <li><code>ERR_REQUIRE_ESM</code> – trying to <code>require()</code> a pure ESM package</li>
+  </ul>
+
+</main>
+
+<footer>
+  <p>Last updated: 2026-05-08 &nbsp;·&nbsp; Node.js error reference &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#err_package_path_not_exported">Official Node.js docs</a></p>
+</footer>
+
+</body>
+</html>
