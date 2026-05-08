@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nodejs-errors",
+  "compatibility_date": "2026-05-08",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "ERR_PACKAGE_PATH_NOT_EXPORTED"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}
