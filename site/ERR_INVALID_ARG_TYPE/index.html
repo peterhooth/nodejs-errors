@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="index, follow" />
-  <title>TypeError [ERR_INVALID_ARG_TYPE]: The argument must be of type string – Node.js Fix</title>
-  <meta name="description" content="Node.js throws ERR_INVALID_ARG_TYPE when a built-in function receives an argument of the wrong type — most often undefined instead of a string for path, data, or callback arguments. Learn exact causes and fixes." />
+  <title>TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string. Received undefined – Node.js Fix</title>
+  <meta name="description" content="Fix TypeError [ERR_INVALID_ARG_TYPE] in Node.js: The 'path' argument must be of type string. Received undefined or Promise. Covers fs, path.resolve, ESM __dirname, stream.write, npm ERR, and React fixes." />
   <link rel="canonical" href="https://nodejs-errors.dev/ERR_INVALID_ARG_TYPE/" />
 
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="TypeError [ERR_INVALID_ARG_TYPE]: The argument must be of type string – Node.js Fix" />
-  <meta property="og:description" content="Node.js throws ERR_INVALID_ARG_TYPE when a built-in function receives an argument of the wrong type — most often undefined instead of a string for path, data, or callback arguments. Learn exact causes and fixes." />
+  <meta property="og:title" content="TypeError [ERR_INVALID_ARG_TYPE]: The &quot;path&quot; argument must be of type string. Received undefined – Node.js Fix" />
+  <meta property="og:description" content="Fix TypeError [ERR_INVALID_ARG_TYPE] in Node.js: The 'path' argument must be of type string. Received undefined or Promise. Covers fs, path.resolve, ESM __dirname, stream.write, npm ERR, and React fixes." />
   <meta property="og:url" content="https://nodejs-errors.dev/ERR_INVALID_ARG_TYPE/" />
   <meta property="og:site_name" content="nodejs-errors.dev" />
 
@@ -18,8 +18,8 @@
   {
     "@context": "https://schema.org",
     "@type": "TechArticle",
-    "headline": "TypeError [ERR_INVALID_ARG_TYPE]: The argument must be of type string – Node.js Fix",
-    "description": "Node.js throws ERR_INVALID_ARG_TYPE when a built-in function receives an argument of the wrong type — most often undefined instead of a string for path, data, or callback arguments.",
+    "headline": "TypeError [ERR_INVALID_ARG_TYPE]: The \"path\" argument must be of type string. Received undefined – Node.js Fix",
+    "description": "ERR_INVALID_ARG_TYPE is thrown by Node.js built-in functions when an argument has the wrong type — most commonly undefined or a Promise where a string is expected. Covers all major causes: missing await, undefined env vars, ESM __dirname not defined, path.resolve/path.join with undefined, fs.readFile/writeFile, stream.write passing an object, npm ERR during install, React react-scripts build failures, and TypeScript type guards.",
     "url": "https://nodejs-errors.dev/ERR_INVALID_ARG_TYPE/",
     "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
     "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
@@ -38,7 +38,7 @@
         "name": "What is ERR_INVALID_ARG_TYPE in Node.js?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "ERR_INVALID_ARG_TYPE is a TypeError thrown by Node.js built-in functions when they receive an argument of the wrong JavaScript type. The most common case is passing undefined to a function that expects a string, such as passing an undefined path to fs.readFile() or fs.writeFile(). The error message names the argument and both the expected and received types."
+          "text": "ERR_INVALID_ARG_TYPE is a TypeError thrown by Node.js built-in functions when they receive an argument of the wrong JavaScript type. The most common case is passing undefined to a function that expects a string, such as passing an undefined path to fs.readFile(), fs.writeFile(), or path.resolve(). The error message names the argument and both the expected and received types."
         }
       },
       {
@@ -54,7 +54,15 @@
         "name": "Why does ERR_INVALID_ARG_TYPE happen with async/await?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "A very common cause is forgetting the await keyword before an async function. Without await, the variable holds a Promise object instead of the resolved string value. When that Promise is passed to a built-in like fs.readFile(), Node.js throws ERR_INVALID_ARG_TYPE because a Promise is not a string. Fix by adding the missing await."
+          "text": "A very common cause is forgetting the await keyword before an async function. Without await, the variable holds a Promise object instead of the resolved string value. When that Promise is passed to a built-in like fs.readFile(), Node.js throws ERR_INVALID_ARG_TYPE because a Promise is not a string. The error message will say 'Received an instance of Promise'. Fix by adding the missing await."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_INVALID_ARG_TYPE caused by __dirname being undefined in ESM modules?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "__dirname is not defined in ES modules (.mjs files or when package.json has type: module). When passed to path.resolve() or path.join(), it causes ERR_INVALID_ARG_TYPE because it is undefined. Fix by defining __dirname yourself: import { fileURLToPath } from 'url'; import path from 'path'; const __filename = fileURLToPath(import.meta.url); const __dirname = path.dirname(__filename);"
         }
       },
       {
@@ -62,7 +70,23 @@
         "name": "What causes npm ERR! code ERR_INVALID_ARG_TYPE during npm install?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "During npm install or npm run, ERR_INVALID_ARG_TYPE usually means npm or a build tool received an undefined value for a path it expected to be a string. Common causes: the 'main' field in package.json points to a missing file, an npm script references an undefined environment variable, or the npm version is outdated. Fix by checking package.json for a valid 'main' field, clearing the npm cache with npm cache clean --force, and updating npm with npm install -g npm@latest."
+          "text": "During npm install or npm run, ERR_INVALID_ARG_TYPE usually means npm or a build tool received an undefined value for a path it expected to be a string. Common causes: the 'main' field in package.json points to a missing file, an npm script references an undefined environment variable, or the npm version is outdated. Fix by checking package.json for a valid 'main' field, clearing the npm cache with npm cache clean --force, deleting node_modules and package-lock.json, and updating npm with npm install -g npm@latest."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_INVALID_ARG_TYPE in a React or Create React App project?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "In React projects using Create React App, ERR_INVALID_ARG_TYPE during the build is usually caused by an outdated react-scripts package. Fix by upgrading react-scripts: npm install react-scripts@latest. If that does not help, delete node_modules and package-lock.json, then run npm install again. For ejected apps, check webpackDevServer.config.js for any path that may be undefined."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_INVALID_ARG_TYPE say 'The data argument must be of type string or an instance of Buffer'?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "This variant occurs when you pass an object, array, number, or undefined to fs.writeFile(), stream.write(), or response.end() instead of a string or Buffer. Objects must be serialized first with JSON.stringify(data). Numbers must be converted with String(num) or num.toString(). If the value is undefined, trace back to where it was set and ensure the variable is initialized before the write call."
         }
       }
     ]
@@ -86,11 +110,13 @@
     "@type": "HowTo",
     "name": "How to fix TypeError [ERR_INVALID_ARG_TYPE] in Node.js",
     "step": [
-      { "@type": "HowToStep", "position": 1, "name": "Identify the undefined argument", "text": "Read the error message — it names the exact argument that was wrong (e.g. 'path', 'data', 'chunk'). Add a console.log or Node.js assert statement immediately before the failing call to print the actual value you are passing." },
+      { "@type": "HowToStep", "position": 1, "name": "Identify the undefined argument", "text": "Read the error message — it names the exact argument that was wrong (e.g. 'path', 'data', 'chunk', 'from'). Add a console.log or Node.js assert statement immediately before the failing call to print the actual value you are passing." },
       { "@type": "HowToStep", "position": 2, "name": "Trace where the value comes from", "text": "Follow the variable back to its source: an environment variable, config file, function parameter, or return value. Check whether it could be undefined at runtime and add a validation guard." },
-      { "@type": "HowToStep", "position": 3, "name": "Add a missing await", "text": "If the value comes from an async function, confirm you have the await keyword. Without it the variable holds a Promise, not the resolved string, causing ERR_INVALID_ARG_TYPE." },
-      { "@type": "HowToStep", "position": 4, "name": "Validate environment variables at startup", "text": "If the value comes from process.env, validate all required environment variables when the application starts and throw a descriptive error early rather than letting undefined propagate to built-in calls." },
-      { "@type": "HowToStep", "position": 5, "name": "Provide a default with nullish coalescing", "text": "Use the ?? operator to supply a fallback value: const filePath = config.outputPath ?? './output.json'. This prevents undefined from reaching Node.js built-ins when a config key is omitted." }
+      { "@type": "HowToStep", "position": 3, "name": "Add a missing await", "text": "If the value comes from an async function, confirm you have the await keyword. Without it the variable holds a Promise, not the resolved string, causing ERR_INVALID_ARG_TYPE with 'Received an instance of Promise'." },
+      { "@type": "HowToStep", "position": 4, "name": "Fix __dirname in ESM modules", "text": "If using ES modules (.mjs or type: module in package.json), __dirname is not available. Define it yourself: import { fileURLToPath } from 'url'; const __filename = fileURLToPath(import.meta.url); const __dirname = path.dirname(__filename);" },
+      { "@type": "HowToStep", "position": 5, "name": "Validate environment variables at startup", "text": "If the value comes from process.env, validate all required environment variables when the application starts and throw a descriptive error early rather than letting undefined propagate to built-in calls." },
+      { "@type": "HowToStep", "position": 6, "name": "Provide a default with nullish coalescing", "text": "Use the ?? operator to supply a fallback value: const filePath = config.outputPath ?? './output.json'. This prevents undefined from reaching Node.js built-ins when a config key is omitted." },
+      { "@type": "HowToStep", "position": 7, "name": "Serialize objects before writing", "text": "If passing an object or number to fs.writeFile(), stream.write(), or response.end(), serialize it first with JSON.stringify(data) or String(num). Built-ins only accept strings or Buffers for data arguments." }
     ]
   }
   </script>
@@ -121,6 +147,11 @@
     th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
     td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
     footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
   </style>
 </head>
 <body>
@@ -135,13 +166,13 @@
   <span class="error-badge">Node.js Error</span>
   <h1>TypeError [ERR_INVALID_ARG_TYPE]</h1>
   <span class="error-code">error code: <code>ERR_INVALID_ARG_TYPE</code></span>
-  <p>Complete reference — what it means, why undefined reaches built-in functions, and how to fix it with argument validation, environment checks, and proper async/await usage.</p>
+  <p>Complete reference — what it means, all variants (path, data, chunk, from), and every fix: missing await, undefined env vars, ESM <code>__dirname</code>, npm install failures, React build errors, and proper type guards.</p>
 </header>
 
 <main>
 
   <div class="quick-answer">
-    <strong>Quick Answer:</strong> <code>TypeError [ERR_INVALID_ARG_TYPE]</code> means a Node.js built-in received the wrong JavaScript type — almost always <code>undefined</code> where a string was expected. Find the named argument in the error message, trace the variable back to its source, and check for a missing environment variable, a missing <code>await</code>, or a destructured property from a <code>null</code>/<code>undefined</code> object.
+    <strong>Quick Answer:</strong> <code>TypeError [ERR_INVALID_ARG_TYPE]</code> means a Node.js built-in received the wrong JavaScript type — almost always <code>undefined</code> or a <code>Promise</code> where a string was expected. Read the argument name in the error message (<code>"path"</code>, <code>"data"</code>, <code>"chunk"</code>, <code>"from"</code>), add a <code>console.log</code> right before the failing call to see the actual value, then trace it back to a missing env var, a missing <code>await</code>, an undefined <code>__dirname</code> in ESM, or an unserialised object.
   </div>
 
   <h2>What is ERR_INVALID_ARG_TYPE?</h2>
@@ -160,8 +191,10 @@
   <div class="callout">
     <strong>Exact error messages you will see:</strong><br>
     <code>TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string. Received undefined</code><br>
+    <code>TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string. Received an instance of Promise</code><br>
     <code>TypeError [ERR_INVALID_ARG_TYPE]: The "data" argument must be of type string or an instance of Buffer. Received undefined</code><br>
     <code>TypeError [ERR_INVALID_ARG_TYPE]: The "chunk" argument must be of type string or an instance of Buffer. Received type number (42)</code><br>
+    <code>TypeError [ERR_INVALID_ARG_TYPE]: The "from" argument must be of type string. Received undefined</code><br>
     <code>npm ERR! code ERR_INVALID_ARG_TYPE</code>
   </div>
 
@@ -191,12 +224,20 @@
         <td>The path argument is <code>undefined</code> because an environment variable, config property, or function parameter was never set before the <code>fs.readFile()</code> / <code>fs.writeFile()</code> call.</td>
       </tr>
       <tr>
+        <td><code>__dirname</code> is undefined in ESM modules</td>
+        <td><code>__dirname</code> and <code>__filename</code> are CommonJS globals. In ES modules (<code>.mjs</code> files or <code>"type": "module"</code> in package.json) they do not exist, so passing <code>__dirname</code> to <code>path.resolve()</code> or <code>path.join()</code> passes <code>undefined</code>.</td>
+      </tr>
+      <tr>
+        <td>Passing <code>undefined</code> to <code>path.resolve()</code> or <code>path.join()</code></td>
+        <td>Any argument to <code>path.resolve()</code> or <code>path.join()</code> that is <code>undefined</code> triggers the error. Common when an object property used as a path segment does not exist.</td>
+      </tr>
+      <tr>
         <td>Missing <code>return</code> value from async function</td>
         <td>An async function that should return a path or data string has no <code>return</code> statement, so it implicitly returns <code>undefined</code>. The caller then passes that <code>undefined</code> to a built-in.</td>
       </tr>
       <tr>
         <td>Forgot <code>await</code> on an async function</td>
-        <td>Without <code>await</code>, the variable holds a <code>Promise</code> object instead of the resolved string. Node.js built-ins reject a <code>Promise</code> as an invalid type.</td>
+        <td>Without <code>await</code>, the variable holds a <code>Promise</code> object instead of the resolved string. Node.js built-ins reject a <code>Promise</code> as an invalid type. The error message says <code>Received an instance of Promise</code>.</td>
       </tr>
       <tr>
         <td>Passing wrong type to <code>stream.write()</code> or <code>response.end()</code></td>
@@ -213,6 +254,10 @@
       <tr>
         <td>npm / build tool config issue</td>
         <td>The <code>"main"</code> field in <code>package.json</code> is missing or points to a non-existent file, causing npm's internal path resolution to pass <code>undefined</code> to a file system call.</td>
+      </tr>
+      <tr>
+        <td>React / Create React App (react-scripts)</td>
+        <td>An outdated <code>react-scripts</code> version passes an undefined path to a webpack or file-system function during build. Upgrading <code>react-scripts</code> resolves it.</td>
       </tr>
     </tbody>
   </table>
@@ -237,7 +282,37 @@ assert.strictEqual(typeof config.inputPath, 'string',
   `config.inputPath must be a string, got ${typeof config.inputPath}: ${config.inputPath}`);
 fs.readFile(config.inputPath, 'utf8', (err, data) => { /* ... */ });</code></pre>
 
-  <h2>Fix 2 – Validate environment variables at startup</h2>
+  <h2>Fix 2 – Fix __dirname in ES Modules (ESM)</h2>
+  <p>
+    <code>__dirname</code> and <code>__filename</code> are CommonJS-only globals. When your
+    file uses ES module syntax (<code>import</code>/<code>export</code>) — either with a
+    <code>.mjs</code> extension or with <code>"type": "module"</code> in <code>package.json</code>
+    — these globals are not available. Passing the bare name <code>__dirname</code> to
+    <code>path.resolve()</code> or <code>path.join()</code> passes <code>undefined</code>,
+    triggering <code>ERR_INVALID_ARG_TYPE</code>.
+  </p>
+  <pre><code>// WRONG – __dirname is not defined in ESM; this passes undefined to path.resolve
+// TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string. Received undefined
+import path from 'path';
+const configPath = path.resolve(__dirname, 'config.json'); // ReferenceError or undefined
+
+// CORRECT – recreate __dirname using import.meta.url
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+
+const configPath = path.resolve(__dirname, 'config.json'); // works correctly</code></pre>
+
+  <div class="callout">
+    <strong>Tip:</strong> This ESM <code>__dirname</code> pattern is one of the most common
+    causes of <code>ERR_INVALID_ARG_TYPE</code> in modern Node.js projects that have migrated
+    from CommonJS to ES modules. Whenever you see the error on a <code>path.resolve()</code>
+    or <code>path.join()</code> call, check the module system first.
+  </div>
+
+  <h2>Fix 3 – Validate environment variables at startup</h2>
   <p>
     Environment variables are one of the most common sources of <code>undefined</code>.
     Rather than letting <code>process.env.X</code> silently propagate through your code,
@@ -266,33 +341,37 @@ module.exports = {
 const config = require('./config');
 // If OUTPUT_DIR is not set, you get a clear error at startup, not deep in fs code.</code></pre>
 
-  <h2>Fix 3 – Use nullish coalescing for defaults</h2>
+  <h2>Fix 4 – Use nullish coalescing for defaults</h2>
   <p>
     When a config value or function argument is optional, use the <code>??</code> operator
     to supply a default instead of letting <code>undefined</code> reach a built-in function.
+    You can also use the logical OR operator (<code>||</code>) for any falsy value.
   </p>
-  <pre><code>const fs = require('fs/promises');
+  <pre><code>import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs/promises';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function writeOutput(data, options = {}) {
-  // Without ??, options.outputPath being undefined would cause ERR_INVALID_ARG_TYPE
-  const filePath = options.outputPath ?? './output.json';
+  // ?? prevents undefined from reaching built-ins when a config key is omitted
+  const filePath = options.outputPath ?? path.resolve(__dirname, 'output.json');
   const encoding = options.encoding   ?? 'utf8';
 
   // filePath is always a string now
   await fs.writeFile(filePath, JSON.stringify(data, null, 2), encoding);
 }
 
-// Works even when called without options
-await writeOutput({ result: 42 });
+// Also works for path.resolve — guard every segment that could be undefined
+const obj = {};
+const resolved = path.resolve(obj.basePath || __dirname, 'dist'); // safe fallback</code></pre>
 
-// Also works with a provided path
-await writeOutput({ result: 42 }, { outputPath: '/tmp/results.json' });</code></pre>
-
-  <h2>Fix 4 – Fix missing await (Promise passed as string)</h2>
+  <h2>Fix 5 – Fix missing await (Promise passed as string)</h2>
   <p>
     When an async function returns a string, forgetting <code>await</code> means the
     caller receives a <code>Promise</code> instead. Node.js built-ins will reject it as
-    the wrong type.
+    the wrong type. The error message will explicitly say
+    <code>Received an instance of Promise</code>.
   </p>
   <pre><code>const fs = require('fs/promises');
 
@@ -302,7 +381,8 @@ async function getConfigPath() {
 }
 
 // WRONG – missing await: configPath is a Promise, not a string
-// TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string. Received an instance of Promise
+// TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string.
+// Received an instance of Promise
 async function loadConfigBad() {
   const configPath = getConfigPath(); // forgot await
   return fs.readFile(configPath, 'utf8');
@@ -310,7 +390,7 @@ async function loadConfigBad() {
 
 // CORRECT – await the async function to get the resolved string
 async function loadConfigGood() {
-  const configPath = await getConfigPath(); // await resolves to '/etc/myapp/config.json'
+  const configPath = await getConfigPath(); // resolves to '/etc/myapp/config.json'
   return fs.readFile(configPath, 'utf8');
 }</code></pre>
 
@@ -320,51 +400,47 @@ async function loadConfigGood() {
     assignment and confirm that every async call is properly awaited.
   </div>
 
-  <h2>Fix 5 – Type check with typeof before calling built-ins</h2>
+  <h2>Fix 6 – Serialize objects before writing (data / chunk argument)</h2>
   <p>
-    When accepting values from external sources — user input, API responses, parsed JSON —
-    validate the type explicitly before passing them to Node.js built-ins.
+    When passing data to <code>fs.writeFile()</code>, <code>stream.write()</code>, or
+    <code>response.end()</code>, the value must be a <code>string</code> or a <code>Buffer</code>.
+    Passing a plain JavaScript object, array, or number triggers the
+    <code>"data" argument must be of type string or an instance of Buffer</code> variant.
   </p>
   <pre><code>const fs = require('fs/promises');
-
-async function readUserFile(filePath) {
-  // Guard against wrong types from external callers
-  if (typeof filePath !== 'string') {
-    throw new TypeError(
-      `readUserFile: filePath must be a string, got ${typeof filePath} (${String(filePath)})`
-    );
-  }
-
-  if (filePath.trim() === '') {
-    throw new RangeError('readUserFile: filePath must not be an empty string');
-  }
-
-  return fs.readFile(filePath, 'utf8');
-}
-
-// For stream.write() and response.end(), convert to string or Buffer first
 const http = require('http');
 
+// WRONG – passing an object to fs.writeFile causes ERR_INVALID_ARG_TYPE
+// TypeError [ERR_INVALID_ARG_TYPE]: The "data" argument must be of type string
+// or an instance of Buffer, TypedArray, or DataView. Received an instance of Object
+const results = { count: 42, items: ['a', 'b'] };
+await fs.writeFile('output.json', results); // Error!
+
+// CORRECT – serialize to string first
+await fs.writeFile('output.json', JSON.stringify(results, null, 2), 'utf8');
+
+// WRONG – passing a number to stream.write
+// TypeError [ERR_INVALID_ARG_TYPE]: The "chunk" argument must be of type string
+// or an instance of Buffer. Received type number (42)
 http.createServer((req, res) => {
-  const data = { message: 'hello' };
+  const statusCode = 200;
+  res.end(statusCode); // Error!
 
-  // WRONG: passing an object causes ERR_INVALID_ARG_TYPE on response.end()
-  // res.end(data);
-
-  // CORRECT: serialize to string first
+  // CORRECT – convert to string first
   res.setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify(data));
+  res.end(JSON.stringify({ status: statusCode }));
 }).listen(3000);</code></pre>
 
-  <h2>Fix 6 – npm ERR! code ERR_INVALID_ARG_TYPE during npm install or run</h2>
+  <h2>Fix 7 – npm ERR! code ERR_INVALID_ARG_TYPE during npm install or run</h2>
   <p>
     When the error appears in npm output rather than your own code, the cause is usually
     a misconfigured <code>package.json</code>, a corrupted npm cache, or an outdated npm
-    version.
+    version. The <code>"from" argument must be of type string</code> variant specifically
+    appears during npm dependency resolution when a package path cannot be determined.
   </p>
   <pre><code># Step 1: Check your package.json for a valid "main" field
 #   If "main" points to a file that does not exist, npm throws ERR_INVALID_ARG_TYPE internally
-cat package.json | grep '"main"'
+grep '"main"' package.json
 
 # Step 2: Clear the npm cache
 npm cache clean --force
@@ -379,7 +455,7 @@ npm --version
 
 # Step 5: If using Node.js engines field, make sure your Node.js version matches
 node --version
-cat package.json | grep '"node"'</code></pre>
+grep '"node"' package.json</code></pre>
 
   <div class="callout warn">
     <strong>package.json "main" field:</strong> If your <code>package.json</code> has a
@@ -390,12 +466,59 @@ cat package.json | grep '"node"'</code></pre>
     (<code>index.js</code>).
   </div>
 
+  <h2>Fix 8 – React / Create React App build error</h2>
+  <p>
+    In React projects bootstrapped with Create React App, <code>ERR_INVALID_ARG_TYPE</code>
+    during <code>npm start</code> or <code>npm run build</code> is almost always caused by
+    an outdated <code>react-scripts</code> package. An old version may pass an undefined path
+    to webpack's file-system resolver.
+  </p>
+  <pre><code># Upgrade react-scripts to the latest version
+npm install react-scripts@latest
+
+# If the error persists, clear all caches and reinstall from scratch
+rm -rf node_modules package-lock.json
+npm install
+
+# For ejected Create React App, check webpackDevServer.config.js
+# Look for any path that might be constructed from an undefined variable
+grep -n "undefined\|resolve\|join" config/webpackDevServer.config.js</code></pre>
+
+  <h2>Fix 9 – Type check with typeof (external data / user input)</h2>
+  <p>
+    When accepting values from external sources — user input, API responses, parsed JSON —
+    validate the type explicitly before passing them to Node.js built-ins. Consider using
+    TypeScript to catch these issues at compile time instead of at runtime.
+  </p>
+  <pre><code>const fs = require('fs/promises');
+
+// Guard against wrong types from external callers
+async function readUserFile(filePath) {
+  if (typeof filePath !== 'string') {
+    throw new TypeError(
+      `readUserFile: filePath must be a string, got ${typeof filePath} (${String(filePath)})`
+    );
+  }
+
+  if (filePath.trim() === '') {
+    throw new RangeError('readUserFile: filePath must not be an empty string');
+  }
+
+  return fs.readFile(filePath, 'utf8');
+}
+
+// TypeScript equivalent – catches ERR_INVALID_ARG_TYPE at compile time
+// function readUserFile(filePath: string): Promise&lt;string&gt; {
+//   return fs.readFile(filePath, 'utf8');
+// }</code></pre>
+
   <h2>Debugging Checklist</h2>
   <ol>
-    <li>Read the error message — the argument name (<code>"path"</code>, <code>"data"</code>, <code>"chunk"</code>) tells you exactly which parameter is wrong.</li>
+    <li>Read the error message — the argument name (<code>"path"</code>, <code>"data"</code>, <code>"chunk"</code>, <code>"from"</code>) tells you exactly which parameter is wrong.</li>
     <li>Find the line number in your own code from the stack trace (not the <code>node:internal/</code> frames) and add a <code>console.log</code> to print the value.</li>
     <li>If the value is <code>undefined</code>, trace back to where it was set: config object, environment variable, function return value, or destructured property.</li>
-    <li>If the value is a <code>Promise</code> object, add a missing <code>await</code> before the async function call.</li>
+    <li>If the value is a <code>Promise</code> object (<code>Received an instance of Promise</code>), add a missing <code>await</code> before the async function call.</li>
+    <li>If using ES modules and the error is on <code>path.resolve()</code> or <code>path.join()</code>, check whether <code>__dirname</code> is defined — it is not available in ESM. Use <code>fileURLToPath(import.meta.url)</code> instead.</li>
     <li>If the value is an object or number being passed to <code>stream.write()</code> or <code>response.end()</code>, wrap it with <code>JSON.stringify()</code> or <code>String()</code>.</li>
     <li>If the error appears in npm output, check <code>package.json</code> for a broken <code>"main"</code> field, clear the npm cache, and update npm.</li>
     <li>Use <code>NODE_DEBUG=fs</code> to trace all file system calls and see what path value is actually being passed at the system level.</li>
@@ -413,11 +536,96 @@ NODE_DEBUG=fs node app.js 2&gt;&amp;1 | head -40</code></pre>
     fix the root cause instead.
   </div>
 
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ERR_INVALID_ARG_TYPE in Node.js?</summary>
+    <div class="faq-answer">
+      <p><code>ERR_INVALID_ARG_TYPE</code> is a <code>TypeError</code> thrown by Node.js built-in functions when they receive an argument of the wrong JavaScript type. The most common case is passing <code>undefined</code> to a function that expects a string, such as passing an undefined path to <code>fs.readFile()</code>, <code>fs.writeFile()</code>, or <code>path.resolve()</code>. The error message always names the argument and states both the expected and received types.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix: The "path" argument must be of type string. Received undefined?</summary>
+    <div class="faq-answer">
+      <p>This means the variable you passed as the file path is <code>undefined</code>. Add a <code>console.log</code> right before the failing call to confirm the value, then trace it back to its source:</p>
+      <ul>
+        <li><strong>Environment variable not set:</strong> <code>process.env.OUTPUT_DIR</code> is <code>undefined</code> when missing from <code>.env</code> or CI settings.</li>
+        <li><strong>Missing config property:</strong> Use <code>const p = config.path ?? './default'</code> to provide a fallback.</li>
+        <li><strong>ESM module:</strong> <code>__dirname</code> is undefined — use <code>fileURLToPath(import.meta.url)</code>.</li>
+        <li><strong>Missing await:</strong> Add <code>await</code> before the async call that returns the path.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does it say "Received an instance of Promise"?</summary>
+    <div class="faq-answer">
+      <p>This is caused by a missing <code>await</code> keyword. Without <code>await</code>, the variable holds an unresolved <code>Promise</code> object instead of the actual string value. Find the assignment and add the missing <code>await</code>:</p>
+      <pre><code>// Wrong
+const configPath = getConfigPath(); // returns Promise, not string
+
+// Correct
+const configPath = await getConfigPath(); // resolves to string</code></pre>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix __dirname causing ERR_INVALID_ARG_TYPE in ESM?</summary>
+    <div class="faq-answer">
+      <p><code>__dirname</code> is not defined in ES modules. Use <code>fileURLToPath</code> from the built-in <code>url</code> module to recreate it:</p>
+      <pre><code>import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);</code></pre>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix npm ERR! code ERR_INVALID_ARG_TYPE during npm install?</summary>
+    <div class="faq-answer">
+      <p>Run these steps in order until the error resolves:</p>
+      <ol>
+        <li>Check <code>package.json</code> — ensure the <code>"main"</code> field points to a file that actually exists.</li>
+        <li>Clear the npm cache: <code>npm cache clean --force</code></li>
+        <li>Delete <code>node_modules</code> and <code>package-lock.json</code>, then run <code>npm install</code> again.</li>
+        <li>Update npm: <code>npm install -g npm@latest</code></li>
+      </ol>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_INVALID_ARG_TYPE in a React / Create React App project?</summary>
+    <div class="faq-answer">
+      <p>An outdated <code>react-scripts</code> package is the most common cause in CRA projects. Run:</p>
+      <pre><code>npm install react-scripts@latest</code></pre>
+      <p>If that does not fix it, delete <code>node_modules</code> and <code>package-lock.json</code> and run <code>npm install</code> again. For ejected apps, inspect <code>config/webpackDevServer.config.js</code> for any path built from a potentially undefined variable.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does "The data argument must be of type string or an instance of Buffer" appear?</summary>
+    <div class="faq-answer">
+      <p>This variant is thrown by <code>fs.writeFile()</code>, <code>stream.write()</code>, and similar APIs when you pass an object, array, or number instead of a string or <code>Buffer</code>. Serialize the value first:</p>
+      <pre><code>// Object → JSON string
+await fs.writeFile('out.json', JSON.stringify(data, null, 2), 'utf8');
+
+// Number → string
+stream.write(String(count));
+
+// Buffer for binary data
+stream.write(Buffer.from(binaryData));</code></pre>
+    </div>
+  </details>
+
   <h2>Related Errors</h2>
   <ul>
     <li><a href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/"><code>TypeError: Cannot read properties of undefined</code></a> — accessing a property on an undefined value; often the same root cause (missing env var or unresolved async) manifesting one step earlier</li>
     <li><a href="https://nodejs-errors.dev/MODULE_NOT_FOUND/"><code>Error: Cannot find module (MODULE_NOT_FOUND)</code></a> — a related npm/require failure often caused by the same broken package.json configuration</li>
-    <li><code>ENOENT: no such file or directory</code> — what you see after using <code>String(undefined)</code> as a workaround, producing the literal path <code>"undefined"</code></li>
+    <li><a href="https://nodejs-errors.dev/ENOENT/"><code>ENOENT: no such file or directory</code></a> — what you see after using <code>String(undefined)</code> as a workaround, producing the literal path <code>"undefined"</code></li>
+    <li><a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/"><code>ERR_REQUIRE_ESM</code></a> — related ESM migration error that often surfaces alongside <code>__dirname</code> issues</li>
+    <li><a href="https://nodejs-errors.dev/UnhandledPromiseRejection/"><code>UnhandledPromiseRejection</code></a> — if a missing <code>await</code> causes <code>ERR_INVALID_ARG_TYPE</code> inside an async function without a try/catch, it surfaces as this error</li>
     <li><code>ERR_INVALID_ARG_VALUE</code> — sibling error thrown when the argument is the right type but an invalid value (e.g. a negative number for a buffer size)</li>
     <li><code>ERR_MISSING_ARGS</code> — thrown when a required argument is omitted entirely rather than passed as the wrong type</li>
   </ul>

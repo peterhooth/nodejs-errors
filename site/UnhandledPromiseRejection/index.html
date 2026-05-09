@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="index, follow" />
-  <title>UnhandledPromiseRejection: Promise rejected without a .catch() handler – Node.js Fix</title>
-  <meta name="description" content="Node.js throws UnhandledPromiseRejectionWarning / UnhandledPromiseRejection when a rejected Promise has no .catch() handler or try/catch block. Fatal since Node.js 15+. Learn all causes and fixes." />
+  <title>UnhandledPromiseRejection: This error originated either by throwing inside of an async function without a catch block – Node.js Fix</title>
+  <meta name="description" content="Node.js throws UnhandledPromiseRejectionWarning (Node &lt;15) or crashes with [UnhandledPromiseRejection: This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch()] (Node 15+, exit code 1). All causes and fixes." />
   <link rel="canonical" href="https://nodejs-errors.dev/UnhandledPromiseRejection/" />
 
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="UnhandledPromiseRejection: Promise rejected without a .catch() handler – Node.js Fix" />
-  <meta property="og:description" content="Node.js throws UnhandledPromiseRejectionWarning / UnhandledPromiseRejection when a rejected Promise has no .catch() handler or try/catch block. Fatal since Node.js 15+. Learn all causes and fixes." />
+  <meta property="og:title" content="UnhandledPromiseRejection: This error originated either by throwing inside of an async function without a catch block – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws UnhandledPromiseRejectionWarning (Node &lt;15) or crashes with [UnhandledPromiseRejection: This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch()] (Node 15+, exit code 1). All causes and fixes." />
   <meta property="og:url" content="https://nodejs-errors.dev/UnhandledPromiseRejection/" />
   <meta property="og:site_name" content="nodejs-errors.dev" />
 
@@ -18,8 +18,8 @@
   {
     "@context": "https://schema.org",
     "@type": "TechArticle",
-    "headline": "UnhandledPromiseRejection: Promise rejected without a .catch() handler – Node.js Fix",
-    "description": "Node.js terminates the process with UnhandledPromiseRejection when a rejected Promise has no .catch() handler or try/catch block. This has been fatal (process exit code 1) since Node.js 15.",
+    "headline": "UnhandledPromiseRejection: This error originated either by throwing inside of an async function without a catch block – Node.js Fix",
+    "description": "Node.js terminates the process with [UnhandledPromiseRejection: This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch().] when a rejected Promise has no .catch() handler or try/catch block. Fatal since Node.js 15 (exit code 1). Covers: fire-and-forget async functions, promise chains without .catch(), async event listeners, async forEach anti-pattern, async setTimeout callbacks, Express 4 route handlers, secondary rejections thrown inside catch handlers, and constructor async anti-patterns. Fix with try/catch, .catch(), Promise.all+map, asyncHandler wrapper, and the @typescript-eslint/no-floating-promises lint rule.",
     "url": "https://nodejs-errors.dev/UnhandledPromiseRejection/",
     "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
     "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
@@ -38,7 +38,7 @@
         "name": "What is UnhandledPromiseRejection in Node.js?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "UnhandledPromiseRejection occurs when a Promise is rejected and no .catch() handler or try/catch block is present to handle the rejection. In Node.js 15 and later this crashes the process with exit code 1. In older versions it emitted a deprecation warning (UnhandledPromiseRejectionWarning) but allowed the process to continue."
+          "text": "UnhandledPromiseRejection occurs when a Promise is rejected and no .catch() handler or try/catch block is present to handle the rejection. In Node.js 15 and later this crashes the process with exit code 1 and prints: [UnhandledPromiseRejection: This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch(). The promise rejected with the reason: ...]. In Node.js older than 15 it emitted a deprecation warning (UnhandledPromiseRejectionWarning) but allowed the process to continue."
         }
       },
       {
@@ -46,7 +46,7 @@
         "name": "How do I fix UnhandledPromiseRejection in Node.js?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "The fix is to add proper error handling wherever a Promise is used. For async functions use try/catch. For promise chains add a .catch() at the end. For async event listeners wrap the body in try/catch. Avoid fire-and-forget patterns — if you call an async function without await, you must attach .catch() to the returned Promise."
+          "text": "The fix is to add proper error handling wherever a Promise is used. For async functions use try/catch. For promise chains add a .catch() at the end. For async event listeners wrap the body in try/catch. For the async forEach anti-pattern, replace forEach with Promise.all(arr.map(async ...)). For Express 4 async route handlers, use an asyncHandler wrapper or the express-async-errors package. Never call an async function without await unless you immediately chain .catch() to the returned Promise."
         }
       },
       {
@@ -54,7 +54,7 @@
         "name": "What changed in Node.js 15 regarding UnhandledPromiseRejection?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Before Node.js 15, an unhandled Promise rejection printed an UnhandledPromiseRejectionWarning to stderr but the process continued running. Starting with Node.js 15, an unhandled Promise rejection crashes the process immediately with exit code 1, the same behavior as an uncaught synchronous exception. This makes previously silent bugs suddenly fatal in production."
+          "text": "Before Node.js 15, an unhandled Promise rejection printed an UnhandledPromiseRejectionWarning to stderr but the process continued running. Starting with Node.js 15, an unhandled Promise rejection crashes the process immediately with exit code 1, printing: node:internal/process/promises:279 triggerUncaughtException(err, true /* fromPromise */); — the same behavior as an uncaught synchronous exception. This makes previously silent bugs suddenly fatal in production when upgrading from Node.js 14 to 16+."
         }
       },
       {
@@ -62,7 +62,31 @@
         "name": "Why does process.on('unhandledRejection') not fix the root cause?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "process.on('unhandledRejection') is a last-resort global handler, not a substitute for proper error handling. Using it to silently swallow rejections hides bugs and makes debugging harder. It should only be used for centralized logging, graceful shutdown, or alerting — always re-throw or exit the process after logging."
+          "text": "process.on('unhandledRejection') is a last-resort global handler, not a substitute for proper error handling. Using it to silently swallow rejections hides bugs and makes debugging harder. It should only be used for centralized logging, graceful shutdown, or alerting — always call process.exit(1) after logging. In Node.js 15+, even with a handler registered, the process will still crash unless you explicitly call process.exit() or pass --unhandled-rejections=warn on the command line."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why do I still get UnhandledPromiseRejection even though I have a .catch() handler?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Two common reasons: (1) Disconnected .catch() — you called .catch() as a separate statement instead of chaining it. A disconnected catch does not observe the original rejection. Always chain: promise.then(...).catch(...). (2) Secondary rejection in the catch handler — if your .catch() callback throws an error or references an undefined variable, that new rejection is itself unhandled. Make sure your catch handler does not throw. Also check Promise.any() and Promise.race() — if all input promises reject, the aggregate error may go unhandled."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the async forEach anti-pattern and how does it cause UnhandledPromiseRejection?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Array.prototype.forEach ignores the Promise returned by each async callback invocation. If any async callback rejects, the rejection is not observed. Fix by replacing forEach with Promise.all(arr.map(async (item) => { ... })) for parallel execution, or a for...of loop for sequential execution. Both patterns correctly propagate rejections."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I use the --unhandled-rejections flag to control Node.js behavior?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Node.js accepts --unhandled-rejections=MODE where MODE is: throw (default since Node 15, crashes with exit code 1), warn (logs a warning but does not crash, the Node 14 default), none (silently ignores all unhandled rejections — use only for temporary debugging), or strict (throws even if a handler is later added via rejectionHandled). Do not use warn or none in production — they hide real bugs."
         }
       }
     ]
@@ -86,11 +110,13 @@
     "@type": "HowTo",
     "name": "How to fix UnhandledPromiseRejection in Node.js",
     "step": [
-      { "@type": "HowToStep", "position": 1, "name": "Find the unhandled rejection", "text": "Run Node.js with --unhandled-rejections=throw (the default since Node.js 15) and read the stack trace. The 'at' lines show exactly which async function or promise chain is missing a handler." },
-      { "@type": "HowToStep", "position": 2, "name": "Add try/catch to async functions", "text": "Wrap the body of every async function that can throw in a try/catch block. Ensure the catch block either handles the error or re-throws it to a caller that will handle it." },
-      { "@type": "HowToStep", "position": 3, "name": "Add .catch() to promise chains", "text": "Every promise chain must end with .catch(err => { ... }). If you call an async function without await, attach .catch() to the returned Promise immediately: asyncFn().catch(console.error)." },
-      { "@type": "HowToStep", "position": 4, "name": "Fix async event listeners", "text": "Wrap the body of async event listener callbacks in try/catch. EventEmitter does not forward Promise rejections to the 'error' event." },
-      { "@type": "HowToStep", "position": 5, "name": "Enable the no-floating-promises lint rule", "text": "Install @typescript-eslint/eslint-plugin and enable the @typescript-eslint/no-floating-promises rule. This catches missing .catch() handlers at compile time before they crash production." }
+      { "@type": "HowToStep", "position": 1, "name": "Read the stack trace to locate the rejection", "text": "Run Node.js with --unhandled-rejections=throw (the default since Node.js 15) and read the stack trace. Ignore node:internal/ frames. The first frame in your own source file is where the rejected Promise was created. That is where the missing handler must be added." },
+      { "@type": "HowToStep", "position": 2, "name": "Add try/catch to async functions", "text": "Wrap the body of every async function that can throw in a try/catch block. Ensure the catch block either handles the error or re-throws it to a caller that will handle it. At the top-level entry point, always add .catch() to the main() call." },
+      { "@type": "HowToStep", "position": 3, "name": "Add .catch() to promise chains — and chain it, do not call it separately", "text": "Every promise chain must end with .catch(err => { ... }). If you call an async function without await, attach .catch() to the returned Promise immediately: asyncFn().catch(console.error). Do not call .catch() on a separate line — it must be chained directly." },
+      { "@type": "HowToStep", "position": 4, "name": "Fix async event listeners and setTimeout callbacks", "text": "Wrap the body of async event listener callbacks in try/catch. EventEmitter does not forward Promise rejections to the error event. Do the same for async callbacks inside setTimeout and setInterval — the event loop discards the returned Promise." },
+      { "@type": "HowToStep", "position": 5, "name": "Replace async forEach with Promise.all + map", "text": "Replace items.forEach(async cb) with await Promise.all(items.map(async cb)). forEach discards each returned Promise; Promise.all captures all rejections and propagates them." },
+      { "@type": "HowToStep", "position": 6, "name": "Wrap Express 4 async route handlers", "text": "Express 4 does not catch Promise rejections from async handlers. Wrap each handler with: const asyncHandler = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next); — or install the express-async-errors package, or upgrade to Express 5." },
+      { "@type": "HowToStep", "position": 7, "name": "Enable the no-floating-promises lint rule", "text": "Install @typescript-eslint/eslint-plugin and enable @typescript-eslint/no-floating-promises and @typescript-eslint/no-misused-promises. This catches missing .catch() handlers and misused async callbacks at lint time before they crash production." }
     ]
   }
   </script>
@@ -120,6 +146,11 @@
     table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
     th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
     td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
     footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
   </style>
 </head>
@@ -134,14 +165,14 @@
 <header>
   <span class="error-badge">Node.js Error</span>
   <h1>UnhandledPromiseRejection</h1>
-  <span class="error-code">event: <code>unhandledRejection</code> &nbsp;·&nbsp; fatal since Node.js 15</span>
-  <p>Complete reference — what it means, the Node.js 15 breaking change, all common causes, and step-by-step fixes with code examples.</p>
+  <span class="error-code">event: <code>unhandledRejection</code> &nbsp;·&nbsp; error code: <code>ERR_UNHANDLED_REJECTION</code> &nbsp;·&nbsp; fatal since Node.js 15</span>
+  <p>Complete reference — exact terminal output, the Node.js 15 breaking change, all common causes including edge cases, and step-by-step fixes with code examples.</p>
 </header>
 
 <main>
 
   <div class="quick-answer">
-    <strong>Quick Answer:</strong> A Promise was rejected and nothing caught the rejection — no <code>.catch()</code>, no <code>try/catch</code> around an <code>await</code>. Since Node.js 15 this <strong>crashes the process</strong> with exit code 1. Fix it by adding <code>try/catch</code> to every <code>async</code> function and <code>.catch()</code> to every promise chain. Never call an <code>async</code> function without <code>await</code> unless you immediately chain <code>.catch()</code>.
+    <strong>Quick Answer:</strong> A Promise was rejected and nothing caught the rejection — no <code>.catch()</code>, no <code>try/catch</code> around an <code>await</code>. Since Node.js 15 this <strong>crashes the process</strong> with exit code 1 and prints <code>[UnhandledPromiseRejection: This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch()]</code>. Fix it by adding <code>try/catch</code> to every <code>async</code> function and <code>.catch()</code> to every promise chain. Never call an <code>async</code> function without <code>await</code> unless you immediately chain <code>.catch()</code>.
   </div>
 
   <h2>What is UnhandledPromiseRejection?</h2>
@@ -149,8 +180,7 @@
     When a <code>Promise</code> is rejected and no handler is registered to catch that rejection,
     Node.js emits the <code>unhandledRejection</code> process event. The rejection is "unhandled"
     because no <code>.catch()</code> callback, no <code>try/catch</code> block around an
-    <code>await</code>, and no <code>Promise.allSettled()</code> / <code>Promise.any()</code>
-    absorb the error.
+    <code>await</code>, and no <code>Promise.allSettled()</code> absorb the error.
   </p>
   <p>
     This is one of the most common async bugs in Node.js: code <em>looks</em> like it runs
@@ -158,11 +188,17 @@
   </p>
 
   <div class="callout">
-    <strong>Exact error messages you will see:</strong><br>
-    <code>UnhandledPromiseRejectionWarning: Error: something failed</code> &nbsp;(Node.js &lt; 15)<br>
-    <code>node:internal/process/promises:279 - UnhandledPromiseRejection</code> &nbsp;(Node.js 15+)<br>
-    <code>[UnhandledPromiseRejection: This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch()]</code><br>
-    Process exit code <strong>1</strong> in Node.js 15+
+    <strong>Exact error messages you will see in the terminal:</strong><br><br>
+    <strong>Node.js &lt; 15 (warning, process continues):</strong><br>
+    <code>(node:12345) UnhandledPromiseRejectionWarning: Error: something failed</code><br>
+    <code>(node:12345) UnhandledPromiseRejectionWarning: Unhandled promise rejection. This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch().</code><br><br>
+    <strong>Node.js 15+ (fatal, process crashes with exit code 1):</strong><br>
+    <code>node:internal/process/promises:279</code><br>
+    <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triggerUncaughtException(err, true /* fromPromise */);</code><br>
+    <code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^</code><br>
+    <code>[UnhandledPromiseRejection: This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch(). The promise rejected with the reason: Error: something failed] {</code><br>
+    <code>&nbsp;&nbsp;code: 'ERR_UNHANDLED_REJECTION'</code><br>
+    <code>}</code>
   </div>
 
   <h2>The Node.js 15 Breaking Change</h2>
@@ -173,11 +209,11 @@
     <thead><tr><th>Node.js version</th><th>Behavior on unhandled rejection</th></tr></thead>
     <tbody>
       <tr>
-        <td>Node.js &lt; 15</td>
+        <td>Node.js &lt; 15 (12, 14)</td>
         <td>Prints <code>UnhandledPromiseRejectionWarning</code> to stderr. Process <strong>continues running</strong>. (Deprecated since Node.js 12.)</td>
       </tr>
       <tr>
-        <td>Node.js 15+ (LTS 16, 18, 20, 22)</td>
+        <td>Node.js 15+ (LTS 16, 18, 20, 22, 24)</td>
         <td>Throws the rejection as an uncaught exception. Process <strong>crashes immediately</strong> with exit code 1. Same as an unhandled synchronous throw.</td>
       </tr>
     </tbody>
@@ -195,31 +231,37 @@
     Fix the actual missing error handler.
   </div>
 
-  <h2>Full Error Example</h2>
+  <h2>Full Error Example (Terminal Output)</h2>
   <pre><code>// This code — no await, no .catch()
 getData(); // async function that rejects
 
 // Node.js &lt; 15 output (warning only, process continues):
-// (node:12345) UnhandledPromiseRejectionWarning: Error: something failed
-//     at getData (/app/index.js:5:9)
-//     at Object.&lt;anonymous&gt; (/app/index.js:10:1)
-// (node:12345) UnhandledPromiseRejectionWarning: Unhandled promise rejection.
-// This error originated either by throwing inside of an async function without
-// a catch block, or by rejecting a promise which was not handled with .catch().
+(node:12345) UnhandledPromiseRejectionWarning: Error: something failed
+    at getData (/app/index.js:5:9)
+    at Object.&lt;anonymous&gt; (/app/index.js:10:1)
+(node:12345) UnhandledPromiseRejectionWarning: Unhandled promise rejection.
+This error originated either by throwing inside of an async function without
+a catch block, or by rejecting a promise which was not handled with .catch().
+(node:12345) [DEP0018] DeprecationWarning: Unhandled promise rejections are
+deprecated. In the future, promise rejections that are not handled will terminate
+the Node.js process with a non-zero exit code.
 
-// Node.js 15+ output (process crashes):
-// node:internal/process/promises:279
-//           triggerUncaughtException(err, true /* fromPromise */);
-//           ^
-// [UnhandledPromiseRejection: This error originated either by throwing inside
-// of an async function without a catch block, or by rejecting a promise which
-// was not handled with .catch(). The promise rejected with the reason:
-// Error: something failed]
-//     at getData (/app/index.js:5:9)
-//     at Object.&lt;anonymous&gt; (/app/index.js:10:1) {
-//   code: 'ERR_UNHANDLED_REJECTION'
-// }
-// Process exited with code 1</code></pre>
+// Node.js 15+ output (process crashes with exit code 1):
+node:internal/process/promises:279
+          triggerUncaughtException(err, true /* fromPromise */);
+          ^
+
+[UnhandledPromiseRejection: This error originated either by throwing inside
+of an async function without a catch block, or by rejecting a promise which
+was not handled with .catch(). The promise rejected with the reason:
+Error: something failed]
+    at getData (/app/index.js:5:9)
+    at Object.&lt;anonymous&gt; (/app/index.js:10:1) {
+  code: 'ERR_UNHANDLED_REJECTION'
+}
+
+Node.js v18.12.0
+Process exited with code 1</code></pre>
 
   <h2>Common Causes</h2>
   <table>
@@ -234,20 +276,36 @@ getData(); // async function that rejects
         <td>A rejection in any <code>.then()</code> step propagates to the end of the chain. If the chain has no <code>.catch()</code>, the rejection is unhandled.</td>
       </tr>
       <tr>
+        <td>Disconnected <code>.catch()</code> call (called on a separate statement, not chained)</td>
+        <td>Calling <code>p.catch(handler)</code> on a new line <em>after</em> the Promise is created does not observe the original rejection if the rejection occurs in the same tick or before the catch is attached.</td>
+      </tr>
+      <tr>
+        <td>Error thrown <em>inside</em> a <code>.catch()</code> handler</td>
+        <td>If your catch handler references an undefined variable or throws a new error, that secondary rejection is itself unhandled. This is a common hidden source of the error.</td>
+      </tr>
+      <tr>
         <td><code>async</code> event handler throwing without being caught</td>
-        <td><code>EventEmitter</code> does not <code>await</code> listeners. An <code>async</code> listener that throws returns a rejected Promise that is never observed by the emitter.</td>
+        <td><code>EventEmitter</code> does not <code>await</code> listeners. An <code>async</code> listener that throws returns a rejected Promise that is never observed by the emitter's <code>'error'</code> event.</td>
       </tr>
       <tr>
         <td><code>setTimeout</code> / <code>setInterval</code> with an <code>async</code> callback that throws</td>
-        <td>Timer callbacks are called synchronously by the event loop — the returned Promise from an <code>async</code> callback is silently discarded.</td>
+        <td>Timer callbacks are called by the event loop; the Promise returned by an <code>async</code> timer callback is silently discarded.</td>
       </tr>
       <tr>
-        <td>Forgetting to <code>return</code> a Promise inside middleware chains</td>
-        <td>Express / Fastify / other frameworks expect middleware to either call <code>next(err)</code> or return a resolved Promise. An unreturned rejection escapes the framework's error handler.</td>
+        <td><code>Array.prototype.forEach</code> with an <code>async</code> callback</td>
+        <td><code>forEach</code> ignores the Promise returned by each async invocation. Any rejection inside an async <code>forEach</code> callback is unhandled.</td>
       </tr>
       <tr>
-        <td>Fire-and-forget pattern without error handling</td>
-        <td>Intentionally not awaiting a background task but also not adding <code>.catch()</code> means any failure is silently unhandled.</td>
+        <td>Express 4 async route handler without wrapper</td>
+        <td>Express 4 does not <code>await</code> route handlers. A rejected Promise from an <code>async</code> handler is not forwarded to the Express error handler.</td>
+      </tr>
+      <tr>
+        <td>Async logic inside class constructors</td>
+        <td>Constructors cannot be <code>async</code>. Calling an async method from a constructor and not handling its returned Promise causes an unhandled rejection.</td>
+      </tr>
+      <tr>
+        <td>Top-level <code>await</code> without a surrounding <code>try/catch</code></td>
+        <td>In ES module files (<code>.mjs</code> or <code>"type": "module"</code>), top-level <code>await</code> that throws without a surrounding <code>try/catch</code> is an unhandled rejection.</td>
       </tr>
     </tbody>
   </table>
@@ -274,15 +332,27 @@ async function main() {
     console.error('Failed to load user:', err);
   }
 }
+main().catch((err) => {
+  console.error('Unhandled error in main:', err);
+  process.exit(1);
+});
 
 // FIXED – option B: add .catch() when not awaiting
 loadUser(42).catch((err) => console.error('Failed to load user:', err));</code></pre>
 
-  <h2>Fix 2 – Add .catch() to promise chains</h2>
+  <div class="callout">
+    <strong>Top-level entry point pattern:</strong> Always add <code>.catch()</code> to the
+    outermost <code>main()</code> call. Even if <code>main()</code> has <code>try/catch</code>
+    inside, an unexpected error could still propagate out. Attaching <code>.catch()</code> to
+    the top-level call is a mandatory safety net.
+  </div>
+
+  <h2>Fix 2 – Add .catch() to promise chains (and always chain it)</h2>
   <p>
     Every promise chain must terminate with a <code>.catch()</code>. A rejection in any
     <code>.then()</code> step skips all subsequent <code>.then()</code> calls and lands in
-    the nearest <code>.catch()</code>.
+    the nearest <code>.catch()</code>. Critically, you must <em>chain</em> the <code>.catch()</code>
+    — calling it on a separate statement may not observe the rejection.
   </p>
   <pre><code>// BROKEN – no .catch()
 fetch('https://api.example.com/data')
@@ -290,7 +360,11 @@ fetch('https://api.example.com/data')
   .then((data) => process(data));
 // If fetch() or res.json() or process() rejects — UNHANDLED REJECTION
 
-// FIXED – .catch() at the end of the chain
+// BROKEN – disconnected .catch() (common mistake)
+const p = fetch('https://api.example.com/data').then((res) => res.json());
+p.catch((err) => console.error(err)); // does NOT chain; p.catch() returns a new promise
+
+// FIXED – .catch() chained at the end
 fetch('https://api.example.com/data')
   .then((res) => res.json())
   .then((data) => process(data))
@@ -309,7 +383,44 @@ async function loadData() {
   }
 }</code></pre>
 
-  <h2>Fix 3 – Handle rejections in async event listeners</h2>
+  <h2>Fix 3 – Handle errors thrown inside .catch() handlers</h2>
+  <p>
+    A secondary unhandled rejection occurs when your <code>.catch()</code> handler itself
+    throws — for example by referencing an undefined variable or calling a function that
+    throws. This is one of the most insidious sources of the error: you believe you caught the
+    rejection, but your catch handler created a new one.
+  </p>
+  <pre><code>// BROKEN – catch handler throws a secondary unhandled rejection
+new Promise((_, reject) => reject(new Error('original error')))
+  .catch((error) => {
+    // Bug: 'err' is not defined — ReferenceError thrown here
+    console.log('caught', err.message); // ReferenceError: err is not defined
+    // This secondary rejection is UNHANDLED
+  });
+
+// FIXED – use the correct variable name
+new Promise((_, reject) => reject(new Error('original error')))
+  .catch((error) => {
+    console.log('caught', error.message); // correct
+  });
+
+// ALSO BROKEN – catch handler calls a function that throws
+fetchData()
+  .catch((err) => {
+    notifyMonitoringService(err); // if this throws, new unhandled rejection
+  });
+
+// FIXED – wrap catch handler body too
+fetchData()
+  .catch((err) => {
+    try {
+      notifyMonitoringService(err);
+    } catch (monitorErr) {
+      console.error('Monitoring notification failed:', monitorErr);
+    }
+  });</code></pre>
+
+  <h2>Fix 4 – Handle rejections in async event listeners</h2>
   <p>
     <code>EventEmitter</code> is not Promise-aware. An <code>async</code> listener that
     throws does not propagate the error to the emitter's <code>'error'</code> event.
@@ -318,14 +429,14 @@ async function loadData() {
   <pre><code>const EventEmitter = require('events');
 const emitter = new EventEmitter();
 
-// BROKEN – async listener, rejection is not caught by the emitter
+// BROKEN – async listener, rejection is NOT caught by the emitter's error event
 emitter.on('data', async (payload) => {
   const result = await processPayload(payload); // can reject
   await saveResult(result);                      // can reject
 });
 
 emitter.on('error', (err) => console.error('emitter error:', err));
-// This 'error' listener does NOT catch async listener rejections!
+// This 'error' listener does NOT receive async listener rejections!
 
 // FIXED – wrap async listener in try/catch
 emitter.on('data', async (payload) => {
@@ -333,15 +444,15 @@ emitter.on('data', async (payload) => {
     const result = await processPayload(payload);
     await saveResult(result);
   } catch (err) {
-    // Handle the error here — or emit it to the error handler:
+    // Handle the error directly, or emit it to the error handler:
     emitter.emit('error', err);
   }
 });</code></pre>
 
-  <h2>Fix 4 – Handle async callbacks in setTimeout / setInterval</h2>
+  <h2>Fix 5 – Handle async callbacks in setTimeout / setInterval</h2>
   <p>
-    Timer callbacks are invoked synchronously by the event loop. The <code>Promise</code>
-    returned by an <code>async</code> timer callback is discarded. Any rejection is unhandled.
+    Timer callbacks are invoked by the event loop. The <code>Promise</code> returned by an
+    <code>async</code> timer callback is discarded — any rejection is unhandled.
   </p>
   <pre><code>// BROKEN – async callback, rejection escapes
 setTimeout(async () => {
@@ -368,7 +479,122 @@ async function timerTask() {
 
 setInterval(timerTask, 5000);</code></pre>
 
-  <h2>Fix 5 – Use process.on('unhandledRejection') as a last resort</h2>
+  <h2>Fix 6 – Replace async forEach with Promise.all + map</h2>
+  <p>
+    Using <code>Array.prototype.forEach</code> with an <code>async</code> callback is one
+    of the most common sources of unhandled rejections. <code>forEach</code> ignores the
+    Promise returned by each invocation. Use <code>Promise.all</code> with <code>.map()</code>
+    instead.
+  </p>
+  <pre><code>const items = [1, 2, 3];
+
+// BROKEN – forEach discards each Promise returned by the async callback
+items.forEach(async (item) => {
+  await processItem(item); // UNHANDLED REJECTION if processItem rejects
+});
+
+// FIXED – Promise.all + map: all rejections are captured and propagated
+await Promise.all(items.map(async (item) => {
+  await processItem(item);
+}));
+
+// FIXED – for...of loop (sequential, easier to debug):
+for (const item of items) {
+  try {
+    await processItem(item);
+  } catch (err) {
+    console.error('Failed on item', item, err);
+  }
+}
+
+// FIXED – parallel with independent per-item error handling:
+await Promise.allSettled(items.map(async (item) => {
+  try {
+    await processItem(item);
+  } catch (err) {
+    console.error('Failed on item', item, err);
+  }
+}));</code></pre>
+
+  <div class="callout warn">
+    <strong>Also affected:</strong> <code>Array.prototype.map</code>, <code>filter</code>,
+    <code>reduce</code>, and other array methods also ignore returned Promises unless you wrap
+    them with <code>Promise.all()</code>. The same issue applies to <code>.forEach()</code>
+    on <code>Set</code> and <code>Map</code> iterables.
+  </div>
+
+  <h2>Fix 7 – Handle async errors in Express 4 route handlers</h2>
+  <p>
+    Express 4 does not catch Promise rejections from <code>async</code> route handlers.
+    Either wrap handlers with a helper, or upgrade to Express 5 which handles this natively.
+  </p>
+  <pre><code>// BROKEN in Express 4 – async handler, rejection not forwarded to Express error handler
+app.get('/user/:id', async (req, res) => {
+  const user = await db.findUser(req.params.id); // rejects = UNHANDLED REJECTION
+  res.json(user);
+});
+
+// FIX A – asyncHandler wrapper (Express 4)
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
+
+app.get('/user/:id', asyncHandler(async (req, res) => {
+  const user = await db.findUser(req.params.id);
+  res.json(user);
+}));
+
+// FIX B – express-async-errors package (Express 4)
+// npm install express-async-errors
+require('express-async-errors'); // patches Express to handle async errors automatically
+app.get('/user/:id', async (req, res) => {
+  const user = await db.findUser(req.params.id);
+  res.json(user);
+});
+
+// FIX C – Express 5 (handles async route handlers natively)
+// npm install express@5
+app.get('/user/:id', async (req, res) => {
+  const user = await db.findUser(req.params.id); // rejections auto-forwarded to next(err)
+  res.json(user);
+});
+
+// In all cases, register an Express error handler:
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: err.message });
+});</code></pre>
+
+  <h2>Fix 8 – Avoid async logic in class constructors</h2>
+  <p>
+    Class constructors cannot be <code>async</code>. Calling an async method inside a
+    constructor and not handling the returned Promise causes an unhandled rejection.
+    Use a static factory method instead.
+  </p>
+  <pre><code>// BROKEN – async call in constructor, returned Promise discarded
+class Database {
+  constructor(url) {
+    this.connect(url); // returns a Promise that is never awaited or caught
+  }
+  async connect(url) {
+    this.conn = await createConnection(url); // UNHANDLED REJECTION if this fails
+  }
+}
+const db = new Database('mongodb://localhost'); // bug hidden here
+
+// FIXED – static async factory method
+class Database {
+  constructor(conn) {
+    this.conn = conn;
+  }
+  static async create(url) {
+    const conn = await createConnection(url); // rejections propagate to caller
+    return new Database(conn);
+  }
+}
+const db = await Database.create('mongodb://localhost'); // caller handles rejection</code></pre>
+
+  <h2>Fix 9 – Use process.on('unhandledRejection') as a last resort</h2>
   <p>
     A global handler is useful for centralized logging and graceful shutdown, but it is
     <strong>not a substitute</strong> for proper per-Promise error handling. Every rejection
@@ -385,41 +611,48 @@ process.on('unhandledRejection', (reason, promise) => {
 // DO NOT do this — silently swallowing hides real bugs:
 process.on('unhandledRejection', () => {}); // WRONG
 
-// DO NOT do this — catching without exiting leaves process in unknown state:
+// DO NOT do this — logging without exiting leaves the process in unknown state:
 process.on('unhandledRejection', (reason) => {
-  console.error(reason); // logs but does not exit — WRONG in Node.js 15+
+  console.error(reason); // logs but does not exit — WRONG for Node.js 15+
 });</code></pre>
 
   <div class="callout warn">
-    <strong>Node.js 15+ ignores return values from the unhandledRejection handler:</strong>
-    In Node.js 15+, even if you register a <code>process.on('unhandledRejection')</code>
-    handler, the default behavior is <code>throw</code> — the process will still crash unless
-    you explicitly call <code>process.exit()</code> or use
-    <code>--unhandled-rejections=warn</code> (not recommended for production).
+    <strong>Node.js 15+ behavior with a registered unhandledRejection handler:</strong>
+    In Node.js 15+, if you register a <code>process.on('unhandledRejection')</code> handler,
+    the default <code>throw</code> behavior is suppressed — but only if your handler
+    calls <code>process.exit()</code> or performs another terminal action. If your handler
+    returns without exiting, the process continues in an unknown state. Always call
+    <code>process.exit(1)</code> after logging.
   </div>
 
-  <h2>Fix 6 – Enable no-floating-promises lint rule</h2>
+  <h2>Fix 10 – Enable no-floating-promises lint rule</h2>
   <p>
-    The TypeScript ESLint rule <code>@typescript-eslint/no-floating-promises</code> flags
-    any <code>Promise</code>-returning call that is not <code>await</code>ed and has no
-    <code>.catch()</code>. Catching this at lint time prevents runtime crashes.
+    The TypeScript ESLint rules <code>@typescript-eslint/no-floating-promises</code> and
+    <code>@typescript-eslint/no-misused-promises</code> flag any <code>Promise</code>-returning
+    call that is not <code>await</code>ed and has no <code>.catch()</code>. Catching this at
+    lint time prevents runtime crashes.
   </p>
   <pre><code>// Install:
 // npm install --save-dev @typescript-eslint/eslint-plugin @typescript-eslint/parser
 
-// .eslintrc.json (or eslint.config.js):
-{
-  "parser": "@typescript-eslint/parser",
-  "plugins": ["@typescript-eslint"],
-  "rules": {
-    "@typescript-eslint/no-floating-promises": "error",
-    "@typescript-eslint/no-misused-promises": "error"
-  }
-}
+// eslint.config.js (flat config):
+import tseslint from '@typescript-eslint/eslint-plugin';
+import tsParser from '@typescript-eslint/parser';
 
-// The rule catches:
-someAsyncFunction();           // ERROR: floating promise
-arr.forEach(async (item) => { // ERROR: no-misused-promises
+export default [
+  {
+    plugins: { '@typescript-eslint': tseslint },
+    languageOptions: { parser: tsParser },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error'
+    }
+  }
+];
+
+// The rules catch:
+someAsyncFunction();           // ERROR: floating promise — missing await or .catch()
+arr.forEach(async (item) => { // ERROR: no-misused-promises — forEach ignores returned Promise
   await processItem(item);
 });
 
@@ -428,106 +661,60 @@ await someAsyncFunction();
 someAsyncFunction().catch(handleError);
 await Promise.all(arr.map(async (item) => processItem(item)));</code></pre>
 
-  <h2>Fix 7 – Fix the async forEach anti-pattern</h2>
+  <h2>Controlling Behavior with --unhandled-rejections Flag</h2>
   <p>
-    Using <code>Array.prototype.forEach</code> with an <code>async</code> callback is one
-    of the most common sources of unhandled rejections. <code>forEach</code> ignores the
-    returned Promise. Use <code>Promise.all</code> with <code>.map()</code> instead.
+    Node.js provides a command-line flag to control what happens when an unhandled rejection occurs.
+    Knowing these modes helps during debugging and migration.
   </p>
-  <pre><code>const items = [1, 2, 3];
+  <table>
+    <thead><tr><th>Flag value</th><th>Behavior</th><th>When to use</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>--unhandled-rejections=throw</code></td>
+        <td>Default since Node.js 15. Crashes with exit code 1.</td>
+        <td>Production. Always use this.</td>
+      </tr>
+      <tr>
+        <td><code>--unhandled-rejections=warn</code></td>
+        <td>Logs a warning but does not crash. The Node.js 14 default.</td>
+        <td>Temporary — migrating a large codebase to Node.js 15+.</td>
+      </tr>
+      <tr>
+        <td><code>--unhandled-rejections=none</code></td>
+        <td>Silently ignores all unhandled rejections.</td>
+        <td>Never in production. Useful only to isolate unrelated issues during debugging.</td>
+      </tr>
+      <tr>
+        <td><code>--unhandled-rejections=strict</code></td>
+        <td>Always throws, even if a <code>rejectionHandled</code> event is later emitted.</td>
+        <td>Strictest mode — use to surface late-attached handlers as bugs.</td>
+      </tr>
+    </tbody>
+  </table>
+  <pre><code># Run with warn mode temporarily while migrating from Node 14 to 18:
+node --unhandled-rejections=warn app.js
 
-// BROKEN – forEach discards the Promise returned by each async callback
-items.forEach(async (item) => {
-  await processItem(item); // UNHANDLED REJECTION if processItem rejects
-});
-
-// FIXED – Promise.all + map: all rejections are captured
-await Promise.all(items.map(async (item) => {
-  await processItem(item);
-}));
-
-// FIXED – for...of loop (sequential, easier to read):
-for (const item of items) {
-  try {
-    await processItem(item);
-  } catch (err) {
-    console.error('Failed on item', item, err);
-  }
-}
-
-// FIXED – with individual error handling per item (parallel, independent):
-await Promise.allSettled(items.map(async (item) => {
-  try {
-    await processItem(item);
-  } catch (err) {
-    console.error('Failed on item', item, err);
-  }
-}));</code></pre>
-
-  <h2>Fix 8 – Handle async errors in Express middleware</h2>
-  <p>
-    Express 4 does not catch Promise rejections from <code>async</code> route handlers.
-    Either wrap handlers with a helper, or upgrade to Express 5 which handles this natively.
-  </p>
-  <pre><code>// BROKEN in Express 4 – async handler, rejection is not forwarded to Express error handler
-app.get('/user/:id', async (req, res) => {
-  const user = await db.findUser(req.params.id); // rejects = UNHANDLED REJECTION
-  res.json(user);
-});
-
-// FIX A – wrap with asyncHandler helper (Express 4)
-const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
-
-app.get('/user/:id', asyncHandler(async (req, res) => {
-  const user = await db.findUser(req.params.id);
-  res.json(user);
-}));
-
-// FIX B – express-async-errors package (Express 4)
-// npm install express-async-errors
-require('express-async-errors'); // patch Express to handle async errors
-app.get('/user/:id', async (req, res) => {
-  const user = await db.findUser(req.params.id);
-  res.json(user);
-});
-
-// FIX C – Express 5 (handles async natively)
-// npm install express@5
-app.get('/user/:id', async (req, res) => {
-  const user = await db.findUser(req.params.id); // rejections auto-forwarded to next(err)
-  res.json(user);
-});
-
-// In all cases, register an Express error handler:
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ error: err.message });
-});</code></pre>
+# Force throw mode to reproduce the crash (useful on older Node.js):
+node --unhandled-rejections=throw app.js</code></pre>
 
   <h2>Debugging: Finding the Source</h2>
   <p>
-    When the error message does not include a useful stack trace, use these techniques to
-    locate the exact promise that is rejecting.
+    When the stack trace does not include a useful line from your own source files, use these
+    techniques to locate the exact promise that is rejecting.
   </p>
-  <h3>Read the stack trace carefully</h3>
+  <h3>Read the stack trace — ignore node:internal/ frames</h3>
   <p>
-    The stack trace in the <code>unhandledRejection</code> event points to where the
-    rejected Promise was <em>created</em>, not where it was called. Look for your own
-    source files in the trace — ignore <code>node:internal/</code> frames.
+    The stack trace points to where the rejected Promise was <em>created</em>, not where it
+    was called from. Look for the first frame that belongs to your own code — ignore all
+    <code>node:internal/</code> lines.
   </p>
-  <pre><code># Force throw behavior even on older Node.js versions
+  <pre><code># Force throw behavior even on older Node.js versions:
 node --unhandled-rejections=throw app.js
 
-# See all async hooks activity (verbose, for deep debugging)
-NODE_DEBUG=promise node app.js</code></pre>
-
-  <h3>Use --trace-warnings for deprecation context</h3>
-  <pre><code># Shows the full stack trace for DeprecationWarnings including promise warnings
+# Show full stack trace for all process warnings (including deprecation warnings):
 node --trace-warnings app.js</code></pre>
 
-  <h3>Identify the rejection reason and promise</h3>
+  <h3>Identify the rejection reason and promise with a diagnostic handler</h3>
   <pre><code>process.on('unhandledRejection', (reason, promise) => {
   console.error('=== UNHANDLED REJECTION ===');
   console.error('Promise:', promise);
@@ -538,12 +725,11 @@ node --trace-warnings app.js</code></pre>
   process.exit(1);
 });</code></pre>
 
-  <h3>Use AsyncLocalStorage to track context</h3>
+  <h3>Use AsyncLocalStorage to track which request caused the rejection</h3>
   <pre><code>const { AsyncLocalStorage } = require('async_hooks');
 const requestContext = new AsyncLocalStorage();
 
-// Wrap each request in a context store so you know which request
-// triggered the unhandled rejection:
+// Wrap each incoming request in a context store:
 app.use((req, res, next) => {
   requestContext.run({ requestId: req.id, url: req.url }, next);
 });
@@ -556,22 +742,79 @@ process.on('unhandledRejection', (reason) => {
 
   <h2>Debugging Checklist</h2>
   <ol>
-    <li>Search your codebase for <code>async</code> functions called without <code>await</code> — any of them can produce an unhandled rejection.</li>
-    <li>Search for <code>.then(</code> without a matching <code>.catch(</code> at the end of the same chain.</li>
-    <li>Search for <code>forEach(async</code> — replace all with <code>Promise.all(arr.map(async</code>.</li>
-    <li>Check Express route handlers — they need either a wrapper or Express 5 to safely use <code>async</code>.</li>
+    <li>Search your codebase for <code>async</code> functions called without <code>await</code> — any of them can produce an unhandled rejection if they reject.</li>
+    <li>Search for <code>.then(</code> without a matching <code>.catch(</code> chained at the end of the same expression.</li>
+    <li>Search for <code>forEach(async</code> — replace all occurrences with <code>Promise.all(arr.map(async</code>.</li>
+    <li>Inspect every <code>.catch()</code> handler — does it reference the correct variable name? Does any code inside it throw?</li>
+    <li>Check Express route handlers — they need an asyncHandler wrapper, the express-async-errors package, or Express 5.</li>
     <li>Check <code>EventEmitter</code> listeners — any <code>async</code> listener needs its own <code>try/catch</code>.</li>
     <li>Check <code>setTimeout</code> / <code>setInterval</code> callbacks — wrap <code>async</code> timer callbacks in <code>try/catch</code>.</li>
-    <li>Add the <code>@typescript-eslint/no-floating-promises</code> and <code>@typescript-eslint/no-misused-promises</code> rules to catch these statically.</li>
+    <li>Check class constructors for async method calls — convert to static factory methods.</li>
+    <li>Add the <code>@typescript-eslint/no-floating-promises</code> and <code>@typescript-eslint/no-misused-promises</code> lint rules to catch these statically.</li>
+    <li>Add <code>main().catch(err => { console.error(err); process.exit(1); })</code> at every top-level entry point.</li>
   </ol>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is UnhandledPromiseRejection in Node.js?</summary>
+    <div class="faq-answer">
+      <p>UnhandledPromiseRejection occurs when a Promise is rejected and no <code>.catch()</code> handler or <code>try/catch</code> block around an <code>await</code> is present to handle the rejection. In Node.js 15+ it crashes the process immediately with exit code 1 and error code <code>ERR_UNHANDLED_REJECTION</code>. In Node.js older than 15 it printed <code>UnhandledPromiseRejectionWarning</code> to stderr but the process continued, hiding the bug.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What changed in Node.js 15 — why did upgrading break my app?</summary>
+    <div class="faq-answer">
+      <p>Before Node.js 15, unhandled rejections emitted a deprecation warning but the process kept running. Starting with Node.js 15, the default behavior changed to <code>throw</code> — the rejection is re-thrown as an uncaught exception, crashing the process with exit code 1. This exposed pre-existing bugs that were previously silently ignored. The fix is to add the missing error handlers, not to downgrade Node.js.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why do I still get the error even though I have a .catch() handler?</summary>
+    <div class="faq-answer">
+      <p>Two common reasons: (1) <strong>Disconnected <code>.catch()</code></strong> — you called <code>.catch()</code> as a separate statement instead of chaining it on the same expression. Chain it directly: <code>promise.then(...).catch(...)</code>. (2) <strong>Secondary rejection inside the catch handler</strong> — if your <code>.catch()</code> callback throws a new error (e.g., referencing an undefined variable like <code>err</code> instead of <code>error</code>), that new rejection is itself unhandled. Inspect your catch callbacks carefully.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does async forEach cause UnhandledPromiseRejection?</summary>
+    <div class="faq-answer">
+      <p><code>Array.prototype.forEach</code> does not do anything with the return value of its callback. When an <code>async</code> callback is used, <code>forEach</code> receives a Promise and discards it. If that Promise rejects, the rejection is never observed. Replace <code>items.forEach(async cb)</code> with <code>await Promise.all(items.map(async cb))</code> or a <code>for...of</code> loop with <code>try/catch</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I use process.on('unhandledRejection') correctly?</summary>
+    <div class="faq-answer">
+      <p>Use it only as a last-resort safety net for logging and graceful shutdown — not as a replacement for per-Promise error handling. Always call <code>process.exit(1)</code> after logging. Never use an empty handler (<code>() => {}</code>) to silence the error — it hides real bugs. In Node.js 15+, if your handler returns without calling <code>process.exit()</code>, the process may continue in an inconsistent state.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I use the --unhandled-rejections flag?</summary>
+    <div class="faq-answer">
+      <p>Run <code>node --unhandled-rejections=warn app.js</code> to temporarily restore the Node.js 14 behavior (warning, no crash) while migrating a large codebase. Use <code>--unhandled-rejections=throw</code> (the default) for production. Use <code>--unhandled-rejections=none</code> only for temporary isolated debugging — never in production. Use <code>--unhandled-rejections=strict</code> to throw even when a handler is attached late.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is PromiseRejectionHandledWarning?</summary>
+    <div class="faq-answer">
+      <p><code>PromiseRejectionHandledWarning</code> is emitted when a <code>.catch()</code> handler is attached to a Promise <em>after</em> the current event loop tick — too late to prevent the <code>unhandledRejection</code> event. This happens when you create a Promise in one tick and attach the handler asynchronously later. Fix by attaching <code>.catch()</code> synchronously in the same expression that creates the Promise.</p>
+    </div>
+  </details>
 
   <h2>Related Errors</h2>
   <ul>
-    <li><a href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/"><code>TypeError: Cannot read properties of undefined</code></a> — often the underlying rejection reason inside an async function</li>
-    <li><code>ERR_UNHANDLED_REJECTION</code> — the error <code>code</code> property set on the thrown rejection object in Node.js 15+</li>
-    <li><code>UnhandledPromiseRejectionWarning</code> — the older form of this error emitted as a process warning in Node.js &lt; 15</li>
+    <li><a href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/"><code>TypeError: Cannot read properties of undefined</code></a> — often the underlying rejection reason inside an async function; frequently appears as the <code>reason</code> in the <code>unhandledRejection</code> event</li>
+    <li><a href="https://nodejs-errors.dev/ECONNREFUSED/"><code>ECONNREFUSED: connect ECONNREFUSED</code></a> — a common rejection reason from database or HTTP client calls inside async functions; if not caught, causes UnhandledPromiseRejection</li>
+    <li><a href="https://nodejs-errors.dev/ETIMEDOUT/"><code>ETIMEDOUT</code></a> — another frequent async rejection reason from network calls; must be caught in async functions or .catch() handlers</li>
+    <li><a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/"><code>ERR_REQUIRE_ESM</code></a> — can cause an unexpected rejection when requiring an ES module from a CommonJS context inside an async function</li>
+    <li><code>ERR_UNHANDLED_REJECTION</code> — the <code>code</code> property set on the thrown rejection object in Node.js 15+; found in the error output as <code>{ code: 'ERR_UNHANDLED_REJECTION' }</code></li>
+    <li><code>UnhandledPromiseRejectionWarning</code> — the older form of this error emitted as a process warning in Node.js &lt; 15; same root cause, different behavior</li>
     <li><code>PromiseRejectionHandledWarning</code> — emitted when a <code>.catch()</code> is attached to a Promise <em>after</em> the current tick (too late to prevent the unhandledRejection event)</li>
-    <li><code>uncaughtException</code> — the synchronous equivalent: a thrown error with no surrounding <code>try/catch</code></li>
+    <li><code>uncaughtException</code> — the synchronous equivalent: a thrown error with no surrounding <code>try/catch</code>; handled via <code>process.on('uncaughtException')</code></li>
   </ul>
 
 </main>

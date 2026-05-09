@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="index, follow" />
-  <title>ECONNRESET: connection reset by peer – Node.js Fix</title>
-  <meta name="description" content="Node.js throws ECONNRESET: connection reset by peer when the remote server forcibly closes a TCP connection. Learn the exact causes and how to fix it with retry logic, timeouts, and keep-alive settings." />
+  <title>Error: read ECONNRESET – Node.js Fix (socket hang up, keep-alive, axios)</title>
+  <meta name="description" content="Node.js throws 'Error: read ECONNRESET' or 'socket hang up' when the remote server forcibly closes a TCP connection. Fix with retry logic, keepAliveTimeout, AbortSignal, axios interceptors, and database reconnection." />
   <link rel="canonical" href="https://nodejs-errors.dev/ECONNRESET/" />
 
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="ECONNRESET: connection reset by peer – Node.js Fix" />
-  <meta property="og:description" content="Node.js throws ECONNRESET: connection reset by peer when the remote server forcibly closes a TCP connection. Learn the exact causes and how to fix it with retry logic, timeouts, and keep-alive settings." />
+  <meta property="og:title" content="Error: read ECONNRESET – Node.js Fix (socket hang up, keep-alive, axios)" />
+  <meta property="og:description" content="Node.js throws 'Error: read ECONNRESET' or 'socket hang up' when the remote server forcibly closes a TCP connection. Fix with retry logic, keepAliveTimeout, AbortSignal, axios interceptors, and database reconnection." />
   <meta property="og:url" content="https://nodejs-errors.dev/ECONNRESET/" />
   <meta property="og:site_name" content="nodejs-errors.dev" />
 
@@ -18,8 +18,8 @@
   {
     "@context": "https://schema.org",
     "@type": "TechArticle",
-    "headline": "ECONNRESET: connection reset by peer – Node.js Fix",
-    "description": "Node.js throws ECONNRESET when the remote end of a TCP connection sends a RST packet, forcibly closing the socket before the exchange completed.",
+    "headline": "Error: read ECONNRESET – Node.js Fix (socket hang up, keep-alive, axios)",
+    "description": "Node.js throws 'Error: read ECONNRESET' or 'Error: socket hang up' when the remote end of a TCP connection sends a RST packet. Caused by stale keep-alive sockets, server crashes, load balancer timeouts, Node.js 19 default keep-alive change, database pool exhaustion, or TLS failures. Fix with retry logic, exponential backoff, keepAliveTimeout tuning, AbortSignal.timeout(), axios interceptors, database reconnection, and circuit breaker patterns.",
     "url": "https://nodejs-errors.dev/ECONNRESET/",
     "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
     "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
@@ -38,7 +38,7 @@
         "name": "What is ECONNRESET in Node.js?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "ECONNRESET stands for 'Error CONNection RESET'. Node.js throws it as 'Error: read ECONNRESET' or 'Error: socket hang up' when the remote server sends a TCP RST packet, forcibly terminating an in-progress connection. It can occur on any socket operation: http/https requests, TCP clients, or database connections."
+          "text": "ECONNRESET stands for 'Error CONNection RESET'. Node.js throws it as 'Error: read ECONNRESET' or 'Error: socket hang up' when the remote server sends a TCP RST packet, forcibly terminating an in-progress connection. It can occur on any socket operation: http/https requests, TCP clients, database connections, or streaming downloads."
         }
       },
       {
@@ -46,7 +46,7 @@
         "name": "How do I fix ECONNRESET in Node.js?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "The fix depends on the cause. For transient network errors, add retry logic with exponential backoff. For keep-alive connections being closed by the server, handle the ECONNRESET and retry the request. For long-running requests, set a socket timeout. Check server logs to confirm whether the server is intentionally closing the connection."
+          "text": "The fix depends on the cause. For transient network errors, add retry logic with exponential backoff. For stale keep-alive sockets being reused from the pool, handle ECONNRESET and retry the request with a fresh connection. For long-running requests, set AbortSignal.timeout() or req.setTimeout(). For servers behind a load balancer, set server.keepAliveTimeout higher than the load balancer idle timeout. For database connections, configure connection pooling with keep-alive and reconnection options."
         }
       },
       {
@@ -54,7 +54,31 @@
         "name": "Why does ECONNRESET happen with HTTP keep-alive?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "When using an HTTP Agent with keepAlive: true, the client reuses sockets from a pool. The server may close an idle socket at any time. If Node.js picks up that socket just as the server closes it, you get ECONNRESET. Fix by catching the error and retrying the request once, or by disabling keep-alive for the affected agent."
+          "text": "When using an HTTP Agent with keepAlive: true, the client reuses sockets from a pool. The server may close an idle socket at any time (often after a timeout expires). If Node.js picks up that socket just as the server closes it, you get ECONNRESET. This race condition became more common in Node.js 19+, which enabled keep-alive by default in the HTTP server with a 5-second timeout. Fix by catching ECONNRESET and retrying the request once, or set server.keepAliveTimeout higher than your load balancer's idle timeout."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What changed in Node.js 19 that causes more ECONNRESET errors?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Starting in Node.js 19, the HTTP server enables Keep-Alive by default with a 5-second keepAliveTimeout. Before Node.js 19, connections closed immediately after the response. This behavioral change means clients that do not expect persistent connections (especially in tests using fetch or HTTP clients) now receive ECONNRESET when the 5-second window expires and they attempt to reuse the socket. Fix by setting server.keepAliveTimeout = 0 to disable keep-alive, or set it higher than the load balancer idle timeout (e.g., 65000 for AWS ALB)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ECONNRESET with axios in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Add an axios retry interceptor that catches ECONNRESET and retries with a fresh connection. Set the httpAgent and httpsAgent options with keepAlive: true and a freeSocketTimeout shorter than the server's keep-alive timeout to avoid reusing stale sockets. Use axios-retry or implement a manual interceptor that checks err.code === 'ECONNRESET' and retries up to 3 times with exponential backoff."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ECONNRESET happen on database connections in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Database drivers (MySQL, PostgreSQL, MongoDB) maintain connection pools. If a pooled connection sits idle long enough for a firewall or the database server to close it, the next query receives ECONNRESET. Fix by configuring the pool's keepAliveInitialDelay, setting a shorter acquireTimeout than the server's wait_timeout, and enabling enableKeepAlive: true on the connection options. For MySQL use mysql2 with enableKeepAlive and keepAliveInitialDelay. For PostgreSQL use pg with keepAlives settings. For MongoDB set socketTimeoutMS and heartbeatFrequencyMS."
         }
       },
       {
@@ -62,7 +86,15 @@
         "name": "What is the difference between ECONNRESET and ECONNREFUSED?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "ECONNRESET means the connection was established but then forcibly closed mid-session by the remote peer. ECONNREFUSED means the connection was never accepted — nothing is listening on that port."
+          "text": "ECONNRESET means the connection was established but then forcibly closed mid-session by the remote peer (TCP RST packet received). ECONNREFUSED means the connection was never accepted — nothing is listening on that port (TCP RST received immediately on connect attempt, or the OS rejected the SYN)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between 'Error: read ECONNRESET' and 'Error: socket hang up'?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "'Error: read ECONNRESET' is the raw POSIX error from the OS when a TCP RST packet is received during a read syscall. 'Error: socket hang up' is a higher-level Node.js HTTP error (code: 'ECONNRESET') emitted by the http/https module when the socket closes before a complete HTTP response was received. Both indicate the same underlying cause: the remote peer forcibly closed the connection. The socket hang up message typically appears at the HTTP layer; ECONNRESET appears at the net/TLS layer."
         }
       }
     ]
@@ -84,13 +116,15 @@
   {
     "@context": "https://schema.org",
     "@type": "HowTo",
-    "name": "How to fix ECONNRESET: connection reset by peer in Node.js",
+    "name": "How to fix Error: read ECONNRESET in Node.js",
     "step": [
-      { "@type": "HowToStep", "position": 1, "name": "Identify where the error occurs", "text": "Check whether the error originates from an HTTP request, a TCP socket, or a database driver. The stack trace and err.syscall ('read', 'write', or 'connect') show which operation failed." },
-      { "@type": "HowToStep", "position": 2, "name": "Add retry logic for transient errors", "text": "Wrap the request in a retry loop with exponential backoff. Only retry on ECONNRESET, ECONNREFUSED, ETIMEDOUT, and 5xx status codes." },
-      { "@type": "HowToStep", "position": 3, "name": "Handle keep-alive socket races", "text": "When using an http.Agent with keepAlive: true, attach an error handler to the socket inside the 'socket' event, or set agent.on('error', () => {}). Retry the request once on ECONNRESET." },
-      { "@type": "HowToStep", "position": 4, "name": "Set a socket timeout", "text": "Call req.setTimeout(ms) or socket.setTimeout(ms) to detect hung connections early and destroy the socket instead of waiting indefinitely." },
-      { "@type": "HowToStep", "position": 5, "name": "Check server-side logs", "text": "ECONNRESET can mean the server crashed, hit a memory limit, or has a misconfigured idle timeout. Confirm the server is healthy and tune its keep-alive timeout to be longer than your load balancer's." }
+      { "@type": "HowToStep", "position": 1, "name": "Identify where the error occurs", "text": "Check err.syscall: 'read' means reset while receiving data, 'write' means reset while sending, 'connect' means reset during the TCP handshake. The stack trace shows whether it originates in the HTTP layer, net.Socket, TLS, or a database driver." },
+      { "@type": "HowToStep", "position": 2, "name": "Add retry logic for transient ECONNRESET", "text": "Wrap the request in a retry loop. For keep-alive race conditions, retry once immediately. For general transient errors, retry up to 3 times with exponential backoff. Only retry idempotent operations (GET, HEAD, OPTIONS) automatically; treat POST/PUT with caution." },
+      { "@type": "HowToStep", "position": 3, "name": "Fix keep-alive socket race conditions", "text": "Set server.keepAliveTimeout higher than your load balancer's idle timeout (e.g., 65000 ms for AWS ALB default of 60 s). Set server.headersTimeout slightly higher than keepAliveTimeout. On the client side, set freeSocketTimeout on the agent lower than the server's keepAliveTimeout so stale sockets are discarded before reuse." },
+      { "@type": "HowToStep", "position": 4, "name": "Set socket and request timeouts", "text": "Use AbortSignal.timeout(ms) with fetch (Node.js 17.3+) or req.setTimeout(ms) with http/https to detect hung connections early. Always call req.destroy() in the timeout callback and handle the resulting ECONNRESET error event." },
+      { "@type": "HowToStep", "position": 5, "name": "Fix axios with retry interceptors and agent tuning", "text": "Configure axios with an httpAgent/httpsAgent that has keepAlive: true and freeSocketTimeout set lower than the server keep-alive timeout. Add a response interceptor that retries on err.code === 'ECONNRESET' using exponential backoff." },
+      { "@type": "HowToStep", "position": 6, "name": "Fix database connection pool ECONNRESET", "text": "Enable keepAlive on pool connections and configure reconnection. For MySQL2, set enableKeepAlive: true and keepAliveInitialDelay. For PostgreSQL (pg), set keepAlives: true. For MongoDB, configure heartbeatFrequencyMS and socketTimeoutMS. Always handle pool-level error events to avoid unhandled ECONNRESET crashes." },
+      { "@type": "HowToStep", "position": 7, "name": "Check server-side configuration", "text": "Confirm the server is not crashing (OOM, uncaught exception), not hitting server.maxConnections limits, and that the load balancer idle timeout is lower than the Node.js keepAliveTimeout. Enable NODE_DEBUG=net,http to trace socket lifecycle events." }
     ]
   }
   </script>
@@ -111,7 +145,7 @@
     p { margin-bottom: 0.85rem; }
     pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
     code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
-    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    p code, li code, td code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
     .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
     .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
     .callout.warn { border-color: #e17055; background: #fff5f3; }
@@ -121,6 +155,11 @@
     th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
     td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
     footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
   </style>
 </head>
 <body>
@@ -133,15 +172,15 @@
 
 <header>
   <span class="error-badge">Node.js Error</span>
-  <h1>ECONNRESET: connection reset by peer</h1>
-  <span class="error-code">error code: <code>ECONNRESET</code></span>
-  <p>Complete reference — what it means, why it happens with keep-alive, and how to fix it with retries and timeouts.</p>
+  <h1>Error: read ECONNRESET</h1>
+  <span class="error-code">error code: <code>ECONNRESET</code> &nbsp;·&nbsp; also: <code>Error: socket hang up</code> &nbsp;·&nbsp; <code>Error: write ECONNRESET</code></span>
+  <p>Complete reference — what it means, why it happens with keep-alive (including the Node.js 19 change), axios, database pools, and how to fix it with retries, timeouts, and server tuning.</p>
 </header>
 
 <main>
 
   <div class="quick-answer">
-    <strong>Quick Answer:</strong> <code>Error: read ECONNRESET</code> means the remote server closed the TCP connection while your code was reading or writing. The most common cause is a stale keep-alive socket — catch the error and retry the request once. For persistent issues, add retry logic with exponential backoff and set a socket timeout.
+    <strong>Quick Answer:</strong> <code>Error: read ECONNRESET</code> means the remote server closed the TCP connection while your code was reading or writing. The most common cause is a stale keep-alive socket — catch the error and retry the request once with a fresh connection. For persistent issues, add retry logic with exponential backoff, tune <code>server.keepAliveTimeout</code> above your load balancer's idle timeout, and set a socket timeout with <code>AbortSignal.timeout()</code>.
   </div>
 
   <h2>What is ECONNRESET?</h2>
@@ -155,11 +194,12 @@
   <p>
     Node.js surfaces this as an <code>Error</code> object with <code>code: 'ECONNRESET'</code>
     on HTTP requests, raw <code>net.Socket</code> streams, database connections, and any other
-    TCP-based API.
+    TCP-based API. At the HTTP layer it also appears as <code>Error: socket hang up</code> —
+    both errors share the same root cause.
   </p>
 
   <div class="callout">
-    <strong>Exact error messages you will see:</strong><br>
+    <strong>Exact error strings you will see in the terminal:</strong><br>
     <code>Error: read ECONNRESET</code><br>
     <code>Error: socket hang up</code><br>
     <code>Error: write ECONNRESET</code><br>
@@ -175,11 +215,19 @@
   syscall: 'read'
 }</code></pre>
 
+  <pre><code>Error: socket hang up
+    at connResetException (node:internal/errors:711:14)
+    at Socket.socketOnEnd (node:_http_client:518:23)
+    at Socket.emit (node:events:529:35) {
+  code: 'ECONNRESET'
+}</code></pre>
+
   <p>
     The <code>syscall</code> field tells you which operation was interrupted:
     <code>'read'</code> (receiving data), <code>'write'</code> (sending data), or
     <code>'connect'</code> (initial handshake). This narrows down whether the problem
-    is during connection establishment or mid-transfer.
+    is during connection establishment or mid-transfer. The <code>socket hang up</code>
+    variant does not expose a <code>syscall</code> but always carries <code>code: 'ECONNRESET'</code>.
   </p>
 
   <h2>Common Causes</h2>
@@ -188,7 +236,11 @@
     <tbody>
       <tr>
         <td>Stale keep-alive socket</td>
-        <td>The HTTP Agent reused a socket that the server had already closed. The RST arrives the moment Node.js tries to read the response.</td>
+        <td>The HTTP Agent reused a socket that the server had already closed. The RST arrives the moment Node.js tries to read the response. Race condition most visible with <code>keepAlive: true</code>.</td>
+      </tr>
+      <tr>
+        <td>Node.js 19+ default keep-alive (5 s timeout)</td>
+        <td>Since Node.js 19, the HTTP server enables keep-alive by default with a 5-second <code>keepAliveTimeout</code>. Clients that reuse a socket after this window expires receive ECONNRESET. The fix is setting <code>keepAliveTimeout</code> higher than the load balancer idle timeout.</td>
       </tr>
       <tr>
         <td>Server crash or restart</td>
@@ -196,7 +248,7 @@
       </tr>
       <tr>
         <td>Load balancer or proxy timeout</td>
-        <td>A reverse proxy (nginx, AWS ALB) closed an idle or slow connection before Node.js finished sending the request body.</td>
+        <td>A reverse proxy (nginx, AWS ALB) closed an idle or slow connection before Node.js finished sending the request body. AWS ALB default idle timeout is 60 seconds.</td>
       </tr>
       <tr>
         <td>Firewall dropping idle connections</td>
@@ -204,11 +256,23 @@
       </tr>
       <tr>
         <td>Server-side rate limiting</td>
-        <td>The server resets connections when a client exceeds request limits instead of returning a proper HTTP error.</td>
+        <td>The server resets connections when a client exceeds request limits instead of returning a proper HTTP error code.</td>
       </tr>
       <tr>
         <td>TLS/SSL handshake failure</td>
-        <td>Certificate mismatch or unsupported cipher causes the TLS peer to reset the connection during the handshake.</td>
+        <td>Certificate mismatch, unsupported cipher, or protocol version mismatch causes the TLS peer to reset the connection during the handshake.</td>
+      </tr>
+      <tr>
+        <td>Database pool idle socket</td>
+        <td>A pooled database connection (MySQL, PostgreSQL, MongoDB) sat idle long enough for a firewall or the database server to expire it. The next query receives ECONNRESET from the dead socket.</td>
+      </tr>
+      <tr>
+        <td><code>server.maxConnections</code> limit hit</td>
+        <td>When <code>server.maxConnections</code> is set too low and the connection limit is reached, the server resets incoming connections instead of queuing them.</td>
+      </tr>
+      <tr>
+        <td>VPN or proxy misconfiguration</td>
+        <td>A VPN that is required for the target endpoint is not active, or the VPN itself enforces connection time limits that reset active connections.</td>
       </tr>
     </tbody>
   </table>
@@ -219,9 +283,7 @@
     Node.js reusing it from the pool. The fix is to catch <code>ECONNRESET</code> and
     retry the request once with a fresh socket.
   </p>
-  <pre><code>const https = require('https');
-
-async function fetchWithRetry(url, options = {}, retries = 1) {
+  <pre><code>async function fetchWithRetry(url, options = {}, retries = 1) {
   try {
     return await fetch(url, options);
   } catch (err) {
@@ -334,11 +396,12 @@ function request(options) {
   });
 }</code></pre>
 
-  <h2>Fix 5 – Tune keep-alive timeouts</h2>
+  <h2>Fix 5 – Tune keep-alive timeouts (Node.js 19+ / AWS ALB)</h2>
   <p>
     If you control the server, set its keep-alive timeout to be <em>longer</em> than
     your load balancer's idle timeout. This prevents the server from closing sockets
-    that the load balancer still considers open.
+    that the load balancer still considers open. This is especially important in Node.js 19+
+    where <code>keepAliveTimeout</code> defaults to only 5 seconds.
   </p>
   <pre><code>const http = require('http');
 const app = require('./app'); // your Express/Fastify app
@@ -354,13 +417,99 @@ server.listen(3000);</code></pre>
 
   <div class="callout">
     <strong>AWS ALB / nginx tip:</strong> The default ALB idle timeout is 60 seconds.
-    If your Node.js <code>keepAliveTimeout</code> is lower than that (Node.js default is 5 s),
-    the server closes the socket before the load balancer does, causing ECONNRESET on the
-    next request routed through that socket. Always set <code>keepAliveTimeout</code> &gt;
-    load balancer idle timeout.
+    If your Node.js <code>keepAliveTimeout</code> is lower than that (Node.js 19+ default is 5 s,
+    earlier versions close immediately), the server closes the socket before the load balancer does,
+    causing ECONNRESET on the next request routed through that socket. Always set
+    <code>keepAliveTimeout</code> &gt; load balancer idle timeout and set
+    <code>headersTimeout</code> slightly higher than <code>keepAliveTimeout</code>.
   </div>
 
-  <h2>Fix 6 – Handle ECONNRESET on streams</h2>
+  <h2>Fix 6 – Axios retry interceptor and agent tuning</h2>
+  <p>
+    When using <code>axios</code>, configure the HTTP agent's <code>freeSocketTimeout</code>
+    to be shorter than the server's keep-alive timeout so stale sockets are discarded before
+    reuse. Add a request interceptor to retry on <code>ECONNRESET</code>.
+  </p>
+  <pre><code>const axios = require('axios');
+const http = require('http');
+const https = require('https');
+
+// Agents with freeSocketTimeout shorter than server keepAliveTimeout
+const httpAgent  = new http.Agent({ keepAlive: true, freeSocketTimeout: 4000 });
+const httpsAgent = new https.Agent({ keepAlive: true, freeSocketTimeout: 4000 });
+
+const client = axios.create({ httpAgent, httpsAgent });
+
+// Retry interceptor
+client.interceptors.response.use(undefined, async (err) => {
+  const config = err.config;
+  if (!config) throw err;
+
+  config._retryCount = (config._retryCount || 0) + 1;
+
+  if (err.code === 'ECONNRESET' && config._retryCount <= 3) {
+    const delay = 200 * 2 ** (config._retryCount - 1); // exponential backoff
+    await new Promise((r) => setTimeout(r, delay));
+    return client(config);
+  }
+
+  throw err;
+});
+
+// Usage
+const { data } = await client.get('https://api.example.com/data');</code></pre>
+
+  <h2>Fix 7 – Database connection pool ECONNRESET (MySQL, PostgreSQL, MongoDB)</h2>
+  <p>
+    Database drivers reuse pooled connections. If a firewall or the database server closes
+    an idle pooled socket, the next query receives <code>ECONNRESET</code>. Enable
+    TCP keep-alive on pool connections and configure reconnection.
+  </p>
+
+  <h3>MySQL2</h3>
+  <pre><code>const mysql = require('mysql2/promise');
+
+const pool = mysql.createPool({
+  host: 'localhost',
+  user: 'root',
+  database: 'mydb',
+  waitForConnections: true,
+  connectionLimit: 10,
+  enableKeepAlive: true,          // send TCP keep-alive packets
+  keepAliveInitialDelay: 10000,   // start keep-alives after 10 s of idle
+});
+
+// Handle pool-level errors (prevents unhandled ECONNRESET crashes)
+pool.on('error', (err) => {
+  console.error('MySQL pool error:', err.code, err.message);
+});</code></pre>
+
+  <h3>PostgreSQL (pg)</h3>
+  <pre><code>const { Pool } = require('pg');
+
+const pool = new Pool({
+  host: 'localhost',
+  database: 'mydb',
+  keepAlives: true,               // enable TCP keep-alives
+  keepAlivesInitialDelay: 10,     // seconds before first keep-alive probe
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 30000,       // release idle connections before firewall kills them
+});
+
+pool.on('error', (err) => {
+  console.error('PostgreSQL pool error:', err.code);
+});</code></pre>
+
+  <h3>MongoDB (Mongoose)</h3>
+  <pre><code>const mongoose = require('mongoose');
+
+await mongoose.connect('mongodb://localhost:27017/mydb', {
+  socketTimeoutMS: 45000,         // give up queries after 45 s
+  heartbeatFrequencyMS: 10000,    // monitor server health every 10 s
+  serverSelectionTimeoutMS: 5000, // fail fast if no server reachable
+});</code></pre>
+
+  <h2>Fix 8 – Handle ECONNRESET on streams</h2>
   <p>
     When piping or reading from an HTTP response stream, a connection reset causes an
     <code>'error'</code> event on the stream. Always attach an error handler.
@@ -383,14 +532,72 @@ https.get('https://example.com/large-file.zip', (res) => {
   console.error('Request error:', err.code, err.message);
 });</code></pre>
 
+  <h2>Fix 9 – Disable keep-alive (Node.js 19+ test environments)</h2>
+  <p>
+    In test environments where connections are expected to close immediately, the Node.js 19+
+    default keep-alive causes unexpected ECONNRESET errors. Disable it explicitly:
+  </p>
+  <pre><code>const http = require('http');
+
+// Option A: disable keep-alive on server creation
+const server = http.createServer({ keepAlive: false }, app);
+
+// Option B: send Connection: close header on each response
+app.use((req, res, next) => {
+  res.setHeader('Connection', 'close');
+  next();
+});</code></pre>
+
+  <h2>Fix 10 – Circuit breaker for repeated ECONNRESET</h2>
+  <p>
+    When a remote service is persistently unreachable or resetting, a circuit breaker
+    prevents cascading failures by stopping requests after a failure threshold is reached.
+  </p>
+  <pre><code>class CircuitBreaker {
+  constructor(threshold = 5, resetAfterMs = 30_000) {
+    this.failures  = 0;
+    this.threshold = threshold;
+    this.state     = 'closed'; // closed = normal, open = blocking requests
+    this.resetAfterMs = resetAfterMs;
+  }
+
+  async call(fn) {
+    if (this.state === 'open') {
+      throw new Error('Circuit breaker is open — service unavailable');
+    }
+    try {
+      const result = await fn();
+      this.failures = 0; // reset on success
+      return result;
+    } catch (err) {
+      if (err.code === 'ECONNRESET' || err.code === 'ECONNREFUSED') {
+        this.failures++;
+        if (this.failures >= this.threshold) {
+          this.state = 'open';
+          setTimeout(() => {
+            this.state  = 'closed';
+            this.failures = 0;
+          }, this.resetAfterMs);
+        }
+      }
+      throw err;
+    }
+  }
+}
+
+const breaker = new CircuitBreaker();
+const data = await breaker.call(() => fetch('https://api.example.com/data'));</code></pre>
+
   <h2>Debugging Checklist</h2>
   <ol>
     <li>Check <code>err.syscall</code>: <code>'read'</code> = reset while receiving, <code>'write'</code> = reset while sending, <code>'connect'</code> = reset during handshake.</li>
     <li>Check server logs for crashes, OOM kills, or intentional connection limits around the time of the error.</li>
-    <li>Verify your <code>keepAliveTimeout</code> is higher than your load balancer's idle timeout.</li>
+    <li>Verify your <code>keepAliveTimeout</code> is higher than your load balancer's idle timeout (AWS ALB: 60 s).</li>
+    <li>Confirm <code>server.maxConnections</code> is not set to a value too low for your traffic.</li>
     <li>If using a proxy or VPN, check whether it enforces connection time limits.</li>
     <li>Enable <code>NODE_DEBUG=net,http</code> to trace socket lifecycle events and see exactly when the reset occurs.</li>
     <li>Use <code>tcpdump</code> or Wireshark to confirm a <code>RST</code> packet is actually arriving from the remote host.</li>
+    <li>For database ECONNRESET: check the database server's <code>wait_timeout</code> (MySQL) or <code>tcp_keepalives_idle</code> (PostgreSQL) settings.</li>
   </ol>
 
   <pre><code># Enable Node.js network debug output
@@ -401,15 +608,69 @@ NODE_DEBUG=net,http node app.js 2>&amp;1 | grep -E "(ECONNRESET|RST|socket)"</co
     or logging it hides connectivity problems that may indicate a misconfigured server,
     failing infrastructure, or a security-relevant connection termination.
     Always log the error and consider whether a retry is safe for your use case (idempotent
-    GET requests: safe to retry; POST requests that mutate state: may not be safe).
+    GET requests: safe to retry; POST/PUT requests that mutate state: only retry if the
+    server guarantees idempotency or you have deduplication).
   </div>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ECONNRESET in Node.js?</summary>
+    <div class="faq-answer">
+      <p><code>ECONNRESET</code> stands for <em>Error CONNection RESET</em>. Node.js throws it as <code>Error: read ECONNRESET</code> or <code>Error: socket hang up</code> when the remote server sends a TCP RST packet, forcibly terminating an in-progress connection. It can occur on any socket operation: HTTP/HTTPS requests, raw TCP clients, database connections, or streaming downloads.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between "Error: read ECONNRESET" and "Error: socket hang up"?</summary>
+    <div class="faq-answer">
+      <p><code>Error: read ECONNRESET</code> is the raw OS-level error emitted at the <code>net</code> or <code>tls</code> layer when the kernel receives a TCP RST during a read syscall. <code>Error: socket hang up</code> is a higher-level Node.js HTTP message emitted by the <code>http</code>/<code>https</code> module when the socket closes before a complete HTTP response was received. Both carry <code>code: 'ECONNRESET'</code> and share the same root cause — the remote peer forcibly closed the connection.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ECONNRESET happen with HTTP keep-alive?</summary>
+    <div class="faq-answer">
+      <p>When using an HTTP Agent with <code>keepAlive: true</code>, the client reuses sockets from a pool. The server may close an idle socket at any time (after its <code>keepAliveTimeout</code> expires). If Node.js picks up that socket just as the server closes it, you get ECONNRESET. This race condition became more common in Node.js 19+ which enabled keep-alive by default on both server and client. Fix by catching ECONNRESET and retrying once, or by setting the agent's <code>freeSocketTimeout</code> lower than the server's <code>keepAliveTimeout</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What changed in Node.js 19 that causes more ECONNRESET errors?</summary>
+    <div class="faq-answer">
+      <p>Starting in Node.js 19, the HTTP server enables Keep-Alive by default with a 5-second <code>keepAliveTimeout</code>. Before Node.js 19, connections closed immediately after the response. This change means clients reusing a socket after the 5-second window expires will receive ECONNRESET. The fix is to set <code>server.keepAliveTimeout</code> higher than your load balancer's idle timeout (e.g., <code>65000</code> ms for AWS ALB with its 60-second default), or set it to <code>0</code> to disable keep-alive entirely in environments where it causes problems.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ECONNRESET with axios in Node.js?</summary>
+    <div class="faq-answer">
+      <p>Configure an axios instance with custom HTTP/HTTPS agents that have <code>keepAlive: true</code> and <code>freeSocketTimeout</code> set lower than the server's keep-alive timeout (e.g., <code>4000</code> ms). Add a response interceptor that catches errors where <code>err.code === 'ECONNRESET'</code> and retries up to 3 times with exponential backoff. Do not retry non-idempotent requests automatically without server-side deduplication.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ECONNRESET happen on database connections (MySQL, PostgreSQL, MongoDB)?</summary>
+    <div class="faq-answer">
+      <p>Database drivers maintain connection pools. If a pooled connection sits idle long enough for a firewall or the database server to close it (e.g., MySQL's <code>wait_timeout</code>, typically 8 hours but often 60–600 seconds in cloud environments), the next query receives ECONNRESET from the dead socket. Fix by enabling TCP keep-alive on pool connections (<code>enableKeepAlive: true</code> for MySQL2, <code>keepAlives: true</code> for pg), setting a shorter <code>idleTimeoutMillis</code> than the server's timeout, and always attaching a <code>pool.on('error', ...)</code> handler to prevent unhandled ECONNRESET crashes.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between ECONNRESET and ECONNREFUSED?</summary>
+    <div class="faq-answer">
+      <p><code>ECONNRESET</code> means the connection was established but then forcibly closed mid-session by the remote peer (TCP RST packet received during an active connection). <a href="https://nodejs-errors.dev/ECONNREFUSED/"><code>ECONNREFUSED</code></a> means the connection attempt was rejected immediately — nothing is listening on that port (the OS returned a RST in response to the SYN, or the port is actively refused).</p>
+    </div>
+  </details>
 
   <h2>Related Errors</h2>
   <ul>
     <li><a href="https://nodejs-errors.dev/EADDRINUSE/"><code>EADDRINUSE: address already in use</code></a> — port conflict when starting a server</li>
-    <li><code>ECONNREFUSED: connection refused</code> — nothing is listening on the target port; the connection was never established</li>
-    <li><code>ETIMEDOUT: connection timed out</code> — no response within the timeout window; the connection was not actively reset</li>
-    <li><code>ENOTFOUND: getaddrinfo ENOTFOUND</code> — DNS resolution failed before a TCP connection could be made</li>
+    <li><a href="https://nodejs-errors.dev/ECONNREFUSED/"><code>ECONNREFUSED: connection refused</code></a> — nothing is listening on the target port; the connection was never established</li>
+    <li><a href="https://nodejs-errors.dev/ETIMEDOUT/"><code>ETIMEDOUT: connection timed out</code></a> — no response within the timeout window; the connection was not actively reset</li>
+    <li><a href="https://nodejs-errors.dev/ENOTFOUND/"><code>ENOTFOUND: getaddrinfo ENOTFOUND</code></a> — DNS resolution failed before a TCP connection could be made</li>
+    <li><a href="https://nodejs-errors.dev/EPIPE/"><code>EPIPE: broken pipe</code></a> — write to a socket whose read end has already closed; often accompanies ECONNRESET on the write path</li>
+    <li><a href="https://nodejs-errors.dev/EMFILE/"><code>EMFILE: too many open files</code></a> — file descriptor exhaustion can prevent new sockets from being opened after ECONNRESET failures accumulate</li>
     <li><code>HPE_INVALID_EOF_STATE</code> — HTTP parser received unexpected EOF, often seen alongside ECONNRESET on truncated responses</li>
   </ul>
 

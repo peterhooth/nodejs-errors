@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="index, follow" />
   <title>SyntaxError: Cannot use import statement outside a module – Node.js Fix</title>
-  <meta name="description" content="Node.js throws SyntaxError: Cannot use import statement outside a module when ES module import syntax is used in a CommonJS context. Fix by adding type:module to package.json or renaming to .mjs." />
+  <meta name="description" content="Fix SyntaxError: Cannot use import statement outside a module and SyntaxError: Unexpected token 'export' in Node.js. Covers type:module in package.json, .mjs extension, require() conversion, ts-node --esm, Jest, Next.js, NestJS, Vite, Webpack, Electron, and monorepos." />
   <link rel="canonical" href="https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/" />
 
   <meta property="og:type" content="article" />
   <meta property="og:title" content="SyntaxError: Cannot use import statement outside a module – Node.js Fix" />
-  <meta property="og:description" content="Node.js throws SyntaxError: Cannot use import statement outside a module when ES module import syntax is used in a CommonJS context. Fix by adding type:module to package.json or renaming to .mjs." />
+  <meta property="og:description" content="Fix SyntaxError: Cannot use import statement outside a module in Node.js. Covers type:module, .mjs, require() conversion, ts-node, Jest, Next.js, NestJS, Vite, Webpack, Electron, and monorepos." />
   <meta property="og:url" content="https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/" />
   <meta property="og:site_name" content="nodejs-errors.dev" />
 
@@ -19,7 +19,7 @@
     "@context": "https://schema.org",
     "@type": "TechArticle",
     "headline": "SyntaxError: Cannot use import statement outside a module – Node.js Fix",
-    "description": "Node.js throws SyntaxError: Cannot use import statement outside a module when ES module import/export syntax is used in a file that Node.js treats as CommonJS. Fix by setting type:module in package.json, renaming to .mjs, or converting to require().",
+    "description": "Node.js throws SyntaxError: Cannot use import statement outside a module when ES module import or export syntax is used in a file treated as CommonJS. Causes include missing \"type\":\"module\" in package.json, wrong file extension, misconfigured ts-node, Jest, Vite, Webpack, Next.js, NestJS, Electron, and monorepo setups. Fix by setting type:module in package.json, renaming to .mjs, converting to require(), or configuring your toolchain for ESM.",
     "url": "https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/",
     "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
     "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
@@ -46,7 +46,7 @@
         "name": "How do I fix SyntaxError: Cannot use import statement outside a module?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "There are three main fixes: (1) Add \"type\": \"module\" to package.json — this converts all .js files in the project to ESM. (2) Rename the file from .js to .mjs — a per-file fix that does not affect other files. (3) Replace import statements with require() calls to stay in CommonJS. For TypeScript with ts-node, add --esm flag or set \"esm\": true in tsconfig. For Jest, configure transform and use --experimental-vm-modules."
+          "text": "There are several main fixes: (1) Add \"type\": \"module\" to package.json — this converts all .js files in the project to ESM. (2) Rename the file from .js to .mjs — a per-file fix that does not affect other files. (3) Replace import statements with require() calls to stay in CommonJS. (4) For TypeScript with ts-node, add --esm flag or set \"esm\": true in tsconfig. (5) For Jest, configure transform and use --experimental-vm-modules. (6) For browsers, add type=\"module\" to the script tag."
         }
       },
       {
@@ -63,6 +63,30 @@
         "acceptedAnswer": {
           "@type": "Answer",
           "text": "SyntaxError: Unexpected token 'export' is the same underlying problem as Cannot use import statement outside a module. Node.js is parsing the file as CommonJS and encounters export — a keyword only valid in ES modules. The fix is identical: add \"type\": \"module\" to package.json or rename the file to .mjs."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix SyntaxError: Cannot use import statement outside a module in a monorepo or workspace?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "In a monorepo (Nx, Turborepo, Yarn workspaces, pnpm workspaces), each sub-package needs its own package.json with \"type\": \"module\" if that package uses ESM. The root-level package.json type field does not automatically apply to nested packages. Check the package.json in the directory containing the file that throws the error and add \"type\": \"module\" there."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix this error in a Next.js project?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Next.js uses its own Webpack/SWC-based bundler and does not require \"type\": \"module\" in package.json. If you see this error in Next.js, it usually means a dependency is not being transpiled. Add it to the transpilePackages array in next.config.js: module.exports = { transpilePackages: ['some-esm-only-package'] }. For pages/api routes and server components, ensure you are not mixing require() and import in the same file."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I use __dirname and __filename in an ES module?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "__dirname and __filename are not available in ES modules. Replace them with: import { fileURLToPath } from 'url'; import path from 'path'; const __filename = fileURLToPath(import.meta.url); const __dirname = path.dirname(__filename);. This gives you the same values as in CommonJS."
         }
       }
     ]
@@ -91,7 +115,9 @@
       { "@type": "HowToStep", "position": 3, "name": "Fix for ESM: Rename to .mjs (single-file fix)", "text": "Rename the offending file from filename.js to filename.mjs. Node.js always treats .mjs files as ES modules regardless of the package.json type field. No other files are affected." },
       { "@type": "HowToStep", "position": 4, "name": "Fix for CJS: Convert import to require()", "text": "Replace import statements with require() calls. Use const fs = require('fs') instead of import fs from 'fs', and const { foo } = require('./foo') instead of import { foo } from './foo'." },
       { "@type": "HowToStep", "position": 5, "name": "Fix for TypeScript (ts-node): Enable ESM mode", "text": "Run ts-node with the --esm flag: ts-node --esm src/index.ts. Or add \"esm\": true to your tsconfig.json ts-node section and set module to NodeNext or ESNext." },
-      { "@type": "HowToStep", "position": 6, "name": "Fix for Jest: Configure ESM transform", "text": "In jest.config.js set transform: {} to skip Babel CJS transform. Run Jest with node --experimental-vm-modules node_modules/.bin/jest. For Babel projects, configure @babel/preset-env with modules: 'auto'." }
+      { "@type": "HowToStep", "position": 6, "name": "Fix for Jest: Configure ESM transform", "text": "In jest.config.js set transform: {} to skip Babel CJS transform. Run Jest with node --experimental-vm-modules node_modules/.bin/jest. For Babel projects, configure @babel/preset-env with modules: 'auto'." },
+      { "@type": "HowToStep", "position": 7, "name": "Fix for Next.js: Add package to transpilePackages", "text": "In next.config.js add the ESM-only dependency to transpilePackages: module.exports = { transpilePackages: ['some-esm-package'] }. Do not add type:module to a Next.js project's root package.json." },
+      { "@type": "HowToStep", "position": 8, "name": "Fix for Electron: Use preload script with CJS or configure ESM", "text": "Electron's main process and preload scripts run as CommonJS by default. Either keep those files as CJS, rename them to .cjs, or configure Electron Forge / electron-builder with the appropriate ESM target." }
     ]
   }
   </script>
@@ -122,6 +148,16 @@
     th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
     td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
     footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-section { margin: 2rem 0; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+    .faq-item .faq-answer pre { margin: 0.5rem 0; }
+    .faq-item .faq-answer p { margin-bottom: 0.5rem; }
+    .faq-item .faq-answer p:last-child { margin-bottom: 0; }
   </style>
 </head>
 <body>
@@ -135,14 +171,14 @@
 <header>
   <span class="error-badge">Node.js Error</span>
   <h1>SyntaxError: Cannot use import statement outside a module</h1>
-  <span class="error-code">error type: <code>SyntaxError</code> &nbsp;·&nbsp; also: <code>SyntaxError: Unexpected token 'export'</code></span>
-  <p>Complete reference — what it means, why Node.js throws it, and how to fix it with <code>"type": "module"</code>, <code>.mjs</code>, <code>require()</code>, ts-node, and Jest.</p>
+  <span class="error-code">error type: <code>SyntaxError</code> &nbsp;·&nbsp; also: <code>SyntaxError: Unexpected token 'export'</code> &nbsp;·&nbsp; <code>SyntaxError: Cannot use import statement in a script</code></span>
+  <p>Complete reference — what it means, why Node.js throws it, and how to fix it with <code>"type": "module"</code>, <code>.mjs</code>, <code>require()</code>, ts-node, Jest, Next.js, NestJS, Vite, Webpack, Electron, and monorepos.</p>
 </header>
 
 <main>
 
   <div class="quick-answer">
-    <strong>Quick Answer:</strong> Node.js defaults to CommonJS (CJS). When it encounters an <code>import</code> or <code>export</code> statement in a <code>.js</code> file without <code>"type": "module"</code> in <code>package.json</code>, it throws <code>SyntaxError: Cannot use import statement outside a module</code>. The fastest fix is to add <code>"type": "module"</code> to <code>package.json</code>. To fix a single file without touching <code>package.json</code>, rename it to <code>.mjs</code>. To stay with CJS, replace <code>import</code> with <code>require()</code>.
+    <strong>Quick Answer:</strong> Node.js defaults to CommonJS (CJS). When it encounters an <code>import</code> or <code>export</code> statement in a <code>.js</code> file without <code>"type": "module"</code> in <code>package.json</code>, it throws <code>SyntaxError: Cannot use import statement outside a module</code>. The fastest fix is to add <code>"type": "module"</code> to <code>package.json</code>. To fix a single file without touching <code>package.json</code>, rename it to <code>.mjs</code>. To stay with CJS, replace <code>import</code> with <code>require()</code>. For browsers, add <code>type="module"</code> to the <code>&lt;script&gt;</code> tag.
   </div>
 
   <h2>What is this error?</h2>
@@ -179,7 +215,7 @@ SyntaxError: Cannot use import statement outside a module
     at Module._extensions..js (node:internal/modules/cjs/loader:1536:10)
     at Module.load (node:internal/modules/cjs/loader:1275:32)
     at Module._load (node:internal/modules/cjs/loader:1096:12)
-    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/main/run_main_module:164:12)
     at node:internal/main/run_main_module:28:49</code></pre>
 
   <p>
@@ -246,6 +282,14 @@ SyntaxError: Cannot use import statement outside a module
         <td>A dependency updated to ESM-only</td>
         <td>Popular packages like <code>chalk</code>, <code>node-fetch</code>, <code>nanoid</code>, and <code>got</code> dropped CJS support. If you <code>require()</code> them you get <code>ERR_REQUIRE_ESM</code>. If you write <code>import</code> to consume them in a CJS project, you get this error.</td>
       </tr>
+      <tr>
+        <td>Monorepo: missing <code>"type": "module"</code> in sub-package</td>
+        <td>In workspaces (Yarn, pnpm, Nx, Turborepo), each sub-package has its own <code>package.json</code>. The root <code>"type": "module"</code> does not propagate to nested packages. Each package that uses ESM needs its own declaration.</td>
+      </tr>
+      <tr>
+        <td>Browser: <code>&lt;script&gt;</code> tag without <code>type="module"</code></td>
+        <td>In a browser, a <code>&lt;script src="app.js"&gt;</code> tag loads the file as a classic script. Classic scripts do not support <code>import</code>. The error message in browser DevTools is: <code>Uncaught SyntaxError: Cannot use import statement outside a module</code>.</td>
+      </tr>
     </tbody>
   </table>
 
@@ -280,10 +324,10 @@ app.listen(3000);</code></pre>
   <div class="callout warn">
     <strong>Breaking change:</strong> After adding <code>"type": "module"</code>, all existing
     <code>require()</code> calls in <code>.js</code> files will break with
-    <code>ReferenceError: require is not defined in ES module scope</code>.
+    <a href="https://nodejs-errors.dev/ReferenceError-require-is-not-defined/"><code>ReferenceError: require is not defined in ES module scope</code></a>.
     You must either convert them all to <code>import</code>, rename CJS files to <code>.cjs</code>,
     or keep a mixed setup. Also note that <code>__dirname</code> and <code>__filename</code> are
-    not available in ESM — use <code>import.meta.url</code> instead.
+    not available in ESM — use <code>import.meta.url</code> instead (see below).
   </div>
 
   <h2>Fix 2 – Rename the file to <code>.mjs</code> (single-file fix)</h2>
@@ -368,7 +412,7 @@ module.exports = app;</code></pre>
   <h2>Fix 4 – TypeScript with ts-node: enable ESM mode</h2>
   <p>
     When running TypeScript directly with <code>ts-node</code>, it compiles to CJS by default.
-    To use ESM <code>import</code> syntax end-to-end, enable ESM mode in one of two ways:
+    To use ESM <code>import</code> syntax end-to-end, enable ESM mode in one of three ways:
   </p>
 
   <h3>Option A: Command-line flag</h3>
@@ -480,6 +524,187 @@ npx babel src --out-dir dist --extensions '.js,.mjs'
 # Run the CJS output
 node dist/index.js</code></pre>
 
+  <h2>Fix 7 – Next.js: transpilePackages for ESM dependencies</h2>
+  <p>
+    Next.js uses its own SWC/Webpack-based bundler and handles ESM internally. You should
+    <strong>not</strong> add <code>"type": "module"</code> to a Next.js project's root
+    <code>package.json</code> — it can break the build. If you see this error because an npm
+    dependency is ESM-only, add it to the <code>transpilePackages</code> array:
+  </p>
+  <pre><code>// next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  transpilePackages: ['some-esm-only-package', 'another-esm-package'],
+};
+
+module.exports = nextConfig;</code></pre>
+
+  <p>
+    For Next.js App Router (Next.js 13+) server components and API routes, ensure that server-side
+    files do not mix <code>require()</code> calls and <code>import</code> statements. If you need
+    to use a CJS module inside a server component, use dynamic <code>import()</code>:
+  </p>
+  <pre><code>// Inside an async Next.js Server Component
+const { someFunction } = await import('cjs-only-package');</code></pre>
+
+  <h2>Fix 8 – NestJS: configure module format</h2>
+  <p>
+    NestJS projects generated by the CLI default to CommonJS. If you paste ESM <code>import</code>
+    syntax or install an ESM-only dependency, you will hit this error. The recommended approach for
+    NestJS is to stay with CJS and use the <code>esm</code> npm package for consuming ESM-only
+    packages, or switch to using dynamic <code>import()</code>:
+  </p>
+  <pre><code>// In a NestJS service: consume an ESM-only package from CJS
+@Injectable()
+export class MyService {
+  async doWork() {
+    // dynamic import works in CJS context
+    const { default: someEsmModule } = await import('esm-only-package');
+    return someEsmModule.run();
+  }
+}</code></pre>
+
+  <p>
+    If you want full ESM in NestJS, you can configure the <code>tsconfig.json</code> with
+    <code>"module": "NodeNext"</code> and add <code>"type": "module"</code> to <code>package.json</code>,
+    but this requires careful adjustment of all import paths to use explicit <code>.js</code> extensions.
+  </p>
+
+  <h2>Fix 9 – Browser: add <code>type="module"</code> to the script tag</h2>
+  <p>
+    In a browser environment, a classic <code>&lt;script&gt;</code> tag does not support ES module
+    <code>import</code> syntax. The browser DevTools will show:
+    <code>Uncaught SyntaxError: Cannot use import statement outside a module</code>.
+    Fix it by adding the <code>type="module"</code> attribute:
+  </p>
+  <pre><code>&lt;!-- Before: classic script — import fails --&gt;
+&lt;script src="app.js"&gt;&lt;/script&gt;
+
+&lt;!-- After: module script — import works --&gt;
+&lt;script type="module" src="app.js"&gt;&lt;/script&gt;</code></pre>
+
+  <p>
+    Module scripts are automatically deferred (they run after the document is parsed), are
+    subject to CORS restrictions (you cannot load them from <code>file://</code> without a server),
+    and each execute in their own module scope (no global variable pollution).
+  </p>
+
+  <div class="callout">
+    <strong>Inline module scripts</strong> also need the attribute:
+    <code>&lt;script type="module"&gt;import { foo } from './foo.js'; foo();&lt;/script&gt;</code>
+  </div>
+
+  <h2>Fix 10 – Vite and Webpack: bundler configuration</h2>
+  <p>
+    Modern bundlers like Vite and Webpack handle both ESM and CJS. This error typically appears
+    during server-side code execution (not during the bundle build itself).
+  </p>
+
+  <h3>Vite</h3>
+  <p>
+    Vite natively supports ESM. If you see this error in a Vite project, it usually comes from
+    server-side code (SSR) or a Node.js script outside of Vite's build pipeline. Ensure your
+    <code>vite.config.js</code> uses ESM syntax or is renamed to <code>vite.config.mjs</code>:
+  </p>
+  <pre><code>// vite.config.mjs — always treated as ESM
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  ssr: {
+    // Force SSR dependencies to be bundled as ESM
+    noExternal: ['some-esm-package'],
+  },
+});</code></pre>
+
+  <h3>Webpack</h3>
+  <p>
+    Webpack can consume ESM source files regardless of the project's CJS/ESM mode. If you run a
+    Node.js script (not Webpack itself) that uses <code>import</code>, you still need
+    <code>"type": "module"</code>. For Webpack config files, rename to <code>webpack.config.mjs</code>
+    or use <code>require()</code> syntax in <code>webpack.config.js</code>:
+  </p>
+  <pre><code>// webpack.config.mjs — using ESM syntax in Webpack config
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+export default {
+  entry: './src/index.js',
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'bundle.js',
+  },
+};</code></pre>
+
+  <h2>Fix 11 – Electron: main process and preload scripts</h2>
+  <p>
+    Electron's main process and preload scripts run in a Node.js CJS environment by default.
+    If you write <code>import</code> statements in these files, you get this error.
+    You have three options:
+  </p>
+  <ul>
+    <li><strong>Stay with CJS:</strong> Use <code>require()</code> in main process and preload scripts.</li>
+    <li><strong>Use <code>.mjs</code> extension:</strong> Rename <code>main.js</code> to <code>main.mjs</code> and update the <code>"main"</code> field in <code>package.json</code>.</li>
+    <li><strong>Use a bundler:</strong> Configure Electron Forge or electron-builder with Vite or Webpack to bundle ESM source to CJS output for the main process.</li>
+  </ul>
+  <pre><code>// electron-forge with Vite plugin — vite.main.config.mjs
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  build: {
+    lib: {
+      entry: 'src/main.ts',
+      formats: ['cjs'], // Electron main process must be CJS
+    },
+    rollupOptions: {
+      external: ['electron'],
+    },
+  },
+});</code></pre>
+
+  <h2>Fix 12 – Monorepo / workspace: per-package type declaration</h2>
+  <p>
+    In monorepos using Yarn workspaces, pnpm workspaces, Nx, or Turborepo, the <code>"type"</code>
+    field in <code>package.json</code> only applies to files in that package's directory. The root
+    <code>package.json</code> type does not cascade to sub-packages. Each package that uses ESM
+    needs its own <code>"type": "module"</code>:
+  </p>
+  <pre><code>monorepo/
+├── package.json          ← root (type may or may not be set)
+├── packages/
+│   ├── api/
+│   │   ├── package.json  ← { "type": "module" } — API uses ESM
+│   │   └── src/index.js
+│   └── utils/
+│       ├── package.json  ← { "type": "commonjs" } — utils uses CJS
+│       └── src/index.js</code></pre>
+
+  <pre><code>// packages/api/package.json
+{
+  "name": "@myorg/api",
+  "type": "module",
+  "main": "src/index.js"
+}</code></pre>
+
+  <h2>__dirname and __filename in ES modules</h2>
+  <p>
+    After switching to ESM with <code>"type": "module"</code>, you will find that <code>__dirname</code>
+    and <code>__filename</code> throw <code>ReferenceError: __dirname is not defined in ES module scope</code>.
+    These CommonJS globals do not exist in ESM. Replace them with:
+  </p>
+  <pre><code>import { fileURLToPath } from 'url';
+import path from 'path';
+
+// ESM equivalents of __filename and __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Usage example
+const configPath = path.join(__dirname, 'config.json');</code></pre>
+
   <h2>File extension comparison</h2>
   <table>
     <thead>
@@ -551,10 +776,13 @@ node dist/index.js</code></pre>
   <ol>
     <li>Check the first line of the error stack trace — it shows exactly which file contains the <code>import</code> statement that caused the error.</li>
     <li>Check your <code>package.json</code> — is <code>"type": "module"</code> present? If not, Node.js defaults to CJS.</li>
+    <li>In a monorepo, check the <code>package.json</code> in the sub-package containing the file, not just the root.</li>
     <li>Check the file extension — is it <code>.js</code>, <code>.mjs</code>, or <code>.cjs</code>? Only <code>.mjs</code> is always ESM.</li>
     <li>If using <code>ts-node</code>, confirm you are running with <code>--esm</code> or have <code>"esm": true</code> in <code>tsconfig.json</code>.</li>
     <li>If using Jest, confirm your <code>jest.config</code> has the correct <code>transform</code> and you are running with <code>--experimental-vm-modules</code>.</li>
+    <li>If using Next.js, do not add <code>"type": "module"</code> to the root <code>package.json</code>; use <code>transpilePackages</code> instead.</li>
     <li>Check if the error comes from a dependency — some packages ship both CJS and ESM builds. Check the package's <code>package.json</code> <code>"exports"</code> field to see which build is being loaded.</li>
+    <li>In a browser, ensure the <code>&lt;script&gt;</code> tag has <code>type="module"</code>.</li>
   </ol>
 
   <pre><code># Quick diagnostic: check if package.json has type:module
@@ -569,7 +797,80 @@ node --version</code></pre>
   <div class="callout warn">
     <strong>Node.js version note:</strong> ES module support was added in Node.js 12 (experimental)
     and became stable in Node.js 14. If you are running Node.js 10 or earlier, <code>import</code>
-    is not supported at all — upgrade to a supported LTS version.
+    is not supported at all — upgrade to a supported LTS version. For older projects stuck on
+    Node.js 12, use the <code>esm</code> npm package as a loader:
+    <code>node -r esm src/index.js</code>.
+  </div>
+
+  <h2>Frequently Asked Questions</h2>
+  <div class="faq-section">
+
+    <details class="faq-item">
+      <summary>What causes SyntaxError: Cannot use import statement outside a module?</summary>
+      <div class="faq-answer">
+        <p>Node.js defaults to CommonJS (CJS) mode for <code>.js</code> files. When it encounters an <code>import</code> or <code>export</code> statement in a CJS context, it throws this error at parse time before any code executes. The root cause is always a mismatch: the file uses ESM syntax but Node.js is loading it as CommonJS.</p>
+        <p>Common triggers: no <code>"type": "module"</code> in <code>package.json</code>, running a <code>.js</code> file with ESM imports, using <code>ts-node</code> without ESM mode, or running Jest without an ESM transform.</p>
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>How do I fix SyntaxError: Cannot use import statement outside a module?</summary>
+      <div class="faq-answer">
+        <p>The fastest fixes are:</p>
+        <p>1. Add <code>"type": "module"</code> to <code>package.json</code> to enable ESM for all <code>.js</code> files.<br>
+        2. Rename the file from <code>.js</code> to <code>.mjs</code> for a per-file fix.<br>
+        3. Replace <code>import x from 'y'</code> with <code>const x = require('y')</code> to stay in CJS.<br>
+        4. For browsers, add <code>type="module"</code> to the <code>&lt;script&gt;</code> tag.</p>
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>What is SyntaxError: Unexpected token 'export' in Node.js?</summary>
+      <div class="faq-answer">
+        <p><code>SyntaxError: Unexpected token 'export'</code> is the same underlying problem. Node.js is parsing the file as CommonJS and encounters <code>export</code> — a keyword only valid in ESM. The parser does not recognize it and throws a SyntaxError. The fix is identical: add <code>"type": "module"</code> to <code>package.json</code> or rename the file to <code>.mjs</code>.</p>
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>What is the difference between this error and ERR_REQUIRE_ESM?</summary>
+      <div class="faq-answer">
+        <p>They are mirror-image problems at the ESM/CJS boundary:</p>
+        <p><strong>SyntaxError: Cannot use import statement outside a module</strong> — you used ESM <code>import</code> syntax in a file Node.js treats as CJS. Fix: add <code>"type": "module"</code>, rename to <code>.mjs</code>, or use <code>require()</code>.</p>
+        <p><strong><a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/">ERR_REQUIRE_ESM</a></strong> — you called <code>require()</code> on a file or package that only ships ESM. Fix: switch to <code>import</code> or use <code>await import()</code> inside an async function.</p>
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>How do I use __dirname and __filename in an ES module?</summary>
+      <div class="faq-answer">
+        <p><code>__dirname</code> and <code>__filename</code> are CJS globals and do not exist in ESM. After switching to <code>"type": "module"</code> they throw <code>ReferenceError: __dirname is not defined in ES module scope</code>. The ESM replacement is:</p>
+        <pre><code>import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);</code></pre>
+        <p>These give you exactly the same values as the CJS globals.</p>
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>How do I fix this error in a monorepo or workspace?</summary>
+      <div class="faq-answer">
+        <p>In monorepos (Nx, Turborepo, Yarn workspaces, pnpm workspaces), the <code>"type"</code> field in <code>package.json</code> only applies to the directory it lives in — it does not cascade to nested packages. Each sub-package that uses ESM needs its own <code>"type": "module"</code> in its own <code>package.json</code>. Check the <code>package.json</code> in the same directory as the file that is throwing the error, not the root monorepo <code>package.json</code>.</p>
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>How do I fix this error in a Next.js project?</summary>
+      <div class="faq-answer">
+        <p>Do <strong>not</strong> add <code>"type": "module"</code> to a Next.js root <code>package.json</code> — this can break the Next.js build. Instead, if an ESM-only dependency causes the error, add it to <code>transpilePackages</code> in <code>next.config.js</code>:</p>
+        <pre><code>module.exports = {
+  transpilePackages: ['some-esm-only-package'],
+};</code></pre>
+        <p>For server components that need to use a CJS module, use dynamic <code>import()</code> inside an async function.</p>
+      </div>
+    </details>
+
   </div>
 
   <h2>Related Errors</h2>
@@ -577,7 +878,7 @@ node --version</code></pre>
     <li><a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/"><code>ERR_REQUIRE_ESM</code></a> — the reverse problem: using <code>require()</code> to load a pure ESM package</li>
     <li><a href="https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/"><code>ERR_PACKAGE_PATH_NOT_EXPORTED</code></a> — importing a subpath not listed in the package's <code>"exports"</code> map</li>
     <li><a href="https://nodejs-errors.dev/MODULE_NOT_FOUND/"><code>Error: Cannot find module</code></a> — module path cannot be resolved by the loader</li>
-    <li><code>ReferenceError: require is not defined in ES module scope</code> — using <code>require()</code> in an ESM file (add <code>.cjs</code> extension or remove <code>"type": "module"</code>)</li>
+    <li><code>ReferenceError: require is not defined in ES module scope</code> — using <code>require()</code> in an ESM file; add <code>.cjs</code> extension or remove <code>"type": "module"</code></li>
     <li><code>ReferenceError: __dirname is not defined in ES module scope</code> — <code>__dirname</code> and <code>__filename</code> do not exist in ESM; use <code>import.meta.url</code> with <code>path.dirname(fileURLToPath(import.meta.url))</code></li>
   </ul>
 

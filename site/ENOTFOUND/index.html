@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="index, follow" />
-  <title>ENOTFOUND: getaddrinfo ENOTFOUND – Node.js Fix</title>
-  <meta name="description" content="Node.js throws ENOTFOUND: getaddrinfo ENOTFOUND when DNS resolution fails — the hostname cannot be translated to an IP address. Also covers EAI_AGAIN (temporary DNS failure), common causes, and step-by-step fixes." />
+  <title>Error: getaddrinfo ENOTFOUND hostname – Node.js Fix</title>
+  <meta name="description" content="Node.js throws 'Error: getaddrinfo ENOTFOUND hostname' when DNS resolution fails. Covers ENOTFOUND undefined (missing env var), EAI_AGAIN, Docker, proxy config, hosts file, axios, IPv6 fallback, and all fixes." />
   <link rel="canonical" href="https://nodejs-errors.dev/ENOTFOUND/" />
 
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="ENOTFOUND: getaddrinfo ENOTFOUND – Node.js Fix" />
-  <meta property="og:description" content="Node.js throws ENOTFOUND: getaddrinfo ENOTFOUND when DNS resolution fails — the hostname cannot be translated to an IP address. Also covers EAI_AGAIN (temporary DNS failure), common causes, and step-by-step fixes." />
+  <meta property="og:title" content="Error: getaddrinfo ENOTFOUND hostname – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws 'Error: getaddrinfo ENOTFOUND hostname' when DNS resolution fails. Covers ENOTFOUND undefined (missing env var), EAI_AGAIN, Docker, proxy config, hosts file, axios, IPv6 fallback, and all fixes." />
   <meta property="og:url" content="https://nodejs-errors.dev/ENOTFOUND/" />
   <meta property="og:site_name" content="nodejs-errors.dev" />
 
@@ -18,8 +18,8 @@
   {
     "@context": "https://schema.org",
     "@type": "TechArticle",
-    "headline": "ENOTFOUND: getaddrinfo ENOTFOUND – Node.js Fix",
-    "description": "Node.js throws ENOTFOUND when the DNS resolver cannot translate a hostname to an IP address. Covers the difference between ENOTFOUND (permanent DNS failure) and EAI_AGAIN (temporary DNS failure), all common causes, and production-ready fixes.",
+    "headline": "Error: getaddrinfo ENOTFOUND hostname – Node.js Fix",
+    "description": "Node.js throws ENOTFOUND when the DNS resolver cannot translate a hostname to an IP address. Covers ENOTFOUND undefined (missing process.env variable), EAI_AGAIN (temporary DNS failure), Docker container DNS, HTTP/HTTPS proxy misconfiguration, /etc/hosts file issues, IPv6 family forcing, axios custom DNS, DNS cache flushing, and production-ready retry and error handling patterns.",
     "url": "https://nodejs-errors.dev/ENOTFOUND/",
     "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
     "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
@@ -51,10 +51,18 @@
       },
       {
         "@type": "Question",
+        "name": "Why does Node.js show 'Error: getaddrinfo ENOTFOUND undefined'?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The literal hostname 'undefined' in the error means your code passed a JavaScript undefined value as the URL hostname. The most common cause is a missing or unset environment variable: process.env.API_URL is undefined, and when interpolated into a URL string it becomes the literal text 'undefined'. The fix is to validate all environment variables at application startup before any requests are made."
+        }
+      },
+      {
+        "@type": "Question",
         "name": "How do I fix ENOTFOUND in Node.js?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "First, verify the hostname is correct using nslookup, dig, or dns.lookup() in Node.js. Check your environment variables for API_URL or similar — a wrong value is the most common cause in production. In Docker, use the service name from docker-compose instead of localhost. For EAI_AGAIN, add retry logic with exponential backoff. For corporate environments, check VPN and DNS server configuration."
+          "text": "First, verify the hostname resolves using nslookup, dig, or dns.lookup() in Node.js. Check your environment variables for API_URL or similar — a wrong value is the most common cause in production. In Docker, use the service name from docker-compose instead of localhost. If behind a proxy, set HTTP_PROXY, HTTPS_PROXY, and NO_PROXY. For EAI_AGAIN, add retry logic with exponential backoff. For IPv6 issues, force IPv4 with the family: 4 dns option."
         }
       },
       {
@@ -62,7 +70,23 @@
         "name": "Why does ENOTFOUND happen in Docker containers?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Docker containers use their own DNS resolver (127.0.0.11 by default). If the container cannot reach external DNS servers, or if you use 'localhost' to refer to another container (which resolves to the container itself, not the host), DNS resolution fails with ENOTFOUND. Use the docker-compose service name instead of localhost, and ensure your daemon.json specifies reliable DNS servers."
+          "text": "Docker containers use their own DNS resolver (127.0.0.11 by default). If the container cannot reach external DNS servers, or if you use 'localhost' to refer to another container (which resolves to the container itself, not the host), DNS resolution fails with ENOTFOUND. Use the docker-compose service name instead of localhost, and ensure your daemon.json specifies reliable DNS servers such as 8.8.8.8 and 1.1.1.1."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can a proxy cause getaddrinfo ENOTFOUND in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. In corporate or restricted network environments, all outbound traffic must route through an HTTP/HTTPS proxy. Node.js built-in http/https modules do not read proxy environment variables automatically. If HTTP_PROXY or HTTPS_PROXY is set but your code does not configure a proxy agent, requests bypass the proxy and DNS resolution fails. Use the 'hpagent' or 'proxy-agent' npm package to configure a proxy, or set the proxy in axios using the proxy option."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ENOTFOUND localhost in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "On some systems, 'localhost' is not mapped in /etc/hosts (Linux/macOS) or C:\\Windows\\System32\\drivers\\etc\\hosts (Windows), causing DNS resolution to fail. Add '127.0.0.1 localhost' and '::1 localhost' to your hosts file. Alternatively, use '127.0.0.1' directly instead of 'localhost'. In MongoDB connections, switching from 'localhost' to '127.0.0.1' is a common fix for ENOTFOUND on certain systems."
         }
       }
     ]
@@ -84,13 +108,16 @@
   {
     "@context": "https://schema.org",
     "@type": "HowTo",
-    "name": "How to fix ENOTFOUND: getaddrinfo ENOTFOUND in Node.js",
+    "name": "How to fix Error: getaddrinfo ENOTFOUND in Node.js",
     "step": [
-      { "@type": "HowToStep", "position": 1, "name": "Verify the hostname resolves", "text": "Run 'nslookup hostname' or 'dig hostname' in your terminal, or use dns.lookup() in a Node.js script, to confirm the hostname can be resolved from your environment. This immediately distinguishes a bad hostname from an environment DNS problem." },
-      { "@type": "HowToStep", "position": 2, "name": "Check environment variables", "text": "Inspect the API_URL, BASE_URL, DATABASE_URL, or equivalent environment variable your code reads the hostname from. A missing or wrong value is the most frequent cause of ENOTFOUND in production deployments." },
-      { "@type": "HowToStep", "position": 3, "name": "Fix Docker DNS configuration", "text": "If the error occurs inside a Docker container, replace 'localhost' with the docker-compose service name. For external hostname resolution failures, add a reliable DNS server (8.8.8.8 or 1.1.1.1) to /etc/docker/daemon.json or pass --dns to docker run." },
-      { "@type": "HowToStep", "position": 4, "name": "Add retry logic for EAI_AGAIN", "text": "EAI_AGAIN indicates a temporary DNS failure. Wrap your request in a retry loop with exponential backoff, retrying on both EAI_AGAIN and ENOTFOUND (in cases where intermittent DNS outages produce ENOTFOUND)." },
-      { "@type": "HowToStep", "position": 5, "name": "Handle ENOTFOUND gracefully in production", "text": "Catch errors with code 'ENOTFOUND' or 'EAI_AGAIN' at the HTTP/fetch boundary and return a structured error response. Never let an unhandled DNS error crash your Node.js process." }
+      { "@type": "HowToStep", "position": 1, "name": "Verify the hostname resolves", "text": "Run 'nslookup hostname' or 'dig hostname' in your terminal, or use dns.lookup() in a Node.js script, to confirm the hostname can be resolved from your environment. This immediately distinguishes a bad hostname from an environment DNS problem. Use NODE_DEBUG=dns or node --trace-dns for verbose output." },
+      { "@type": "HowToStep", "position": 2, "name": "Check environment variables for undefined or wrong values", "text": "Inspect the API_URL, BASE_URL, DATABASE_URL, or equivalent environment variable your code reads the hostname from. A missing or wrong value is the most frequent cause of ENOTFOUND in production deployments. If process.env.API_URL is undefined, the error will read 'getaddrinfo ENOTFOUND undefined'. Validate all required env vars at startup." },
+      { "@type": "HowToStep", "position": 3, "name": "Check the /etc/hosts file for localhost issues", "text": "If the hostname is 'localhost' or a local development hostname, verify it is mapped in /etc/hosts (Linux/macOS) or C:\\Windows\\System32\\drivers\\etc\\hosts (Windows). Add '127.0.0.1 localhost' if missing. For MongoDB, switch from 'localhost' to '127.0.0.1' to bypass DNS entirely." },
+      { "@type": "HowToStep", "position": 4, "name": "Fix Docker DNS configuration", "text": "If the error occurs inside a Docker container, replace 'localhost' with the docker-compose service name. For external hostname resolution failures, add a reliable DNS server (8.8.8.8 or 1.1.1.1) to /etc/docker/daemon.json or pass --dns to docker run." },
+      { "@type": "HowToStep", "position": 5, "name": "Configure proxy settings for corporate networks", "text": "If your network requires an HTTP/HTTPS proxy, set the HTTP_PROXY and HTTPS_PROXY environment variables and use a proxy agent (hpagent or proxy-agent) with Node.js http/https, or use axios's built-in proxy option. Missing proxy configuration is a frequent ENOTFOUND cause in CI pipelines and corporate environments." },
+      { "@type": "HowToStep", "position": 6, "name": "Force IPv4 to fix IPv6 DNS failures", "text": "If DNS resolves over IPv6 but the target is only reachable over IPv4, pass the family: 4 option to dns.lookup() or to the http/https agent. This forces the resolver to return only IPv4 addresses." },
+      { "@type": "HowToStep", "position": 7, "name": "Add retry logic for EAI_AGAIN", "text": "EAI_AGAIN indicates a temporary DNS failure. Wrap your request in a retry loop with exponential backoff, retrying on both EAI_AGAIN and ENOTFOUND (in cases where intermittent DNS outages produce ENOTFOUND)." },
+      { "@type": "HowToStep", "position": 8, "name": "Handle ENOTFOUND gracefully in production", "text": "Catch errors with code 'ENOTFOUND' or 'EAI_AGAIN' at the HTTP/fetch boundary and return a structured error response. Never let an unhandled DNS error crash your Node.js process." }
     ]
   }
   </script>
@@ -121,6 +148,11 @@
     th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
     td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
     footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
   </style>
 </head>
 <body>
@@ -133,15 +165,15 @@
 
 <header>
   <span class="error-badge">Node.js Error</span>
-  <h1>ENOTFOUND: getaddrinfo ENOTFOUND</h1>
+  <h1>Error: getaddrinfo ENOTFOUND hostname</h1>
   <span class="error-code">error code: <code>ENOTFOUND</code> &nbsp;·&nbsp; also: <code>EAI_AGAIN</code></span>
-  <p>Complete reference — what it means, why DNS resolution fails, the difference between ENOTFOUND and EAI_AGAIN, and how to fix it in every environment including Docker and CI.</p>
+  <p>Complete reference — what it means, why DNS resolution fails, the difference between ENOTFOUND and EAI_AGAIN, and how to fix it in every environment including Docker, proxy networks, CI runners, and local development.</p>
 </header>
 
 <main>
 
   <div class="quick-answer">
-    <strong>Quick Answer:</strong> <code>Error: getaddrinfo ENOTFOUND api.example.com</code> means Node.js could not resolve the hostname to an IP address via DNS. The most common causes are a typo in the hostname, a wrong environment variable (e.g. <code>API_URL</code>), or using <code>localhost</code> inside a Docker container where the service has a different name. Verify the hostname with <code>nslookup</code> or <code>dns.lookup()</code>, fix your environment variables, and add retry logic for the transient variant <code>EAI_AGAIN</code>.
+    <strong>Quick Answer:</strong> <code>Error: getaddrinfo ENOTFOUND api.example.com</code> means Node.js could not resolve the hostname to an IP address via DNS. The most common causes are: a typo in the hostname, a missing environment variable producing <code>ENOTFOUND undefined</code>, using <code>localhost</code> inside Docker, a corporate proxy not configured, or a missing <code>/etc/hosts</code> entry. Verify with <code>nslookup</code> or <code>dns.lookup()</code>, fix your environment variables, configure proxy agents for corporate networks, and add retry logic for the transient variant <code>EAI_AGAIN</code>.
   </div>
 
   <h2>What is ENOTFOUND?</h2>
@@ -155,15 +187,18 @@
   </p>
   <p>
     Unlike <a href="https://nodejs-errors.dev/ECONNRESET/"><code>ECONNRESET</code></a> or
-    <code>ECONNREFUSED</code>, <strong>no TCP connection is ever attempted</strong> — the error
-    happens entirely in the DNS lookup phase, before Node.js can open a socket.
+    <a href="https://nodejs-errors.dev/ECONNREFUSED/"><code>ECONNREFUSED</code></a>,
+    <strong>no TCP connection is ever attempted</strong> — the error happens entirely in the
+    DNS lookup phase, before Node.js can open a socket.
   </p>
 
   <div class="callout">
     <strong>Exact error messages you will see:</strong><br>
     <code>Error: getaddrinfo ENOTFOUND api.example.com</code><br>
+    <code>Error: getaddrinfo ENOTFOUND undefined</code><br>
     <code>Error: getaddrinfo EAI_AGAIN api.example.com</code><br>
-    <code>FetchError: request to https://api.example.com failed, reason: getaddrinfo ENOTFOUND api.example.com</code>
+    <code>FetchError: request to https://api.example.com failed, reason: getaddrinfo ENOTFOUND api.example.com</code><br>
+    <code>Error: getaddrinfo ENOTFOUND localhost</code>
   </div>
 
   <h2>Full Error Example</h2>
@@ -186,6 +221,9 @@
   <p>
     <code>err.hostname</code> is especially useful in production logging — it tells you
     exactly which hostname failed, even when the error bubbles up through multiple layers.
+    When you see <code>ENOTFOUND undefined</code>, <code>err.hostname</code> will literally be
+    the string <code>"undefined"</code>, which is a strong signal that an environment variable
+    is missing.
   </p>
 
   <h2>ENOTFOUND vs EAI_AGAIN — Key Difference</h2>
@@ -223,6 +261,14 @@
         <td>The URL string has a misspelled domain (e.g. <code>api.examlpe.com</code> instead of <code>api.example.com</code>). The DNS server correctly returns NXDOMAIN for a name that does not exist.</td>
       </tr>
       <tr>
+        <td><code>ENOTFOUND undefined</code> — missing env var</td>
+        <td><code>process.env.API_URL</code> is <code>undefined</code>. When interpolated into a template string (<code>`${process.env.API_URL}/path`</code>), the hostname becomes the literal string <code>"undefined"</code>, producing <code>getaddrinfo ENOTFOUND undefined</code>.</td>
+      </tr>
+      <tr>
+        <td>Protocol included in host option</td>
+        <td>Passing <code>{ host: 'https://api.example.com' }</code> to <code>http.get()</code> or <code>https.get()</code> includes the <code>https://</code> scheme in the hostname. The DNS resolver sees <code>https://api.example.com</code> as the hostname and correctly cannot resolve it. Use only the bare hostname: <code>{ host: 'api.example.com' }</code>.</td>
+      </tr>
+      <tr>
         <td>No internet connectivity / offline environment</td>
         <td>The machine or container has no network access. All external DNS lookups fail immediately. Common in restricted CI runners, air-gapped servers, or laptops with no active connection.</td>
       </tr>
@@ -236,11 +282,23 @@
       </tr>
       <tr>
         <td>Using <code>localhost</code> inside a Docker container</td>
-        <td>Inside a container, <code>localhost</code> resolves to the container itself — not the host machine and not another container. Attempting to connect to a service on the host or a sibling container using <code>localhost</code> fails with ENOTFOUND or a connection refused error.</td>
+        <td>Inside a container, <code>localhost</code> resolves to the container itself — not the host machine and not another container. Attempting to connect to a service on the host or a sibling container using <code>localhost</code> fails with ENOTFOUND or ECONNREFUSED.</td>
+      </tr>
+      <tr>
+        <td>Missing <code>/etc/hosts</code> entry for localhost</td>
+        <td>On some minimal Linux environments, <code>localhost</code> is not mapped in <code>/etc/hosts</code>, so DNS resolution fails. The fix is adding <code>127.0.0.1 localhost</code> to the hosts file or using <code>127.0.0.1</code> directly.</td>
+      </tr>
+      <tr>
+        <td>Corporate proxy not configured</td>
+        <td>In enterprise environments, all outbound traffic must route through an HTTP/HTTPS proxy. Node.js built-in modules do not honor <code>HTTP_PROXY</code> / <code>HTTPS_PROXY</code> environment variables automatically, so DNS resolution fails when a proxy is required.</td>
       </tr>
       <tr>
         <td>VPN / corporate DNS issues</td>
         <td>Internal hostnames (e.g. <code>api.internal.corp.com</code>) only resolve via the corporate DNS server. Without VPN active, or when split-horizon DNS is misconfigured, the lookup fails.</td>
+      </tr>
+      <tr>
+        <td>IPv6 DNS resolution returning no usable address</td>
+        <td>Node.js may attempt to resolve a hostname over IPv6 first. If the DNS server returns an IPv6 address but the target is not reachable over IPv6, the connection fails. Forcing IPv4 with <code>family: 4</code> resolves this.</td>
       </tr>
       <tr>
         <td>Docker container can't resolve external hostnames</td>
@@ -257,13 +315,17 @@
   </p>
   <pre><code># From the terminal (macOS / Linux / WSL)
 nslookup api.example.com
-dig api.example.com
+dig api.example.com +short
 
 # On Windows
 nslookup api.example.com
 
 # ping also triggers a DNS lookup
-ping api.example.com</code></pre>
+ping api.example.com
+
+# Enable verbose DNS tracing in Node.js
+NODE_DEBUG=dns node app.js
+node --trace-dns app.js    # Node.js 20+</code></pre>
 
   <p>
     You can also verify programmatically from inside your Node.js process or a quick script:
@@ -285,7 +347,10 @@ const { lookup } = require('dns/promises');
 
 lookup('api.example.com')
   .then(({ address, family }) => console.log('Resolved:', address))
-  .catch((err) => console.error('Failed:', err.code, err.hostname));</code></pre>
+  .catch((err) => console.error('Failed:', err.code, err.hostname));
+
+// One-liner quick test
+node -e "require('dns').lookup('api.example.com', (e,a) => console.log(e || a))"</code></pre>
 
   <div class="callout">
     <strong>Run this inside the same environment as your app.</strong> If your app runs in
@@ -293,17 +358,18 @@ lookup('api.example.com')
     <code>docker exec -it my-container node dns-check.js</code>
   </div>
 
-  <h2>Fix 2 – Check environment variables for the correct hostname</h2>
+  <h2>Fix 2 – Check environment variables (fix "ENOTFOUND undefined")</h2>
   <p>
-    In the vast majority of production ENOTFOUND incidents, the hostname comes from an environment
-    variable that is wrong, missing, or set to a value from a different environment.
+    <code>Error: getaddrinfo ENOTFOUND undefined</code> is one of the most common forms of this
+    error. It means <code>process.env.API_URL</code> (or a similar variable) was never set, so
+    JavaScript converted it to the literal string <code>"undefined"</code> when building the URL.
   </p>
-  <pre><code>// ❌ Common mistake — hardcoded or wrong env var
-const apiUrl = process.env.API_URL; // undefined → 'undefined' string → ENOTFOUND
+  <pre><code>// ❌ Common mistake — env var is undefined → hostname becomes "undefined"
+const apiUrl = process.env.API_URL; // undefined
 const res = await fetch(`${apiUrl}/users`);
 // → Error: getaddrinfo ENOTFOUND undefined
 
-// ✅ Validate environment variables at startup
+// ✅ Validate environment variables at startup (fail fast)
 function requireEnv(name) {
   const value = process.env[name];
   if (!value) {
@@ -312,22 +378,64 @@ function requireEnv(name) {
   return value;
 }
 
-const API_BASE = requireEnv('API_URL'); // throws at startup if missing, not at request time
+const API_BASE = requireEnv('API_URL'); // throws at startup if missing
 
-// ✅ Also validate the hostname is parseable
-function getApiHost(envVar) {
+// ✅ Also validate that the value is a well-formed URL
+function getValidatedUrl(envVar) {
   const raw = requireEnv(envVar);
   try {
-    return new URL(raw).hostname;
+    return new URL(raw); // throws if not a valid URL
   } catch {
     throw new Error(`${envVar} is not a valid URL: "${raw}"`);
   }
 }
 
-const apiHost = getApiHost('API_URL');
-console.log('API host:', apiHost); // Verify this is what you expect</code></pre>
+const apiUrl = getValidatedUrl('API_URL');
+console.log('API host:', apiUrl.hostname); // Confirm this is what you expect</code></pre>
 
-  <h2>Fix 3 – Docker DNS fix</h2>
+  <div class="callout warn">
+    <strong>Check your .env file loading order.</strong> If you use <code>dotenv</code>, call
+    <code>require('dotenv').config()</code> (or <code>import 'dotenv/config'</code>) before
+    any other module that reads <code>process.env</code>. If the <code>.env</code> file is missing
+    from the deployment, all variables will be undefined and you will see a flood of
+    <code>ENOTFOUND undefined</code> errors.
+  </div>
+
+  <h2>Fix 3 – Fix the hosts file for localhost issues</h2>
+  <p>
+    If the failing hostname is <code>localhost</code> or a custom local hostname, the problem
+    may be a missing entry in your system's hosts file. This is especially common in Docker
+    base images, WSL environments, and minimal Linux distros.
+  </p>
+  <pre><code># Check your current hosts file
+cat /etc/hosts          # Linux / macOS / Docker containers
+# Windows: C:\Windows\System32\drivers\etc\hosts
+
+# Required entries — add these if missing:
+# 127.0.0.1   localhost
+# ::1         localhost
+
+# On macOS, flush the DNS cache after editing hosts:
+sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+
+# On Linux (systemd-resolved):
+sudo systemd-resolve --flush-caches
+
+# On Windows:
+ipconfig /flushdns</code></pre>
+
+  <p>
+    For <strong>MongoDB connections</strong>, a common fix is switching from <code>localhost</code>
+    to <code>127.0.0.1</code> in the connection string. This bypasses DNS entirely by using
+    the IP address directly:
+  </p>
+  <pre><code>// ❌ May fail with ENOTFOUND on systems where localhost is not in /etc/hosts
+mongoose.connect('mongodb://localhost:27017/mydb');
+
+// ✅ Use IP address to bypass DNS lookup entirely
+mongoose.connect('mongodb://127.0.0.1:27017/mydb');</code></pre>
+
+  <h2>Fix 4 – Docker DNS fix</h2>
   <p>
     Docker containers frequently produce ENOTFOUND for two different reasons, each with a
     different fix.
@@ -338,8 +446,7 @@ console.log('API host:', apiHost); // Verify this is what you expect</code></pre
 services:
   api:
     image: my-api
-    # ❌ Bad: another service trying to reach this as 'localhost' will get ENOTFOUND
-    # ✅ Use the service name 'api' as the hostname instead
+    # ✅ Other services reach this container as 'api' (the service name)
 
   worker:
     image: my-worker
@@ -362,9 +469,89 @@ sudo systemctl restart docker
 docker run --dns 8.8.8.8 --dns 1.1.1.1 my-image node app.js
 
 # Verify DNS inside the container
-docker exec -it my-container nslookup api.example.com</code></pre>
+docker exec -it my-container nslookup api.example.com
+docker exec -it my-container cat /etc/resolv.conf</code></pre>
 
-  <h2>Fix 4 – Retry on EAI_AGAIN (temporary DNS failures)</h2>
+  <h2>Fix 5 – Configure proxy for corporate networks</h2>
+  <p>
+    Node.js built-in <code>http</code> and <code>https</code> modules do <strong>not</strong>
+    automatically read <code>HTTP_PROXY</code> or <code>HTTPS_PROXY</code> environment variables.
+    In corporate networks where all traffic must route through a proxy, DNS resolution for
+    external hostnames fails with ENOTFOUND because requests never reach the proxy.
+  </p>
+
+  <h3>Option A: Use hpagent (recommended for Node.js built-in fetch / https)</h3>
+  <pre><code>// npm install hpagent
+const { HttpsProxyAgent } = require('hpagent');
+
+const agent = new HttpsProxyAgent({
+  proxy: process.env.HTTPS_PROXY || 'http://proxy.corp.example.com:8080',
+});
+
+// With Node.js built-in fetch (Node 18+)
+const res = await fetch('https://api.example.com/data', { agent });
+
+// With https.get()
+const https = require('https');
+https.get({ hostname: 'api.example.com', agent }, (res) => { /* ... */ });</code></pre>
+
+  <h3>Option B: Configure proxy in axios</h3>
+  <pre><code>// npm install axios
+const axios = require('axios');
+
+const instance = axios.create({
+  proxy: {
+    protocol: 'http',
+    host: 'proxy.corp.example.com',
+    port: 8080,
+    // auth: { username: 'user', password: 'pass' }, // if required
+  },
+});
+
+const res = await instance.get('https://api.example.com/data');</code></pre>
+
+  <h3>Option C: Remove npm proxy if incorrectly set</h3>
+  <pre><code># Check if npm proxy is set (can affect npm-based tools)
+npm config get proxy
+npm config get https-proxy
+
+# Remove proxy settings if no longer needed
+npm config delete proxy
+npm config delete https-proxy
+
+# Or set NO_PROXY to bypass proxy for specific hosts
+export NO_PROXY=localhost,127.0.0.1,api.example.com</code></pre>
+
+  <h2>Fix 6 – Force IPv4 to work around IPv6 DNS issues</h2>
+  <p>
+    On dual-stack networks, Node.js may attempt to resolve a hostname as AAAA (IPv6) first.
+    If the DNS server returns an IPv6 address but the destination is only reachable over IPv4,
+    the connection fails. Pass <code>family: 4</code> to force IPv4-only resolution.
+  </p>
+  <pre><code>const dns = require('dns');
+const https = require('https');
+
+// Force IPv4 for a specific lookup
+dns.lookup('api.example.com', { family: 4 }, (err, address, family) => {
+  console.log('IPv4 address:', address);
+});
+
+// Force IPv4 globally for all http/https lookups
+const agent = new https.Agent({ family: 4 });
+const res = await fetch('https://api.example.com/data', {
+  // Node 18+: dispatcher is used instead of agent
+});
+
+// With axios: set the family option on the httpAgent
+const axios = require('axios');
+const instance = axios.create({
+  httpsAgent: new https.Agent({ family: 4 }),
+});
+
+// Or set the global DNS order preference (Node.js 17+)
+dns.setDefaultResultOrder('ipv4first');</code></pre>
+
+  <h2>Fix 7 – Retry on EAI_AGAIN (temporary DNS failures)</h2>
   <p>
     <code>EAI_AGAIN</code> is a transient error — the DNS server was momentarily unreachable.
     This is common during container startup (the app starts before the network is fully ready)
@@ -383,9 +570,10 @@ async function fetchWithRetry(url, options = {}, { retries = 3, baseDelayMs = 30
       }
       return res;
     } catch (err) {
-      const isRetryable = RETRYABLE_DNS_CODES.has(err.cause?.code ?? err.code);
+      const code = err.cause?.code ?? err.code;
+      const isRetryable = RETRYABLE_DNS_CODES.has(code);
       if (isRetryable && attempt < retries) {
-        console.warn(`DNS/network error (${err.cause?.code ?? err.code}), retrying in ${baseDelayMs * 2 ** attempt}ms… (attempt ${attempt + 1}/${retries})`);
+        console.warn(`DNS/network error (${code}), retrying in ${baseDelayMs * 2 ** attempt}ms… (attempt ${attempt + 1}/${retries})`);
         await sleep(baseDelayMs * 2 ** attempt);
         continue;
       }
@@ -407,41 +595,7 @@ const data = await res.json();</code></pre>
     than ignoring the error.
   </div>
 
-  <h2>Fix 5 – IP address fallback for critical connections</h2>
-  <p>
-    For connections where DNS availability cannot be guaranteed (e.g. a critical database
-    in a constrained environment), you can bypass DNS entirely by using a pre-resolved IP
-    address and providing the expected hostname in the <code>Host</code> header (for HTTP)
-    or in the TLS SNI field.
-  </p>
-  <pre><code>const https = require('https');
-
-// Pre-resolved IP for api.example.com (update this if the IP changes)
-const FALLBACK_IP = '203.0.113.42';
-
-const options = {
-  host: FALLBACK_IP,          // connect to IP directly — no DNS lookup
-  port: 443,
-  path: '/data',
-  headers: {
-    Host: 'api.example.com',  // required for virtual hosting and SNI
-  },
-  servername: 'api.example.com', // TLS SNI — required for HTTPS
-};
-
-https.get(options, (res) => {
-  let body = '';
-  res.on('data', (chunk) => { body += chunk; });
-  res.on('end', () => console.log(JSON.parse(body)));
-}).on('error', console.error);</code></pre>
-
-  <div class="callout warn">
-    <strong>IP fallback caveat:</strong> Hard-coding IP addresses is fragile — CDNs,
-    cloud services, and APIs regularly rotate IPs. Only use this as a last resort for
-    truly critical infrastructure where you control the IP and update it via configuration.
-  </div>
-
-  <h2>Fix 6 – Handle ENOTFOUND gracefully in production code</h2>
+  <h2>Fix 8 – Handle ENOTFOUND gracefully in production code</h2>
   <p>
     DNS errors should be caught at the HTTP/fetch boundary and converted into structured
     application errors. Never let an unhandled <code>ENOTFOUND</code> propagate to a user
@@ -495,6 +649,40 @@ app.get('/data', async (req, res) => {
   }
 });</code></pre>
 
+  <h2>Fix 9 – IP address fallback for critical connections</h2>
+  <p>
+    For connections where DNS availability cannot be guaranteed (e.g. a critical database
+    in a constrained environment), you can bypass DNS entirely by using a pre-resolved IP
+    address and providing the expected hostname in the <code>Host</code> header (for HTTP)
+    or in the TLS SNI field.
+  </p>
+  <pre><code>const https = require('https');
+
+// Pre-resolved IP for api.example.com (update this if the IP changes)
+const FALLBACK_IP = '203.0.113.42';
+
+const options = {
+  host: FALLBACK_IP,          // connect to IP directly — no DNS lookup
+  port: 443,
+  path: '/data',
+  headers: {
+    Host: 'api.example.com',  // required for virtual hosting and SNI
+  },
+  servername: 'api.example.com', // TLS SNI — required for HTTPS
+};
+
+https.get(options, (res) => {
+  let body = '';
+  res.on('data', (chunk) => { body += chunk; });
+  res.on('end', () => console.log(JSON.parse(body)));
+}).on('error', console.error);</code></pre>
+
+  <div class="callout warn">
+    <strong>IP fallback caveat:</strong> Hard-coding IP addresses is fragile — CDNs,
+    cloud services, and APIs regularly rotate IPs. Only use this as a last resort for
+    truly critical infrastructure where you control the IP and update it via configuration.
+  </div>
+
   <h2>Debugging Commands</h2>
   <p>
     Use these commands to diagnose ENOTFOUND from the same environment as your Node.js process.
@@ -516,9 +704,15 @@ docker exec -it my-container cat /etc/resolv.conf
 
 # Enable Node.js DNS debug output
 NODE_DEBUG=dns node app.js
+node --trace-dns app.js       # Node.js 20+ — verbose per-query tracing
 
 # Quick one-liner to test DNS from Node.js
-node -e "require('dns').lookup('api.example.com', (e,a) => console.log(e || a))"</code></pre>
+node -e "require('dns').lookup('api.example.com', (e,a) => console.log(e || a))"
+
+# Flush DNS cache (after editing /etc/hosts or changing DNS server)
+sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder   # macOS
+sudo systemd-resolve --flush-caches                              # Linux (systemd)
+ipconfig /flushdns                                               # Windows</code></pre>
 
   <div class="callout warn">
     <strong>Do not silently swallow ENOTFOUND:</strong> Catching the error without logging it
@@ -528,11 +722,62 @@ node -e "require('dns').lookup('api.example.com', (e,a) => console.log(e || a))"
     will surface again in a different, harder-to-debug form.
   </div>
 
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ENOTFOUND in Node.js?</summary>
+    <div class="faq-answer">
+      <p>ENOTFOUND stands for "Error NOT FOUND" at the DNS level. Node.js throws it as <code>Error: getaddrinfo ENOTFOUND hostname</code> when the DNS resolver cannot map the given hostname to an IP address. This happens before any TCP connection is attempted. The hostname may not exist, may be misspelled, or your environment may have no DNS connectivity.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does Node.js show "Error: getaddrinfo ENOTFOUND undefined"?</summary>
+    <div class="faq-answer">
+      <p>The literal hostname <code>undefined</code> in the error means your code passed a JavaScript <code>undefined</code> value as the URL hostname. The most common cause is a missing or unset environment variable: <code>process.env.API_URL</code> is <code>undefined</code>, and when interpolated into a URL string it becomes the literal text <code>"undefined"</code>. Fix: validate all required environment variables at application startup before any requests are made.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between ENOTFOUND and EAI_AGAIN?</summary>
+    <div class="faq-answer">
+      <p><strong>ENOTFOUND</strong> is a permanent DNS failure — the hostname definitively does not resolve, either because it does not exist or the DNS server authoritatively returned NXDOMAIN. <strong>EAI_AGAIN</strong> is a temporary DNS failure — the resolver could not reach a DNS server (e.g. network is down, DNS server is overloaded) and the lookup should be retried. EAI_AGAIN is transient and retryable; ENOTFOUND usually indicates a configuration problem.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ENOTFOUND happen in Docker containers?</summary>
+    <div class="faq-answer">
+      <p>Docker containers use their own DNS resolver (<code>127.0.0.11</code> by default). If the container cannot reach external DNS servers, or if you use <code>localhost</code> to refer to another container (which resolves to the container itself, not the host), DNS resolution fails with ENOTFOUND. Fix: use the docker-compose service name instead of <code>localhost</code>, and add <code>"dns": ["8.8.8.8", "1.1.1.1"]</code> to <code>/etc/docker/daemon.json</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Can a corporate proxy cause getaddrinfo ENOTFOUND?</summary>
+    <div class="faq-answer">
+      <p>Yes. In corporate or restricted network environments, all outbound traffic must route through an HTTP/HTTPS proxy. Node.js built-in <code>http</code>/<code>https</code> modules do not read proxy environment variables automatically. If <code>HTTP_PROXY</code> or <code>HTTPS_PROXY</code> is set but your code does not configure a proxy agent, requests bypass the proxy and DNS resolution fails. Use the <code>hpagent</code> or <code>proxy-agent</code> npm package, or configure the <code>proxy</code> option in axios.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ENOTFOUND localhost in Node.js?</summary>
+    <div class="faq-answer">
+      <p>On some systems, <code>localhost</code> is not mapped in <code>/etc/hosts</code> (Linux/macOS) or <code>C:\Windows\System32\drivers\etc\hosts</code> (Windows), causing DNS resolution to fail. Add <code>127.0.0.1 localhost</code> and <code>::1 localhost</code> to your hosts file. Alternatively, use <code>127.0.0.1</code> directly instead of <code>localhost</code>. In MongoDB connection strings, switching from <code>localhost</code> to <code>127.0.0.1</code> is a common fix.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ENOTFOUND in axios?</summary>
+    <div class="faq-answer">
+      <p>In axios, ENOTFOUND appears as <code>Error: getaddrinfo ENOTFOUND hostname</code> on <code>err.message</code>, with <code>err.code === 'ENOTFOUND'</code>. To fix: (1) verify the base URL in your axios instance is correct; (2) if behind a proxy, configure the <code>proxy</code> option in <code>axios.create()</code>; (3) if IPv6 is causing issues, pass <code>httpsAgent: new https.Agent({ family: 4 })</code>; (4) add retry logic using <code>axios-retry</code> for transient failures.</p>
+    </div>
+  </details>
+
   <h2>Related Errors</h2>
   <ul>
-    <li><code>ECONNREFUSED: connect ECONNREFUSED</code> — the hostname resolved successfully but nothing is listening on the target port; the TCP connection was actively refused</li>
+    <li><a href="https://nodejs-errors.dev/ECONNREFUSED/"><code>ECONNREFUSED: connect ECONNREFUSED</code></a> — the hostname resolved successfully but nothing is listening on the target port; the TCP connection was actively refused</li>
     <li><a href="https://nodejs-errors.dev/ECONNRESET/"><code>ECONNRESET: connection reset by peer</code></a> — the connection was established but then forcibly closed mid-transfer</li>
-    <li><code>ETIMEDOUT: connect ETIMEDOUT</code> — the hostname resolved but the TCP handshake timed out; the server is unreachable or behind a firewall</li>
+    <li><a href="https://nodejs-errors.dev/ETIMEDOUT/"><code>ETIMEDOUT: connect ETIMEDOUT</code></a> — the hostname resolved but the TCP handshake timed out; the server is unreachable or behind a firewall</li>
     <li><code>EAI_AGAIN</code> — temporary DNS failure; the resolver could not reach a DNS server; retryable variant of ENOTFOUND</li>
     <li><code>CERT_HAS_EXPIRED / UNABLE_TO_VERIFY_LEAF_SIGNATURE</code> — DNS resolved and TCP connected, but TLS handshake failed due to certificate issues</li>
   </ul>

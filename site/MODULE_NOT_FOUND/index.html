@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="index, follow" />
-  <title>Error: Cannot find module – Node.js MODULE_NOT_FOUND Fix</title>
-  <meta name="description" content="Node.js throws 'Error: Cannot find module' (code: MODULE_NOT_FOUND) when require() cannot locate a package or file. Covers every cause — missing install, typos, wrong path, TypeScript aliases, Docker — and how to fix each one." />
+  <title>Error: Cannot find module 'express' – Node.js MODULE_NOT_FOUND Fix</title>
+  <meta name="description" content="Node.js throws 'Error: Cannot find module' (code: MODULE_NOT_FOUND) when require() cannot locate a package or file. Covers every cause — missing npm install, typos, wrong path, ESM/CJS conflict, missing index.js, broken symlinks, TypeScript aliases, Docker — and how to fix each one fast." />
   <link rel="canonical" href="https://nodejs-errors.dev/MODULE_NOT_FOUND/" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="Error: Cannot find module – Node.js MODULE_NOT_FOUND Fix" />
+  <meta property="og:title" content="Error: Cannot find module 'express' – Node.js MODULE_NOT_FOUND Fix" />
   <meta property="og:description" content="Node.js throws 'Error: Cannot find module' (code: MODULE_NOT_FOUND) when require() cannot locate a package or file. Covers every cause and how to fix each one." />
   <meta property="og:url" content="https://nodejs-errors.dev/MODULE_NOT_FOUND/" />
   <meta property="og:site_name" content="nodejs-errors.dev" />
@@ -20,12 +20,12 @@
     "@context": "https://schema.org",
     "@type": "TechArticle",
     "headline": "Error: Cannot find module – Node.js MODULE_NOT_FOUND Fix",
-    "description": "Node.js throws 'Error: Cannot find module' (code: MODULE_NOT_FOUND) when require() cannot locate a package or file. Covers every cause and how to fix each one.",
+    "description": "Node.js throws 'Error: Cannot find module' (code: MODULE_NOT_FOUND) when require() cannot locate a package or file. Covers every cause: missing npm install, typo in module name, wrong relative path, missing file extension, missing index.js in directory import, global-only install, ESM-only package required with require(), TypeScript path aliases not resolved at runtime, Docker node_modules missing, case-sensitivity mismatch on Linux, corrupted node_modules, broken symlinks, and native module build failures — plus every fix.",
     "url": "https://nodejs-errors.dev/MODULE_NOT_FOUND/",
     "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
     "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
     "datePublished": "2026-05-08",
-    "dateModified": "2026-05-08"
+    "dateModified": "2026-05-09"
   }
   </script>
 
@@ -39,7 +39,7 @@
         "name": "What does 'Error: Cannot find module' mean in Node.js?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "'Error: Cannot find module' (error code MODULE_NOT_FOUND) is thrown by the Node.js CommonJS module loader when require() cannot resolve the requested module name or file path. The error occurs both for missing npm packages and for incorrect relative file paths."
+          "text": "'Error: Cannot find module' (error code MODULE_NOT_FOUND) is thrown by the Node.js CommonJS module loader when require() cannot resolve the requested module name or file path. The error occurs both for missing npm packages and for incorrect relative file paths. The error object carries the property code: 'MODULE_NOT_FOUND' and, since Node.js 12, a requireStack array showing the chain of files that triggered the failing require()."
         }
       },
       {
@@ -47,7 +47,7 @@
         "name": "What causes 'Error: Cannot find module'?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "The most common causes are: (1) npm packages not installed – run npm install; (2) a typo in the module name or file path; (3) a wrong relative path such as './utils' instead of '../utils'; (4) running the script from a different working directory than expected; (5) a package listed in devDependencies being required in a production environment; (6) case-sensitivity mismatch on Linux; (7) TypeScript path aliases not resolved at runtime; (8) node_modules not installed inside a Docker container."
+          "text": "The most common causes are: (1) npm packages not installed – run npm install; (2) a typo in the module name or file path; (3) a wrong relative path such as './utils' instead of '../utils'; (4) missing file extension for non-JS files such as '.json'; (5) importing a directory that has no index.js; (6) package installed globally with -g but not locally in the project; (7) running the script from a different working directory than expected; (8) a package listed in devDependencies being required in a production environment; (9) an ESM-only package required with require() instead of import(); (10) case-sensitivity mismatch on Linux; (11) TypeScript path aliases not resolved at runtime; (12) node_modules not installed inside a Docker container; (13) corrupted or incomplete node_modules; (14) broken symlinks in node_modules."
         }
       },
       {
@@ -55,7 +55,7 @@
         "name": "How do I fix Error: Cannot find module?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "1. Run npm install to restore missing node_modules. 2. Check the module name or path for typos. 3. Verify the file exists with the correct case. 4. Confirm you are running the script from the correct working directory. 5. Move the package from devDependencies to dependencies if it is needed in production. 6. Clear the npm cache and reinstall if the module appears installed but the error persists."
+          "text": "1. Run npm install to restore missing node_modules. 2. Check the module name or path for typos. 3. Verify the file exists with the correct case. 4. Add the file extension if importing a non-JS file (e.g., require('./config.json')). 5. Add an index.js if importing a directory. 6. Confirm you are running the script from the correct working directory. 7. Move the package from devDependencies to dependencies if it is needed in production. 8. For ESM-only packages like chalk@5, use dynamic import() or downgrade to a CJS version. 9. Clear the npm cache and reinstall if the module appears installed but the error persists."
         }
       },
       {
@@ -63,7 +63,15 @@
         "name": "Why does 'Cannot find module' happen after npm install?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "If the error persists after npm install, the most likely causes are: (1) you ran npm install in a different directory than where you are running the script; (2) the package is in devDependencies and you ran npm install --production; (3) the installation was corrupted – delete node_modules and package-lock.json and run npm install again; (4) a version mismatch between the lockfile and the available registry version."
+          "text": "If the error persists after npm install, the most likely causes are: (1) you ran npm install in a different directory than where you are running the script; (2) the package is in devDependencies and you ran npm install --production; (3) the installation was corrupted – delete node_modules and package-lock.json and run npm install again; (4) a version mismatch between the lockfile and the available registry version; (5) the package is installed globally (npm install -g) instead of locally."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix 'Cannot find module' for an ESM-only package like chalk?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Some npm packages (chalk@5+, node-fetch@3+, got@12+, ora@6+) are ESM-only and cannot be loaded with require(). You have three options: (1) use a dynamic import: const chalk = await import('chalk'); (2) downgrade to the last CJS version: npm install chalk@4; (3) convert your entire project to ESM by adding type: 'module' to package.json and switching to import statements."
         }
       },
       {
@@ -71,7 +79,7 @@
         "name": "How do I fix 'Cannot find module' in TypeScript?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "In TypeScript projects, 'Cannot find module' at runtime is usually caused by path aliases (e.g. @/utils) defined in tsconfig.json that are not resolved by Node.js. Fix it by registering tsconfig-paths at runtime: node -r tsconfig-paths/register dist/app.js, or by using a bundler that resolves aliases at build time."
+          "text": "In TypeScript projects, 'Cannot find module' at runtime is usually caused by path aliases (e.g. @/utils) defined in tsconfig.json that are not resolved by Node.js. Fix it by registering tsconfig-paths at runtime: node -r tsconfig-paths/register dist/app.js, or by using a bundler that resolves aliases at build time. Also ensure @types/* packages are installed for packages that need them."
         }
       },
       {
@@ -79,7 +87,15 @@
         "name": "How do I fix 'Cannot find module' in Docker?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "In Docker, 'Cannot find module' almost always means node_modules was not installed inside the container. Make sure your Dockerfile runs npm install after copying package.json: COPY package*.json ./ then RUN npm install then COPY . . Do not copy your local node_modules into the image."
+          "text": "In Docker, 'Cannot find module' almost always means node_modules was not installed inside the container. Make sure your Dockerfile runs npm install after copying package.json: COPY package*.json ./ then RUN npm install then COPY . . Do not copy your local node_modules into the image, and make sure .dockerignore includes node_modules."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I debug which path Node.js is searching for a module?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Use these debugging techniques: (1) Print module.paths to see all node_modules directories Node.js searches; (2) Use require.resolve('module-name') to get the full resolved path or a detailed error; (3) Run NODE_DEBUG=module node app.js to see every path Node.js attempts during resolution; (4) Print __dirname and path.resolve('./your-path') to verify relative paths at runtime."
         }
       }
     ]
@@ -134,36 +150,54 @@
       {
         "@type": "HowToStep",
         "position": 4,
+        "name": "Add the file extension for non-JS files",
+        "text": "For JSON, .cjs, or other non-JS files, include the full extension: require('./config.json') instead of require('./config')."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 5,
+        "name": "Add index.js for directory imports",
+        "text": "If require('./models') throws MODULE_NOT_FOUND, ensure models/index.js exists and exports the intended values."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 6,
         "name": "Check your working directory",
         "text": "Run 'pwd' (or 'cd' on Windows) to confirm you are executing the script from the expected directory, as relative paths are resolved from process.cwd()."
       },
       {
         "@type": "HowToStep",
-        "position": 5,
+        "position": 7,
         "name": "Move package to dependencies",
         "text": "If the missing package is in devDependencies and you are running in a production environment (NODE_ENV=production), move it to dependencies in package.json."
       },
       {
         "@type": "HowToStep",
-        "position": 6,
+        "position": 8,
+        "name": "Fix ESM-only packages",
+        "text": "If the package is ESM-only (chalk@5, node-fetch@3, got@12), use dynamic import() or downgrade to the last CommonJS version."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 9,
         "name": "Fix case sensitivity",
         "text": "On Linux (case-sensitive filesystem), require('./Utils') and require('./utils') are different. Rename the file or fix the import to match exactly."
       },
       {
         "@type": "HowToStep",
-        "position": 7,
+        "position": 10,
         "name": "Clear cache and reinstall",
         "text": "Delete node_modules and package-lock.json, then run npm install again to resolve corrupted or incomplete installs."
       },
       {
         "@type": "HowToStep",
-        "position": 8,
+        "position": 11,
         "name": "Register TypeScript path aliases at runtime",
         "text": "If using TypeScript path aliases (e.g. @/utils), install tsconfig-paths and run: node -r tsconfig-paths/register dist/app.js"
       },
       {
         "@type": "HowToStep",
-        "position": 9,
+        "position": 12,
         "name": "Run npm install inside the Docker container",
         "text": "In your Dockerfile, copy package.json first and run npm install before copying the rest of the source: COPY package*.json ./ && RUN npm install && COPY . ."
       }
@@ -247,6 +281,11 @@
     th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
     td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
     footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
   </style>
 </head>
 <body>
@@ -284,7 +323,9 @@
     <strong>Exact error messages you will see:</strong><br>
     <code>Error: Cannot find module 'express'</code><br>
     <code>Error: Cannot find module './utils'</code><br>
-    <code>Error: Cannot find module '@/components/Button'</code>
+    <code>Error: Cannot find module '@/components/Button'</code><br>
+    <code>Error: Cannot find module './config.json'</code><br>
+    <code>Error: Cannot find module './models'</code>
   </div>
 
   <h2>Full Error Example</h2>
@@ -322,6 +363,85 @@ Require stack:
     <li>If nothing is found at any step — throw <code>MODULE_NOT_FOUND</code>.</li>
   </ol>
   <p>The error fires whenever the algorithm reaches the end of its search without finding a match.</p>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead>
+      <tr><th>Cause</th><th>Typical symptom</th><th>Quick fix</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Dependencies not installed</td>
+        <td><code>Cannot find module 'express'</code> after cloning</td>
+        <td><code>npm install</code></td>
+      </tr>
+      <tr>
+        <td>Typo in module name</td>
+        <td><code>Cannot find module 'loadash'</code></td>
+        <td>Fix the spelling in <code>require()</code></td>
+      </tr>
+      <tr>
+        <td>Wrong relative path</td>
+        <td><code>Cannot find module './utils'</code> (wrong directory level)</td>
+        <td>Adjust <code>./</code> / <code>../</code> prefix</td>
+      </tr>
+      <tr>
+        <td>Missing file extension</td>
+        <td><code>Cannot find module './config'</code> for a JSON file</td>
+        <td>Use <code>require('./config.json')</code></td>
+      </tr>
+      <tr>
+        <td>Missing index.js</td>
+        <td><code>Cannot find module './models'</code> (directory import)</td>
+        <td>Create <code>models/index.js</code></td>
+      </tr>
+      <tr>
+        <td>Global-only install</td>
+        <td><code>Cannot find module 'typescript'</code> (installed with -g)</td>
+        <td><code>npm install typescript</code> locally</td>
+      </tr>
+      <tr>
+        <td>devDependency in production</td>
+        <td>Works locally, fails on server</td>
+        <td>Move to <code>dependencies</code></td>
+      </tr>
+      <tr>
+        <td>ESM-only package with require()</td>
+        <td><code>Cannot find module 'chalk'</code> (chalk@5+)</td>
+        <td>Use <code>await import('chalk')</code> or downgrade</td>
+      </tr>
+      <tr>
+        <td>Case sensitivity on Linux</td>
+        <td>Works on macOS/Windows, fails on Linux/CI</td>
+        <td>Match filename case exactly</td>
+      </tr>
+      <tr>
+        <td>Corrupted node_modules</td>
+        <td>Package appears installed but error persists</td>
+        <td><code>rm -rf node_modules &amp;&amp; npm install</code></td>
+      </tr>
+      <tr>
+        <td>TypeScript path aliases</td>
+        <td><code>Cannot find module '@/utils'</code> at runtime</td>
+        <td>Register <code>tsconfig-paths</code></td>
+      </tr>
+      <tr>
+        <td>Docker — no local install</td>
+        <td><code>Cannot find module 'express'</code> in container</td>
+        <td>Run <code>npm install</code> in Dockerfile</td>
+      </tr>
+      <tr>
+        <td>Wrong working directory</td>
+        <td>Script runs from wrong directory</td>
+        <td><code>cd</code> to project root first</td>
+      </tr>
+      <tr>
+        <td>Broken symlinks</td>
+        <td>Error after linking packages or using workspaces</td>
+        <td><code>rm -rf node_modules &amp;&amp; npm install</code></td>
+      </tr>
+    </tbody>
+  </table>
 
   <h2>Common Causes &amp; Fixes</h2>
 
@@ -364,7 +484,53 @@ const utils = require('../utils');</code></pre>
   <pre><code>const path = require('path');
 console.log(path.resolve('./utils')); // prints the full path Node.js will look up</code></pre>
 
-  <h3>Cause 4 – Running from the wrong working directory</h3>
+  <h3>Cause 4 – Missing file extension for non-JS files</h3>
+  <p>
+    Node.js automatically tries <code>.js</code>, <code>.json</code>, and <code>.node</code> extensions
+    when resolving bare filenames — but only in that order and only when no extension is given for a
+    relative path. In practice, omitting the extension for <code>.json</code> files can silently fail
+    in certain configurations or when the file does not exist with the expected name.
+  </p>
+  <pre><code>// Wrong – may throw MODULE_NOT_FOUND if resolution fails
+const config = require('./config');
+
+// Correct – always explicit for non-JS files
+const config = require('./config.json');
+const native = require('./bindings.node');</code></pre>
+
+  <h3>Cause 5 – Missing index.js for directory imports</h3>
+  <p>
+    When you <code>require('./models')</code> and <code>models</code> is a directory, Node.js looks
+    for <code>models/index.js</code>. If that file does not exist, you get <code>MODULE_NOT_FOUND</code>.
+  </p>
+  <pre><code>// Directory structure that causes the error:
+// models/
+//   User.js
+//   Post.js
+//   (no index.js)
+
+const models = require('./models'); // throws MODULE_NOT_FOUND</code></pre>
+  <pre><code>// Fix: create models/index.js
+const User = require('./User');
+const Post = require('./Post');
+module.exports = { User, Post };</code></pre>
+
+  <h3>Cause 6 – Package installed globally, not locally</h3>
+  <p>
+    Running <code>npm install -g express</code> makes <code>express</code> available as a CLI tool
+    but does <em>not</em> make it available to <code>require()</code> inside your project. Node.js
+    searches <code>node_modules/</code> directories relative to the script — not the global npm prefix.
+  </p>
+  <pre><code># This does NOT fix the error
+npm install -g express
+
+# This does fix the error
+npm install express
+
+# Verify local installation
+npm ls express</code></pre>
+
+  <h3>Cause 7 – Running from the wrong working directory</h3>
   <p>
     Node.js resolves bare module names by searching <code>node_modules/</code> starting from the
     script's location, but <code>./</code> paths are relative to <code>process.cwd()</code>. Running
@@ -377,8 +543,9 @@ node project/src/app.js
 # Correct
 cd /project
 node src/app.js</code></pre>
+  <p>Always run <code>node</code> from the project root, or use <code>__dirname</code>-based absolute paths in your code.</p>
 
-  <h3>Cause 5 – Package in devDependencies used in production</h3>
+  <h3>Cause 8 – Package in devDependencies used in production</h3>
   <p>
     <code>npm install --production</code> (or <code>NODE_ENV=production npm install</code>) skips
     <code>devDependencies</code>. If a package required at runtime lives there, it will be missing
@@ -391,7 +558,29 @@ node src/app.js</code></pre>
   }
 }</code></pre>
 
-  <h3>Cause 6 – Case sensitivity on Linux</h3>
+  <h3>Cause 9 – ESM-only package loaded with require()</h3>
+  <p>
+    Several popular npm packages dropped CommonJS support and published ESM-only versions.
+    Using <code>require()</code> on these packages throws <code>MODULE_NOT_FOUND</code> or
+    <a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/"><code>ERR_REQUIRE_ESM</code></a>
+    (depending on Node.js version).
+  </p>
+  <p><strong>Common ESM-only packages:</strong> <code>chalk@5+</code>, <code>node-fetch@3+</code>, <code>got@12+</code>, <code>ora@6+</code>, <code>p-limit@4+</code>, <code>execa@6+</code></p>
+  <pre><code>// Wrong – chalk v5 is ESM-only
+const chalk = require('chalk'); // Error: Cannot find module 'chalk'
+
+// Fix option 1 – use dynamic import (works in any .js file)
+const chalk = await import('chalk');
+
+// Fix option 2 – downgrade to last CJS version
+// npm install chalk@4
+const chalk = require('chalk'); // chalk@4 is CJS
+
+// Fix option 3 – convert project to ESM
+// Add "type": "module" to package.json and use import syntax
+import chalk from 'chalk';</code></pre>
+
+  <h3>Cause 10 – Case sensitivity on Linux</h3>
   <p>
     macOS and Windows filesystems are usually case-insensitive, so <code>require('./Utils')</code>
     finds <code>utils.js</code>. Linux (including most CI/CD and production servers) is
@@ -403,13 +592,22 @@ const utils = require('./Utils');
 // Correct – match the filename exactly
 const utils = require('./utils');</code></pre>
 
-  <h3>Cause 7 – Corrupted or incomplete install</h3>
+  <h3>Cause 11 – Corrupted or incomplete install</h3>
   <p>Interrupted installs, disk errors, or npm cache corruption can leave <code>node_modules</code> in a broken state even though the package appears in <code>package.json</code>.</p>
-  <pre><code># Full clean reinstall
+  <pre><code># macOS / Linux – full clean reinstall
 rm -rf node_modules package-lock.json
+npm install
+
+# Windows (Command Prompt)
+rd /s /q node_modules
+del package-lock.json
+npm install
+
+# Optional: also clear the npm cache
+npm cache clean --force
 npm install</code></pre>
 
-  <h3>Cause 8 – TypeScript path aliases not resolved at runtime</h3>
+  <h3>Cause 12 – TypeScript path aliases not resolved at runtime</h3>
   <p>
     TypeScript supports path aliases like <code>@/utils</code> or <code>~/components</code> defined
     in <code>tsconfig.json</code>. These are a TypeScript-only feature — the compiled JavaScript
@@ -433,7 +631,7 @@ node -r tsconfig-paths/register dist/app.js
 ts-node -r tsconfig-paths/register src/app.ts</code></pre>
   <p>Alternatively, use a bundler (esbuild, webpack, Vite) that resolves aliases at build time so no runtime registration is needed.</p>
 
-  <h3>Cause 9 – node_modules not installed inside Docker</h3>
+  <h3>Cause 13 – node_modules not installed inside Docker</h3>
   <p>
     A common Docker mistake: installing dependencies on the host machine and then copying the whole
     project into the image. If <code>node_modules</code> is in <code>.dockerignore</code>
@@ -450,17 +648,63 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 CMD ["node", "src/app.js"]</code></pre>
+  <p>Also confirm your <code>.dockerignore</code> includes <code>node_modules</code> so the host modules are never copied into the image.</p>
 
-  <h2>Debugging Checklist</h2>
+  <h3>Cause 14 – Broken symlinks in node_modules</h3>
+  <p>
+    npm workspaces, <code>npm link</code>, and some CI environments create symlinks inside
+    <code>node_modules</code>. If the symlink target no longer exists or the symlink was corrupted,
+    Node.js cannot follow it and throws <code>MODULE_NOT_FOUND</code>.
+  </p>
+  <pre><code># Detect broken symlinks (macOS/Linux)
+find node_modules -type l ! -exec test -e {} \; -print
+
+# Fix: full reinstall
+rm -rf node_modules package-lock.json
+npm install
+
+# If using npm workspaces, run from the workspace root
+npm install --workspaces</code></pre>
+
+  <h2>Debugging Techniques</h2>
+
+  <h3>Inspect the module search paths</h3>
+  <p>
+    <code>module.paths</code> is an array of every <code>node_modules</code> directory Node.js will
+    search, in order. Print it to verify Node.js is looking in the right place.
+  </p>
+  <pre><code>// Add temporarily to the failing script
+console.log(module.paths);
+// [
+//   '/project/src/node_modules',
+//   '/project/node_modules',
+//   '/node_modules'
+// ]</code></pre>
+
+  <h3>Use require.resolve() to test resolution</h3>
+  <pre><code>try {
+  const resolved = require.resolve('express');
+  console.log('Found at:', resolved);
+} catch (err) {
+  console.error('Not found:', err.message);
+}</code></pre>
+
+  <h3>Enable Node.js module debug output</h3>
+  <pre><code># Prints every path Node.js attempts during resolution
+NODE_DEBUG=module node app.js</code></pre>
+
+  <h3>General debugging checklist</h3>
   <ol>
     <li>Read the <code>Require stack</code> in the error — it shows exactly which file called <code>require()</code>.</li>
     <li>Run <code>ls node_modules/&lt;package-name&gt;</code> to confirm the package is physically installed.</li>
     <li>Run <code>npm ls &lt;package-name&gt;</code> to see if it is listed as a dependency.</li>
     <li>Print <code>__dirname</code> and <code>path.resolve('./your-path')</code> to verify the resolved path.</li>
+    <li>Print <code>module.paths</code> to see all directories Node.js is searching.</li>
     <li>Check <code>package.json</code> — is the package under <code>dependencies</code> or <code>devDependencies</code>?</li>
     <li>Confirm the filename on disk matches the case used in <code>require()</code>.</li>
     <li>In TypeScript projects, check for unresolved path aliases in the compiled output.</li>
     <li>In Docker/CI, confirm <code>npm install</code> runs inside the container, not just on the host.</li>
+    <li>Run <code>NODE_DEBUG=module node app.js</code> to trace every path attempted during resolution.</li>
   </ol>
 
   <h2>CJS vs ESM: <code>MODULE_NOT_FOUND</code> vs <code>ERR_MODULE_NOT_FOUND</code></h2>
@@ -493,19 +737,137 @@ CMD ["node", "src/app.js"]</code></pre>
     a clean reinstall.
   </div>
 
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What does "Error: Cannot find module" mean in Node.js?</summary>
+    <div class="faq-answer">
+      <p>
+        <code>Error: Cannot find module</code> (error code <code>MODULE_NOT_FOUND</code>) is thrown by the
+        Node.js CommonJS module loader when <code>require()</code> cannot resolve the requested module name
+        or file path. This error occurs both for missing npm packages and for incorrect relative file paths.
+        Since Node.js 12, the error includes a <code>requireStack</code> array showing exactly which files
+        triggered the failing <code>require()</code>.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does "Cannot find module" happen even after npm install?</summary>
+    <div class="faq-answer">
+      <p>
+        Several reasons the error can persist after running <code>npm install</code>:
+      </p>
+      <ul>
+        <li>You ran <code>npm install</code> in a different directory than where you run the script.</li>
+        <li>The package is in <code>devDependencies</code> and you ran <code>npm install --production</code>.</li>
+        <li>The install was corrupted — delete <code>node_modules</code> and <code>package-lock.json</code> and reinstall.</li>
+        <li>The package was installed globally with <code>-g</code> instead of locally.</li>
+        <li>A lockfile version mismatch caused the package to not resolve correctly.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix "Cannot find module" for an ESM-only package like chalk@5?</summary>
+    <div class="faq-answer">
+      <p>
+        Packages like <code>chalk@5</code>, <code>node-fetch@3</code>, <code>got@12</code>, and
+        <code>ora@6</code> are ESM-only and cannot be loaded with <code>require()</code>. You have three options:
+      </p>
+      <ul>
+        <li>Use a dynamic import: <code>const chalk = await import('chalk');</code></li>
+        <li>Downgrade to the last CJS version: <code>npm install chalk@4</code></li>
+        <li>Convert your project to ESM: add <code>"type": "module"</code> to <code>package.json</code> and use <code>import</code> syntax throughout.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix "Cannot find module" for a directory import?</summary>
+    <div class="faq-answer">
+      <p>
+        When you <code>require('./models')</code> and <code>models</code> is a directory, Node.js looks
+        for <code>models/index.js</code>. If that file does not exist, you get <code>MODULE_NOT_FOUND</code>.
+        Create an <code>index.js</code> inside the directory that exports the intended values:
+      </p>
+      <pre style="margin: 0.5rem 0;"><code>// models/index.js
+const User = require('./User');
+const Post = require('./Post');
+module.exports = { User, Post };</code></pre>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix "Cannot find module" in TypeScript projects?</summary>
+    <div class="faq-answer">
+      <p>
+        In TypeScript projects, <code>Cannot find module</code> at runtime is usually caused by path
+        aliases (e.g. <code>@/utils</code>) defined in <code>tsconfig.json</code> that are not resolved
+        by Node.js at runtime. Fix it by registering <code>tsconfig-paths</code>:
+      </p>
+      <pre style="margin: 0.5rem 0;"><code>node -r tsconfig-paths/register dist/app.js
+# or with ts-node:
+ts-node -r tsconfig-paths/register src/app.ts</code></pre>
+      <p>Alternatively use a bundler (esbuild, webpack, Vite) that resolves aliases at build time.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix "Cannot find module" inside a Docker container?</summary>
+    <div class="faq-answer">
+      <p>
+        In Docker, this error almost always means <code>npm install</code> did not run inside the container.
+        Structure your <code>Dockerfile</code> to copy <code>package.json</code> first, then install, then copy source:
+      </p>
+      <pre style="margin: 0.5rem 0;"><code>FROM node:22-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+CMD ["node", "src/app.js"]</code></pre>
+      <p>Also make sure <code>node_modules</code> is listed in your <code>.dockerignore</code> file.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I debug which paths Node.js is searching for a module?</summary>
+    <div class="faq-answer">
+      <p>Three useful techniques:</p>
+      <ul>
+        <li>Print <code>module.paths</code> to see every <code>node_modules</code> directory searched, in order.</li>
+        <li>Use <code>require.resolve('module-name')</code> — returns the full resolved path on success, or throws a detailed error on failure.</li>
+        <li>Run <code>NODE_DEBUG=module node app.js</code> to trace every path Node.js attempts during resolution.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Works on macOS but fails on Linux — why?</summary>
+    <div class="faq-answer">
+      <p>
+        macOS and Windows use case-insensitive filesystems by default, so <code>require('./Utils')</code>
+        successfully loads <code>utils.js</code>. Linux uses a case-sensitive filesystem — the same
+        <code>require('./Utils')</code> throws <code>Cannot find module</code> because there is no file
+        named <code>Utils.js</code>. Fix: match the exact case of the filename in every <code>require()</code>
+        or <code>import</code> statement. Linters like <code>eslint-plugin-import</code> can catch this automatically.
+      </p>
+    </div>
+  </details>
+
   <h2>Related Errors</h2>
   <ul>
-    <li><code>ERR_MODULE_NOT_FOUND</code> – the ESM (<code>import</code>) equivalent of this error</li>
+    <li><a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/"><code>ERR_REQUIRE_ESM</code></a> – the package exists but is ESM-only and must be loaded with <code>import()</code>, not <code>require()</code></li>
     <li><a href="https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/"><code>ERR_PACKAGE_PATH_NOT_EXPORTED</code></a> – the package is installed but the subpath you import is not in its <code>exports</code> map</li>
-    <li><code>ERR_REQUIRE_ESM</code> – the package exists but must be imported with <code>import</code>, not <code>require()</code></li>
-    <li><code>ENOENT: no such file or directory</code> – a related filesystem-level error for missing files</li>
+    <li><a href="https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/"><code>SyntaxError: Cannot use import statement in a module</code></a> – ESM/CJS mismatch in the other direction</li>
+    <li><a href="https://nodejs-errors.dev/ENOENT/"><code>ENOENT: no such file or directory</code></a> – a related filesystem-level error for missing files</li>
   </ul>
 
 </main>
 
 <footer>
   <address style="font-style:normal;">
-    <p>Last updated: 2026-05-08 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/modules.html#loading-from-node_modules-folders">Official Node.js docs</a></p>
+    <p>Last updated: 2026-05-09 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/modules.html#loading-from-node_modules-folders">Official Node.js docs</a></p>
   </address>
 </footer>
 

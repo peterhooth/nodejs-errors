@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="index, follow" />
-  <title>ETIMEDOUT: connection timed out – Node.js Fix</title>
-  <meta name="description" content="Node.js throws ETIMEDOUT when a network connection or operation takes too long and no response is received within the timeout window. Learn the exact causes and how to fix it with AbortSignal.timeout(), socket timeouts, retry logic, and DNS checks." />
+  <title>Error: connect ETIMEDOUT – Node.js Connection Timeout Fix</title>
+  <meta name="description" content="Node.js Error: connect ETIMEDOUT or read ETIMEDOUT — complete fix guide. Covers proxy config, Axios/fetch timeouts, database timeouts (MySQL/PostgreSQL/MongoDB), IPv4 vs IPv6, ESOCKETTIMEDOUT, exponential backoff, and circuit breaker patterns." />
   <link rel="canonical" href="https://nodejs-errors.dev/ETIMEDOUT/" />
 
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="ETIMEDOUT: connection timed out – Node.js Fix" />
-  <meta property="og:description" content="Node.js throws ETIMEDOUT when a network connection or operation takes too long and no response is received within the timeout window. Learn the exact causes and how to fix it with AbortSignal.timeout(), socket timeouts, retry logic, and DNS checks." />
+  <meta property="og:title" content="Error: connect ETIMEDOUT – Node.js Connection Timeout Fix" />
+  <meta property="og:description" content="Node.js Error: connect ETIMEDOUT or read ETIMEDOUT — complete fix guide. Covers proxy config, Axios/fetch timeouts, database timeouts (MySQL/PostgreSQL/MongoDB), IPv4 vs IPv6, ESOCKETTIMEDOUT, exponential backoff, and circuit breaker patterns." />
   <meta property="og:url" content="https://nodejs-errors.dev/ETIMEDOUT/" />
   <meta property="og:site_name" content="nodejs-errors.dev" />
 
@@ -18,8 +18,8 @@
   {
     "@context": "https://schema.org",
     "@type": "TechArticle",
-    "headline": "ETIMEDOUT: connection timed out – Node.js Fix",
-    "description": "Node.js throws ETIMEDOUT when a TCP connect, read, or write operation exceeds the configured timeout window and no response is received from the remote host.",
+    "headline": "Error: connect ETIMEDOUT – Node.js Connection Timeout Fix",
+    "description": "Node.js throws Error: connect ETIMEDOUT or read ETIMEDOUT when a TCP connect, read, or write operation exceeds the configured timeout window. Root causes include firewall drops, proxy misconfiguration, IPv4/IPv6 mismatch, missing User-Agent headers, overloaded servers, database connection exhaustion, and OS file descriptor limits. Fix with AbortSignal.timeout(), req.setTimeout(), Axios timeout options, database pool configuration, retry with exponential backoff, and circuit breakers.",
     "url": "https://nodejs-errors.dev/ETIMEDOUT/",
     "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
     "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
@@ -46,7 +46,15 @@
         "name": "How do I fix ETIMEDOUT in Node.js?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "The fix depends on the cause. Set an explicit timeout using AbortSignal.timeout() (Node.js 17.3+) or req.setTimeout() so your code fails fast instead of hanging. Add retry logic with exponential backoff for transient network timeouts. Check DNS resolution with dns.lookup() if you suspect DNS issues. If the remote server is legitimately slow, increase the timeout. Use err.syscall to distinguish a connect timeout (firewall drop) from a read timeout (server is slow to respond)."
+          "text": "The fix depends on the cause. Set an explicit timeout using AbortSignal.timeout() (Node.js 17.3+) or req.setTimeout() so your code fails fast instead of hanging. For Axios, set the timeout option in the config object. Add retry logic with exponential backoff for transient network timeouts. Check DNS resolution with dns.lookup() if you suspect DNS issues. If behind a corporate network or VPN, configure a proxy agent. Force IPv4 resolution if IPv6 is causing issues. If the remote server is legitimately slow, increase the timeout. Use err.syscall to distinguish a connect timeout (firewall drop) from a read timeout (server is slow to respond)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does connect ETIMEDOUT happen in Node.js but not in the browser?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "There are several key differences. (1) Proxy: browsers automatically use system proxies; Node.js does not — add a proxy-agent if behind a corporate network or VPN. (2) User-Agent header: browsers send one by default; Node.js sends none — servers may treat headless requests as bots and drop them. (3) IPv4 vs IPv6: Node.js may resolve a hostname to an IPv6 address while the server only supports IPv4 — force IPv4 via dns.lookup() with family: 4. (4) Firewall rules: some firewalls whitelist browser processes but block background Node.js processes."
         }
       },
       {
@@ -67,10 +75,26 @@
       },
       {
         "@type": "Question",
+        "name": "What is the difference between ETIMEDOUT and ESOCKETTIMEDOUT?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ETIMEDOUT is a system-level error that occurs during the initial TCP handshake — the three-way connection setup never completed. ESOCKETTIMEDOUT is a higher-level error thrown by some HTTP client libraries (like the legacy 'request' package) after a successful TCP connection when the server fails to send a complete response within the inactivity timeout window. Both indicate a timeout but at different stages of the connection lifecycle."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ETIMEDOUT when connecting to MySQL, PostgreSQL, or MongoDB in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "For MySQL: set connectTimeout and enable keepAliveInitialDelay in your pool config. For PostgreSQL (pg): set connectionTimeoutMillis, idleTimeoutMillis, and query_timeout on the Pool. For MongoDB/Mongoose: configure serverSelectionTimeoutMS, connectTimeoutMS, and socketTimeoutMS in the connection options. In all cases, use connection pooling instead of single connections to reduce per-request handshake overhead, and add retry logic for transient timeouts."
+        }
+      },
+      {
+        "@type": "Question",
         "name": "How do I tell if ETIMEDOUT is a connect timeout or a read timeout?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Check the err.syscall property on the error object. A value of 'connect' means the TCP handshake itself timed out — the host is unreachable or a firewall is silently dropping SYN packets. A value of 'read' means the connection was established but the server took too long to send data back. This distinction guides the fix: connect timeouts point to network/firewall issues, while read timeouts point to slow or overloaded servers."
+          "text": "Check the err.syscall property on the error object. A value of 'connect' means the TCP handshake itself timed out — the host is unreachable or a firewall is silently dropping SYN packets. A value of 'read' means the connection was established but the server took too long to send data back. This distinction guides the fix: connect timeouts point to network/firewall/DNS issues, while read timeouts point to slow or overloaded servers."
         }
       }
     ]
@@ -92,13 +116,15 @@
   {
     "@context": "https://schema.org",
     "@type": "HowTo",
-    "name": "How to fix ETIMEDOUT: connection timed out in Node.js",
+    "name": "How to fix Error: connect ETIMEDOUT in Node.js",
     "step": [
       { "@type": "HowToStep", "position": 1, "name": "Check err.syscall to identify the stage that timed out", "text": "Inspect err.syscall on the Error object. 'connect' means the TCP handshake never completed (unreachable host or firewall drop). 'read' means the connection succeeded but the server stopped sending data. 'lookup' points to a DNS resolution timeout." },
-      { "@type": "HowToStep", "position": 2, "name": "Set an explicit timeout with AbortSignal.timeout()", "text": "Use AbortSignal.timeout(ms) (Node.js 17.3+) with the global fetch() to enforce a total wall-clock deadline on the request. This throws an AbortError / TimeoutError so you can distinguish it from other network errors." },
-      { "@type": "HowToStep", "position": 3, "name": "Set a socket timeout on http/https requests", "text": "Call req.setTimeout(ms, callback) on an http or https request. In the callback, call req.destroy() to abort the hung connection. Without this, the default socket timeout is effectively infinite." },
-      { "@type": "HowToStep", "position": 4, "name": "Retry with exponential backoff", "text": "Wrap outbound requests in a retry loop that catches ETIMEDOUT (and other transient codes) and waits an increasing delay before each attempt. Cap the total number of retries to avoid cascading failures." },
-      { "@type": "HowToStep", "position": 5, "name": "Check DNS resolution independently", "text": "Run dns.lookup() or dns.resolve() to verify the hostname resolves before blaming the connection. A timeout during DNS resolution (EAI_AGAIN) surfaces differently from a TCP connect timeout." }
+      { "@type": "HowToStep", "position": 2, "name": "Check if behind a proxy or VPN (browser works, Node.js does not)", "text": "Node.js does not automatically use system proxies. If the URL works in a browser but not in Node.js, install proxy-agent and set the agent option on your HTTP requests. Also ensure you send a User-Agent header — servers block headless requests without one." },
+      { "@type": "HowToStep", "position": 3, "name": "Force IPv4 if IPv6 resolution is causing timeouts", "text": "Use dns.lookup() with family: 4 or set the family option on http/https requests to force IPv4 resolution. Node.js may resolve a hostname to an IPv6 address while the server only supports IPv4." },
+      { "@type": "HowToStep", "position": 4, "name": "Set an explicit timeout with AbortSignal.timeout() or Axios timeout", "text": "Use AbortSignal.timeout(ms) (Node.js 17.3+) with global fetch(), or set the timeout property in the Axios config object. For the built-in http/https module, call req.setTimeout(ms) and destroy the socket in the callback." },
+      { "@type": "HowToStep", "position": 5, "name": "Configure database connection timeouts and pooling", "text": "For MySQL set connectTimeout in the pool options. For PostgreSQL set connectionTimeoutMillis. For MongoDB set serverSelectionTimeoutMS and connectTimeoutMS. Always use a connection pool to avoid per-request handshake overhead." },
+      { "@type": "HowToStep", "position": 6, "name": "Retry with exponential backoff", "text": "Wrap outbound requests in a retry loop that catches ETIMEDOUT (and other transient codes such as ECONNRESET, EAI_AGAIN) and waits an increasing delay before each attempt. Cap the total number of retries to avoid cascading failures." },
+      { "@type": "HowToStep", "position": 7, "name": "Check DNS resolution independently", "text": "Run dns.lookup() or dns.resolve() to verify the hostname resolves before blaming the connection. A timeout during DNS resolution (EAI_AGAIN) surfaces differently from a TCP connect timeout." }
     ]
   }
   </script>
@@ -129,6 +155,11 @@
     th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
     td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
     footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
   </style>
 </head>
 <body>
@@ -141,15 +172,15 @@
 
 <header>
   <span class="error-badge">Node.js Error</span>
-  <h1>ETIMEDOUT: connection timed out</h1>
+  <h1>Error: connect ETIMEDOUT</h1>
   <span class="error-code">error code: <code>ETIMEDOUT</code></span>
-  <p>Complete reference — what it means, why it happens, and how to fix it with explicit timeouts, retry logic, and DNS checks.</p>
+  <p>Complete reference — what it means, why it happens (including why it works in browser but not Node.js), and how to fix it with explicit timeouts, proxy config, IPv4 forcing, Axios, database pool settings, retry logic, and circuit breakers.</p>
 </header>
 
 <main>
 
   <div class="quick-answer">
-    <strong>Quick Answer:</strong> <code>Error: connect ETIMEDOUT</code> means a TCP connection or read operation did not complete within the timeout window — the remote host went silent rather than actively refusing. Set an explicit timeout with <code>AbortSignal.timeout()</code> (Node.js 17.3+) or <code>req.setTimeout()</code>, then add retry logic with exponential backoff. Check <code>err.syscall</code> to tell a connect timeout from a read timeout.
+    <strong>Quick Answer:</strong> <code>Error: connect ETIMEDOUT</code> means a TCP connection or read operation did not complete within the timeout window — the remote host went silent rather than actively refusing. Set an explicit timeout with <code>AbortSignal.timeout()</code> (Node.js 17.3+), the Axios <code>timeout</code> option, or <code>req.setTimeout()</code>. If the URL works in the browser but not Node.js, check proxy settings, add a <code>User-Agent</code> header, and force IPv4 resolution. Check <code>err.syscall</code> to tell a connect timeout from a read timeout, then add retry logic with exponential backoff.
   </div>
 
   <h2>What is ETIMEDOUT?</h2>
@@ -163,8 +194,8 @@
   <p>
     Unlike <code>ECONNRESET</code>, where the peer actively sends a <code>RST</code> packet,
     ETIMEDOUT is characterised by <em>silence</em> — SYN packets go unanswered, or the
-    server stops sending data mid-response. This makes it common in firewall-drop scenarios
-    and with overloaded or unreachable servers.
+    server stops sending data mid-response. This makes it common in firewall-drop scenarios,
+    proxy misconfigurations, and with overloaded or unreachable servers.
   </p>
 
   <div class="callout">
@@ -172,7 +203,8 @@
     <code>Error: connect ETIMEDOUT 93.184.216.34:443</code><br>
     <code>Error: ETIMEDOUT</code><br>
     <code>Error: read ETIMEDOUT</code><br>
-    <code>FetchError: network timeout at: https://...</code>
+    <code>FetchError: network timeout at: https://...</code><br>
+    <code>ESOCKETTIMEDOUT</code> (thrown by some third-party HTTP libraries)
   </div>
 
   <h2>Full Error Example</h2>
@@ -212,12 +244,32 @@
         <td>If the resolved IP is unreachable (e.g. wrong DNS record, VPN misconfiguration, or no default route), every connect attempt will time out silently.</td>
       </tr>
       <tr>
+        <td>Missing proxy configuration</td>
+        <td>Browsers automatically use system-wide proxy settings; Node.js does not. Behind a corporate network or VPN, every outbound request from Node.js may silently time out unless a proxy agent is configured explicitly.</td>
+      </tr>
+      <tr>
+        <td>IPv4 vs IPv6 mismatch</td>
+        <td>Node.js may resolve a hostname to an IPv6 address while the target server only listens on IPv4. The IPv6 connect attempt silently times out. Force IPv4 resolution to fix this.</td>
+      </tr>
+      <tr>
+        <td>Missing User-Agent header</td>
+        <td>Some servers and CDNs reject or silently drop requests that lack a <code>User-Agent</code> header, treating them as bots. Browsers send this header automatically; Node.js does not.</td>
+      </tr>
+      <tr>
         <td>Default timeout too short for slow API</td>
         <td>Some http/https agents or libraries set a very short default socket timeout. A legitimate but slow third-party API will regularly trigger ETIMEDOUT if the timeout is shorter than the API's 95th-percentile response time.</td>
       </tr>
       <tr>
+        <td>Database connection pool exhaustion</td>
+        <td>When all connections in a MySQL, PostgreSQL, or MongoDB pool are busy, new queries queue up. If the queue wait exceeds the configured timeout, ETIMEDOUT is thrown for the connection attempt.</td>
+      </tr>
+      <tr>
         <td>Large request body with slow upload</td>
         <td>Uploading a large file over a slow connection can exceed a read timeout on the server side, which then closes the connection — or exceed a write timeout on the client side.</td>
+      </tr>
+      <tr>
+        <td>OS file descriptor limit exceeded</td>
+        <td>At high concurrency, Node.js may exhaust the OS file descriptor limit (default ~1,024 on Linux). New socket opens fail silently, producing ETIMEDOUT on connection attempts.</td>
       </tr>
       <tr>
         <td>DNS resolution timeout (EAI_AGAIN)</td>
@@ -226,7 +278,59 @@
     </tbody>
   </table>
 
-  <h2>Fix 1 – Set explicit timeouts with AbortSignal.timeout() (Node.js 17.3+)</h2>
+  <h2>Fix 1 – Check proxy configuration (browser works, Node.js does not)</h2>
+  <p>
+    If a URL loads fine in your browser but <code>Error: connect ETIMEDOUT</code> appears in Node.js,
+    the most common cause is a missing proxy configuration. Browsers automatically inherit
+    system-level proxy settings; Node.js does not. Install <code>proxy-agent</code> and pass it
+    as the <code>agent</code> option to route requests through the system proxy.
+  </p>
+  <pre><code>// npm install proxy-agent
+const { ProxyAgent } = require('proxy-agent');
+
+const agent = new ProxyAgent(); // reads HTTP_PROXY / HTTPS_PROXY env vars automatically
+
+// With fetch (Node.js 18+)
+const res = await fetch('https://api.example.com/data', { agent });
+
+// With https module
+const https = require('https');
+https.get({ hostname: 'api.example.com', path: '/data', agent }, (res) => {
+  // ...
+});</code></pre>
+
+  <div class="callout">
+    <strong>Also add a User-Agent header:</strong> Some CDNs and API gateways silently drop
+    requests that lack a <code>User-Agent</code> header. Add
+    <code>headers: { 'User-Agent': 'MyApp/1.0' }</code> to your request options to mimic
+    a real client.
+  </div>
+
+  <h2>Fix 2 – Force IPv4 resolution to prevent IPv6 timeouts</h2>
+  <p>
+    Node.js may resolve a hostname to an AAAA (IPv6) record while the target server
+    only listens on IPv4. The connect attempt to the IPv6 address times out silently.
+    Force IPv4 by passing <code>family: 4</code> to <code>dns.lookup()</code> or by
+    setting the <code>family</code> option on the HTTP agent.
+  </p>
+  <pre><code>const https = require('https');
+const dns = require('dns');
+
+// Option A: force IPv4 at the dns.lookup level
+dns.setDefaultResultOrder('ipv4first'); // Node.js 17+
+
+// Option B: set family on the https agent
+const agent = new https.Agent({ family: 4 });
+
+const res = await fetch('https://api.example.com/data', { agent });
+
+// Option C: resolve manually and connect to the IP directly
+const { promisify } = require('util');
+const lookup = promisify(dns.lookup);
+const { address } = await lookup('api.example.com', { family: 4 });
+console.log('Resolved to IPv4:', address);</code></pre>
+
+  <h2>Fix 3 – Set explicit timeouts with AbortSignal.timeout() (Node.js 17.3+)</h2>
   <p>
     The cleanest way to enforce a timeout on <code>fetch()</code> is
     <code>AbortSignal.timeout(ms)</code>, available since Node.js 17.3. It throws a
@@ -238,6 +342,7 @@ async function fetchWithTimeout(url, timeoutMs = 5000) {
   try {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(timeoutMs),
+      headers: { 'User-Agent': 'MyApp/1.0' }, // prevent bot-blocking
     });
     return await res.json();
   } catch (err) {
@@ -258,10 +363,52 @@ await fetchWithTimeout('https://api.example.com/data', 8000);</code></pre>
   <div class="callout">
     <strong>Node.js version note:</strong> <code>AbortSignal.timeout()</code> requires Node.js 17.3+.
     For older versions, use <code>req.setTimeout()</code> on the underlying <code>http</code>/<code>https</code>
-    request (see Fix 2 below), or the <code>AbortController</code> + <code>setTimeout</code> pattern.
+    request (see Fix 4 below), or the <code>AbortController</code> + <code>setTimeout</code> pattern.
   </div>
 
-  <h2>Fix 2 – Set a socket timeout on http/https requests</h2>
+  <h2>Fix 4 – Axios timeout configuration</h2>
+  <p>
+    Axios is one of the most widely used HTTP clients in Node.js. Set the <code>timeout</code>
+    property (in milliseconds) in the Axios config to enforce a connect + read deadline.
+    Catch the error and check <code>error.code === 'ECONNABORTED'</code> or
+    <code>axios.isAxiosError(error)</code> to handle timeouts separately.
+  </p>
+  <pre><code>const axios = require('axios');
+
+// Per-request timeout
+async function axiosFetch(url) {
+  try {
+    const response = await axios.get(url, {
+      timeout: 8000, // 8 seconds — covers both connect and read
+      headers: { 'User-Agent': 'MyApp/1.0' },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.code === 'ECONNABORTED') {
+      console.error('Axios request timed out:', error.message);
+    } else if (error.code === 'ETIMEDOUT') {
+      console.error('TCP connect timeout:', error.message);
+    } else {
+      throw error;
+    }
+  }
+}
+
+// Global Axios defaults
+axios.defaults.timeout = 10000;
+
+// Per-instance defaults with axios-retry
+const axiosRetry = require('axios-retry');
+const client = axios.create({ timeout: 8000 });
+
+axiosRetry(client, {
+  retries: 3,
+  retryDelay: axiosRetry.exponentialDelay,
+  retryCondition: (error) =>
+    axiosRetry.isNetworkError(error) || error.code === 'ETIMEDOUT',
+});</code></pre>
+
+  <h2>Fix 5 – Set a socket timeout on http/https requests</h2>
   <p>
     For the built-in <code>http</code> and <code>https</code> modules, call
     <code>req.setTimeout(ms)</code> to configure an inactivity timeout on the socket.
@@ -295,7 +442,99 @@ function httpsGet(url, timeoutMs = 5000) {
 
 const body = await httpsGet('https://api.example.com/data', 8000);</code></pre>
 
-  <h2>Fix 3 – Retry with exponential backoff on ETIMEDOUT</h2>
+  <h2>Fix 6 – Database connection timeouts (MySQL, PostgreSQL, MongoDB, Redis)</h2>
+  <p>
+    ETIMEDOUT is common when connecting to remote databases. Use connection pooling and set
+    explicit timeout values so your application fails fast and can retry rather than hanging
+    indefinitely.
+  </p>
+
+  <h3>MySQL (mysql2)</h3>
+  <pre><code>const mysql = require('mysql2');
+
+const pool = mysql.createPool({
+  host: 'db.example.com',
+  user: 'app_user',
+  password: process.env.DB_PASS,
+  database: 'mydb',
+  connectionLimit: 10,
+  connectTimeout: 10000,       // TCP connect timeout (ms)
+  waitForConnections: true,
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 30000, // send TCP keepalive after 30s idle
+});
+
+// Always use the pool, not single connections
+const promisePool = pool.promise();
+
+try {
+  const [rows] = await promisePool.query('SELECT 1');
+} catch (err) {
+  if (err.code === 'ETIMEDOUT') {
+    console.error('MySQL connect timed out — check host, firewall, and max_connections');
+  }
+}</code></pre>
+
+  <h3>PostgreSQL (pg)</h3>
+  <pre><code>const { Pool } = require('pg');
+
+const pool = new Pool({
+  host: 'db.example.com',
+  port: 5432,
+  database: 'mydb',
+  user: 'app_user',
+  password: process.env.DB_PASS,
+  connectionTimeoutMillis: 10000, // fail fast if no connection available
+  idleTimeoutMillis: 30000,       // release idle connections after 30s
+  query_timeout: 20000,           // cancel queries running longer than 20s
+  max: 10,
+});
+
+pool.on('error', (err) => {
+  if (err.code === 'ETIMEDOUT') {
+    console.error('PostgreSQL pool error — idle connection timed out');
+  }
+});</code></pre>
+
+  <h3>MongoDB / Mongoose</h3>
+  <pre><code>const mongoose = require('mongoose');
+
+await mongoose.connect('mongodb://db.example.com:27017/mydb', {
+  serverSelectionTimeoutMS: 5000,  // how long to wait for a server to be found
+  connectTimeoutMS: 10000,         // TCP connect timeout
+  socketTimeoutMS: 45000,          // socket inactivity timeout
+  maxPoolSize: 10,
+  minPoolSize: 2,
+});
+
+mongoose.connection.on('error', (err) => {
+  if (err.name === 'MongoNetworkTimeoutError' || err.code === 'ETIMEDOUT') {
+    console.error('MongoDB connection timed out');
+  }
+});</code></pre>
+
+  <h3>Redis (ioredis)</h3>
+  <pre><code>const Redis = require('ioredis');
+
+const redis = new Redis({
+  host: 'redis.example.com',
+  port: 6379,
+  connectTimeout: 10000,  // TCP connect timeout
+  commandTimeout: 5000,   // per-command timeout
+  retryStrategy(times) {
+    if (times > 5) return null; // stop retrying
+    return Math.min(times * 200, 2000); // exponential backoff up to 2s
+  },
+});
+
+redis.on('error', (err) => {
+  if (err.code === 'ETIMEDOUT') {
+    console.error('Redis connection timed out');
+  }
+});</code></pre>
+
+  <h2>Fix 7 – Retry with exponential backoff on ETIMEDOUT</h2>
   <p>
     ETIMEDOUT is almost always transient. A robust production retry strategy should
     catch it (along with other transient codes) and back off before retrying to avoid
@@ -309,6 +548,7 @@ async function fetchWithBackoff(url, options = {}, { retries = 3, baseDelayMs = 
       const res = await fetch(url, {
         ...options,
         signal: AbortSignal.timeout(10_000), // 10 s per attempt
+        headers: { 'User-Agent': 'MyApp/1.0', ...options.headers },
       });
       if (res.ok) return res;
       // Retry on 5xx server errors
@@ -336,7 +576,103 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const res = await fetchWithBackoff('https://api.example.com/data');
 const data = await res.json();</code></pre>
 
-  <h2>Fix 4 – Check DNS resolution with dns.lookup()</h2>
+  <h2>Fix 8 – Connection pooling with Keep-Alive (high concurrency)</h2>
+  <p>
+    At high concurrency, creating a new TCP connection per request rapidly exhausts
+    OS resources and produces ETIMEDOUT errors. Use HTTP Keep-Alive to reuse sockets,
+    and cap the number of concurrent requests to prevent server-side rate limiting.
+  </p>
+  <pre><code>// npm install agentkeepalive
+const { HttpsAgent } = require('agentkeepalive');
+
+const agent = new HttpsAgent({
+  keepAlive: true,
+  maxSockets: 50,          // max simultaneous connections per origin
+  maxFreeSockets: 10,      // idle sockets to keep alive
+  timeout: 60000,          // active socket timeout
+  freeSocketTimeout: 30000,// idle socket timeout before closing
+  dnsCache: true,          // cache DNS results for 5 minutes
+});
+
+// Use with fetch (Node.js 18+)
+const res = await fetch('https://api.example.com/data', { agent });
+
+// Combine with p-limit to cap concurrency
+// npm install p-limit
+const pLimit = require('p-limit');
+const limit = pLimit(20); // max 20 concurrent requests
+
+const urls = ['https://api.example.com/1', 'https://api.example.com/2' /* ... */];
+const results = await Promise.all(
+  urls.map((url) => limit(() => fetch(url, { agent })))
+);</code></pre>
+
+  <div class="callout warn">
+    <strong>OS file descriptor limit:</strong> On Linux the default soft limit is 1,024 file
+    descriptors. Under high load this is exhausted quickly, causing new socket opens to fail
+    with ETIMEDOUT. Raise the limit with <code>ulimit -n 65536</code> for the current session,
+    or add <code>* soft nofile 65536</code> to <code>/etc/security/limits.conf</code> for
+    a permanent change.
+  </div>
+
+  <h2>Fix 9 – Circuit breaker pattern to prevent cascading timeouts</h2>
+  <p>
+    When a dependency is degraded, continuing to send requests that all time out wastes
+    resources and amplifies the outage. A circuit breaker opens after a threshold of
+    failures and fast-fails subsequent calls until the dependency recovers.
+  </p>
+  <pre><code>class CircuitBreaker {
+  constructor({ threshold = 5, resetTimeoutMs = 30000 } = {}) {
+    this.threshold = threshold;
+    this.resetTimeoutMs = resetTimeoutMs;
+    this.failures = 0;
+    this.state = 'CLOSED'; // CLOSED | OPEN | HALF_OPEN
+    this.nextAttempt = Date.now();
+  }
+
+  async call(fn) {
+    if (this.state === 'OPEN') {
+      if (Date.now() < this.nextAttempt) {
+        throw new Error('Circuit breaker OPEN — fast-failing request');
+      }
+      this.state = 'HALF_OPEN';
+    }
+
+    try {
+      const result = await fn();
+      this.onSuccess();
+      return result;
+    } catch (err) {
+      this.onFailure(err);
+      throw err;
+    }
+  }
+
+  onSuccess() {
+    this.failures = 0;
+    this.state = 'CLOSED';
+  }
+
+  onFailure(err) {
+    if (err.code === 'ETIMEDOUT' || err.name === 'TimeoutError') {
+      this.failures++;
+      if (this.failures >= this.threshold) {
+        this.state = 'OPEN';
+        this.nextAttempt = Date.now() + this.resetTimeoutMs;
+        console.error(`Circuit breaker opened after ${this.failures} timeouts`);
+      }
+    }
+  }
+}
+
+const breaker = new CircuitBreaker({ threshold: 5, resetTimeoutMs: 30_000 });
+
+const data = await breaker.call(() =>
+  fetch('https://api.example.com/data', { signal: AbortSignal.timeout(5000) })
+    .then((r) => r.json())
+);</code></pre>
+
+  <h2>Fix 10 – Check DNS resolution with dns.lookup()</h2>
   <p>
     If you suspect the timeout is happening before the TCP connection even starts,
     verify that the hostname resolves correctly. A slow or broken DNS resolver will
@@ -367,12 +703,16 @@ async function checkDns(hostname) {
 // Diagnose before making the actual request
 await checkDns('api.example.com');
 
+// Force IPv4 to avoid IPv6 timeout issues
+const { address: ipv4Address } = await lookup('api.example.com', { family: 4 });
+console.log('IPv4 address:', ipv4Address);
+
 // For finer control, use dns.resolve() to bypass the OS hosts file:
 const resolve4 = promisify(dns.resolve4);
 const addresses = await resolve4('api.example.com');
 console.log('A records:', addresses);</code></pre>
 
-  <h2>Fix 5 – Distinguish connect timeout vs read timeout (err.syscall)</h2>
+  <h2>Fix 11 – Distinguish connect timeout vs read timeout (err.syscall)</h2>
   <p>
     The <code>err.syscall</code> property tells you exactly where the timeout occurred,
     which points to different root causes and fixes.
@@ -387,8 +727,9 @@ console.log('A records:', addresses);</code></pre>
         case 'connect':
           // TCP handshake never completed.
           // Root causes: host unreachable, firewall dropping SYN packets,
-          //              wrong IP from DNS, server not listening.
-          console.error('Connect timeout — check firewall rules, routing, and DNS');
+          //              wrong IP from DNS, server not listening,
+          //              missing proxy config, IPv6/IPv4 mismatch.
+          console.error('Connect timeout — check firewall rules, routing, proxy, and DNS');
           console.error('  address:', err.address, 'port:', err.port);
           break;
 
@@ -410,22 +751,59 @@ console.log('A records:', addresses);</code></pre>
   }
 }</code></pre>
 
+  <h2>ETIMEDOUT vs ESOCKETTIMEDOUT</h2>
+  <p>
+    <strong>ETIMEDOUT</strong> is a system-level error thrown during the <em>initial TCP handshake</em> —
+    the three-way SYN / SYN-ACK / ACK sequence never completed within the OS timeout.
+    <strong>ESOCKETTIMEDOUT</strong> is a higher-level error thrown by some HTTP client libraries
+    (e.g. the legacy <code>request</code> package) <em>after</em> a successful TCP connection is
+    established, when the server fails to send a complete response within the inactivity timeout window.
+  </p>
+  <table>
+    <thead><tr><th>Error</th><th>When it occurs</th><th>Common library</th></tr></thead>
+    <tbody>
+      <tr><td><code>ETIMEDOUT</code></td><td>TCP connect phase (SYN never acknowledged)</td><td>Node.js core, axios, got</td></tr>
+      <tr><td><code>ESOCKETTIMEDOUT</code></td><td>After connection — inactivity during read</td><td><code>request</code>, <code>superagent</code></td></tr>
+      <tr><td><code>TimeoutError</code></td><td>Total wall-clock deadline (AbortSignal)</td><td>fetch, got, ky</td></tr>
+    </tbody>
+  </table>
+  <p>To handle all three in one place:</p>
+  <pre><code>function isTimeoutError(err) {
+  return (
+    err.code === 'ETIMEDOUT' ||
+    err.code === 'ESOCKETTIMEDOUT' ||
+    err.code === 'ECONNABORTED' || // axios timeout
+    err.name === 'TimeoutError'    // AbortSignal
+  );
+}</code></pre>
+
   <h2>Debugging Checklist</h2>
   <ol>
     <li>Check <code>err.syscall</code>: <code>'connect'</code> = TCP handshake timed out (unreachable host / firewall), <code>'read'</code> = server connected but stopped responding.</li>
     <li>Check <code>err.address</code> and <code>err.port</code> to confirm you are hitting the right endpoint — a stale DNS cache can resolve a hostname to a wrong or unreachable IP.</li>
-    <li>Run <code>dns.lookup(hostname)</code> or <code>nslookup hostname</code> from the same machine to verify DNS resolves correctly.</li>
+    <li>Does the URL work in a browser but not Node.js? Check proxy configuration, add a <code>User-Agent</code> header, and force IPv4 resolution.</li>
+    <li>Run <code>dns.lookup(hostname)</code> or <code>nslookup hostname</code> from the same machine to verify DNS resolves correctly. Note the address family (IPv4 vs IPv6).</li>
     <li>Try <code>curl --connect-timeout 5 https://your-endpoint/</code> or <code>nc -zv host port</code> from the same host to test raw TCP reachability outside Node.js.</li>
     <li>Check whether a firewall, security group, or VPN is silently dropping packets — a connect timeout without a RST is the classic symptom.</li>
+    <li>For database ETIMEDOUT, verify the pool is not exhausted: check active connection counts against <code>max_connections</code> (MySQL) or <code>max_connections</code> (PostgreSQL).</li>
     <li>If the timeout is intermittent, check server-side metrics (CPU, memory, connection pool saturation) around the time of failure.</li>
     <li>Enable <code>NODE_DEBUG=net,http</code> to trace socket lifecycle events and pinpoint when the timer fires relative to the connection state.</li>
   </ol>
 
-  <pre><code># Test TCP reachability directly (Unix/macOS)
+  <pre><code># Test TCP reachability directly (Unix/macOS/Linux)
 nc -zv api.example.com 443
 
 # Test with curl and explicit connect/max-time limits
 curl --connect-timeout 5 --max-time 10 -v https://api.example.com/health
+
+# Diagnose IPv4 vs IPv6 resolution
+nslookup api.example.com
+dig api.example.com AAAA  # check for IPv6 records
+
+# Check OS file descriptor limit (Linux)
+ulimit -n
+# Raise it temporarily
+ulimit -n 65536
 
 # Enable Node.js network debug output
 NODE_DEBUG=net,http node app.js 2&gt;&amp;1 | grep -E "(ETIMEDOUT|timeout|connect)"</code></pre>
@@ -438,11 +816,75 @@ NODE_DEBUG=net,http node app.js 2&gt;&amp;1 | grep -E "(ETIMEDOUT|timeout|connec
     handle transient failures.
   </div>
 
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ETIMEDOUT in Node.js?</summary>
+    <div class="faq-answer">
+      <p><strong>ETIMEDOUT</strong> stands for "Error TIMed OUT." Node.js throws it as <code>Error: connect ETIMEDOUT</code>, <code>Error: read ETIMEDOUT</code>, or <code>FetchError: network timeout</code> when a TCP connect, read, or write operation does not complete within the configured timeout window. Unlike <code>ECONNRESET</code>, the remote host never sends a RST packet — the connection simply goes silent until the local timer fires.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does connect ETIMEDOUT happen in Node.js but not in the browser?</summary>
+    <div class="faq-answer">
+      <p>There are four main reasons the same URL works in a browser but produces <code>Error: connect ETIMEDOUT</code> in Node.js:</p>
+      <ul>
+        <li><strong>Proxy:</strong> Browsers automatically use system proxies; Node.js does not — configure <code>proxy-agent</code> explicitly.</li>
+        <li><strong>User-Agent header:</strong> Browsers send one automatically; Node.js sends none — servers may silently drop headless requests.</li>
+        <li><strong>IPv4 vs IPv6:</strong> Node.js may resolve the hostname to an IPv6 address while the server only supports IPv4. Force IPv4 with <code>dns.setDefaultResultOrder('ipv4first')</code> (Node.js 17+) or <code>family: 4</code> on the agent.</li>
+        <li><strong>Firewall rules:</strong> Some firewalls whitelist browser processes but block background Node.js processes from making outbound connections.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between ETIMEDOUT and ECONNRESET?</summary>
+    <div class="faq-answer">
+      <p><code>ETIMEDOUT</code> means no response was received within the timeout window — the connection went silent. <code>ECONNRESET</code> means the connection was <em>actively terminated</em> by the remote peer, which sent a TCP RST packet. ETIMEDOUT is often caused by firewalls silently dropping packets or an overloaded server, while ECONNRESET is an active rejection or premature close.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between ETIMEDOUT and ESOCKETTIMEDOUT?</summary>
+    <div class="faq-answer">
+      <p><code>ETIMEDOUT</code> is a system-level error thrown during the initial TCP handshake — the three-way connection setup never completed. <code>ESOCKETTIMEDOUT</code> is a higher-level error thrown by some HTTP client libraries (like the legacy <code>request</code> package) after a successful TCP connection when the server fails to send a complete response within the inactivity timeout. Both indicate a timeout but at different stages of the connection lifecycle.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ETIMEDOUT when connecting to MySQL, PostgreSQL, or MongoDB?</summary>
+    <div class="faq-answer">
+      <p>Always use connection pooling and set explicit timeout values:</p>
+      <ul>
+        <li><strong>MySQL (mysql2):</strong> set <code>connectTimeout: 10000</code> and <code>enableKeepAlive: true</code> on the pool.</li>
+        <li><strong>PostgreSQL (pg):</strong> set <code>connectionTimeoutMillis</code>, <code>idleTimeoutMillis</code>, and <code>query_timeout</code> on the <code>Pool</code>.</li>
+        <li><strong>MongoDB/Mongoose:</strong> configure <code>serverSelectionTimeoutMS</code>, <code>connectTimeoutMS</code>, and <code>socketTimeoutMS</code>.</li>
+        <li><strong>Redis (ioredis):</strong> set <code>connectTimeout</code>, <code>commandTimeout</code>, and implement a <code>retryStrategy</code>.</li>
+      </ul>
+      <p>Also verify the database server is reachable from the Node.js host, that firewall rules allow the connection on the correct port, and that the maximum connection count has not been exceeded.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I tell if ETIMEDOUT is a connect timeout or a read timeout?</summary>
+    <div class="faq-answer">
+      <p>Check the <code>err.syscall</code> property on the error object. A value of <code>'connect'</code> means the TCP handshake itself timed out — the host is unreachable or a firewall is silently dropping SYN packets. A value of <code>'read'</code> means the connection was established but the server took too long to send data back. Connect timeouts point to network/firewall/DNS/proxy issues; read timeouts point to slow or overloaded servers.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I add retry logic for ETIMEDOUT in Node.js?</summary>
+    <div class="faq-answer">
+      <p>Wrap requests in a loop that catches <code>ETIMEDOUT</code> (and related codes: <code>ECONNRESET</code>, <code>EAI_AGAIN</code>, <code>TimeoutError</code>) and waits an exponentially increasing delay before each retry. For Axios, use the <code>axios-retry</code> package. Cap the total retries (typically 3–5) and use jitter to avoid thundering herd when many clients retry simultaneously. Always log each retry attempt for observability.</p>
+    </div>
+  </details>
+
   <h2>Related Errors</h2>
   <ul>
     <li><a href="https://nodejs-errors.dev/ECONNRESET/"><code>ECONNRESET: connection reset by peer</code></a> — the remote host actively sent a TCP RST packet to close the connection, as opposed to silently timing out</li>
-    <li><code>ECONNREFUSED: connection refused</code> — the remote host actively rejected the connection; nothing is listening on that port</li>
-    <li><code>ENOTFOUND: getaddrinfo ENOTFOUND</code> — DNS resolution failed entirely before a TCP connection could be attempted</li>
+    <li><a href="https://nodejs-errors.dev/ECONNREFUSED/"><code>ECONNREFUSED: connection refused</code></a> — the remote host actively rejected the connection; nothing is listening on that port</li>
+    <li><a href="https://nodejs-errors.dev/ENOTFOUND/"><code>ENOTFOUND: getaddrinfo ENOTFOUND</code></a> — DNS resolution failed entirely before a TCP connection could be attempted</li>
     <li><code>EAI_AGAIN: getaddrinfo EAI_AGAIN</code> — temporary DNS failure; the resolver is unreachable or returned a SERVFAIL</li>
     <li><code>ESOCKETTIMEDOUT</code> — thrown by some third-party HTTP client libraries (e.g. <code>request</code>) as a higher-level wrapper around an underlying socket inactivity timeout</li>
   </ul>
