@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>ECONNRESET: connection reset by peer – Node.js Fix</title>
+  <meta name="description" content="Node.js throws ECONNRESET: connection reset by peer when the remote server forcibly closes a TCP connection. Learn the exact causes and how to fix it with retry logic, timeouts, and keep-alive settings." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ECONNRESET/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="ECONNRESET: connection reset by peer – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws ECONNRESET: connection reset by peer when the remote server forcibly closes a TCP connection. Learn the exact causes and how to fix it with retry logic, timeouts, and keep-alive settings." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ECONNRESET/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "ECONNRESET: connection reset by peer – Node.js Fix",
+    "description": "Node.js throws ECONNRESET when the remote end of a TCP connection sends a RST packet, forcibly closing the socket before the exchange completed.",
+    "url": "https://nodejs-errors.dev/ECONNRESET/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-09",
+    "dateModified": "2026-05-09"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ECONNRESET in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ECONNRESET stands for 'Error CONNection RESET'. Node.js throws it as 'Error: read ECONNRESET' or 'Error: socket hang up' when the remote server sends a TCP RST packet, forcibly terminating an in-progress connection. It can occur on any socket operation: http/https requests, TCP clients, or database connections."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ECONNRESET in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The fix depends on the cause. For transient network errors, add retry logic with exponential backoff. For keep-alive connections being closed by the server, handle the ECONNRESET and retry the request. For long-running requests, set a socket timeout. Check server logs to confirm whether the server is intentionally closing the connection."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ECONNRESET happen with HTTP keep-alive?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "When using an HTTP Agent with keepAlive: true, the client reuses sockets from a pool. The server may close an idle socket at any time. If Node.js picks up that socket just as the server closes it, you get ECONNRESET. Fix by catching the error and retrying the request once, or by disabling keep-alive for the affected agent."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between ECONNRESET and ECONNREFUSED?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ECONNRESET means the connection was established but then forcibly closed mid-session by the remote peer. ECONNREFUSED means the connection was never accepted — nothing is listening on that port."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ECONNRESET", "item": "https://nodejs-errors.dev/ECONNRESET/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix ECONNRESET: connection reset by peer in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Identify where the error occurs", "text": "Check whether the error originates from an HTTP request, a TCP socket, or a database driver. The stack trace and err.syscall ('read', 'write', or 'connect') show which operation failed." },
+      { "@type": "HowToStep", "position": 2, "name": "Add retry logic for transient errors", "text": "Wrap the request in a retry loop with exponential backoff. Only retry on ECONNRESET, ECONNREFUSED, ETIMEDOUT, and 5xx status codes." },
+      { "@type": "HowToStep", "position": 3, "name": "Handle keep-alive socket races", "text": "When using an http.Agent with keepAlive: true, attach an error handler to the socket inside the 'socket' event, or set agent.on('error', () => {}). Retry the request once on ECONNRESET." },
+      { "@type": "HowToStep", "position": 4, "name": "Set a socket timeout", "text": "Call req.setTimeout(ms) or socket.setTimeout(ms) to detect hung connections early and destroy the socket instead of waiting indefinitely." },
+      { "@type": "HowToStep", "position": 5, "name": "Check server-side logs", "text": "ECONNRESET can mean the server crashed, hit a memory limit, or has a misconfigured idle timeout. Confirm the server is healthy and tune its keep-alive timeout to be longer than your load balancer's." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ECONNRESET</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>ECONNRESET: connection reset by peer</h1>
+  <span class="error-code">error code: <code>ECONNRESET</code></span>
+  <p>Complete reference — what it means, why it happens with keep-alive, and how to fix it with retries and timeouts.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> <code>Error: read ECONNRESET</code> means the remote server closed the TCP connection while your code was reading or writing. The most common cause is a stale keep-alive socket — catch the error and retry the request once. For persistent issues, add retry logic with exponential backoff and set a socket timeout.
+  </div>
+
+  <h2>What is ECONNRESET?</h2>
+  <p>
+    <strong>ECONNRESET</strong> stands for <em>Error CONNection RESET</em> — a
+    <a href="https://nodejs.org/api/errors.html#common-system-errors" rel="noopener noreferrer">POSIX system error</a>
+    thrown when the remote end of a TCP connection sends a <code>RST</code> packet, abruptly
+    terminating the socket. Unlike a graceful close (<code>FIN</code>), a reset discards any
+    data in flight and gives the local side no chance to finish reading or writing.
+  </p>
+  <p>
+    Node.js surfaces this as an <code>Error</code> object with <code>code: 'ECONNRESET'</code>
+    on HTTP requests, raw <code>net.Socket</code> streams, database connections, and any other
+    TCP-based API.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error messages you will see:</strong><br>
+    <code>Error: read ECONNRESET</code><br>
+    <code>Error: socket hang up</code><br>
+    <code>Error: write ECONNRESET</code><br>
+    <code>Error: connect ECONNRESET &lt;ip&gt;:&lt;port&gt;</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>Error: read ECONNRESET
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:217:20)
+    at TLSWrap.callbackTrampoline (node:internal/async_hooks:130:17) {
+  errno: -104,
+  code: 'ECONNRESET',
+  syscall: 'read'
+}</code></pre>
+
+  <p>
+    The <code>syscall</code> field tells you which operation was interrupted:
+    <code>'read'</code> (receiving data), <code>'write'</code> (sending data), or
+    <code>'connect'</code> (initial handshake). This narrows down whether the problem
+    is during connection establishment or mid-transfer.
+  </p>
+
+  <h2>Common Causes</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Why it happens</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Stale keep-alive socket</td>
+        <td>The HTTP Agent reused a socket that the server had already closed. The RST arrives the moment Node.js tries to read the response.</td>
+      </tr>
+      <tr>
+        <td>Server crash or restart</td>
+        <td>The remote process died mid-request, causing the OS to send RST packets for all open connections.</td>
+      </tr>
+      <tr>
+        <td>Load balancer or proxy timeout</td>
+        <td>A reverse proxy (nginx, AWS ALB) closed an idle or slow connection before Node.js finished sending the request body.</td>
+      </tr>
+      <tr>
+        <td>Firewall dropping idle connections</td>
+        <td>Stateful firewalls silently drop TCP connections that exceed an idle timeout, causing the next read/write to fail.</td>
+      </tr>
+      <tr>
+        <td>Server-side rate limiting</td>
+        <td>The server resets connections when a client exceeds request limits instead of returning a proper HTTP error.</td>
+      </tr>
+      <tr>
+        <td>TLS/SSL handshake failure</td>
+        <td>Certificate mismatch or unsupported cipher causes the TLS peer to reset the connection during the handshake.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Fix 1 – Retry on ECONNRESET (keep-alive race condition)</h2>
+  <p>
+    The most common cause is a race between the server closing a keep-alive socket and
+    Node.js reusing it from the pool. The fix is to catch <code>ECONNRESET</code> and
+    retry the request once with a fresh socket.
+  </p>
+  <pre><code>const https = require('https');
+
+async function fetchWithRetry(url, options = {}, retries = 1) {
+  try {
+    return await fetch(url, options);
+  } catch (err) {
+    if (err.code === 'ECONNRESET' && retries > 0) {
+      console.warn('ECONNRESET – retrying request...');
+      return fetchWithRetry(url, options, retries - 1);
+    }
+    throw err;
+  }
+}
+
+// Usage
+const res = await fetchWithRetry('https://api.example.com/data');
+const data = await res.json();</code></pre>
+
+  <h2>Fix 2 – Retry with exponential backoff</h2>
+  <p>
+    For production code making many outbound requests, use a full retry strategy that
+    handles transient network errors and backs off to avoid overwhelming the server.
+  </p>
+  <pre><code>const RETRYABLE_CODES = new Set(['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND']);
+
+async function fetchWithBackoff(url, options = {}, { retries = 3, baseDelayMs = 200 } = {}) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) return res;
+      // Retry on 5xx server errors
+      if (res.status >= 500 && attempt < retries) {
+        await sleep(baseDelayMs * 2 ** attempt);
+        continue;
+      }
+      return res; // Return non-retryable HTTP errors as-is
+    } catch (err) {
+      if (RETRYABLE_CODES.has(err.code) && attempt < retries) {
+        await sleep(baseDelayMs * 2 ** attempt);
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));</code></pre>
+
+  <h2>Fix 3 – Set a socket timeout</h2>
+  <p>
+    Without a timeout, a connection reset mid-response can leave your code waiting
+    indefinitely. Set <code>AbortSignal.timeout()</code> (Node.js 17.3+) or a manual
+    timeout on the socket to fail fast.
+  </p>
+  <pre><code>// Using AbortSignal.timeout (Node.js 17.3+, recommended)
+const res = await fetch('https://api.example.com/data', {
+  signal: AbortSignal.timeout(5000), // 5 second total timeout
+});
+
+// Using http/https request timeout (older Node.js)
+const http = require('http');
+
+const req = http.get('http://api.example.com/data', (res) => {
+  res.resume(); // consume the response
+});
+
+req.setTimeout(5000, () => {
+  req.destroy(new Error('Request timed out'));
+});
+
+req.on('error', (err) => {
+  if (err.code === 'ECONNRESET' || err.message === 'Request timed out') {
+    console.error('Request failed:', err.message);
+  }
+});</code></pre>
+
+  <h2>Fix 4 – Handle ECONNRESET on keep-alive agents</h2>
+  <p>
+    When using a custom <code>http.Agent</code> with <code>keepAlive: true</code>,
+    attach an error listener to the socket to prevent unhandled errors from crashing
+    the process when idle sockets are reset.
+  </p>
+  <pre><code>const http = require('http');
+
+const agent = new http.Agent({ keepAlive: true });
+
+function request(options) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ ...options, agent }, resolve);
+
+    req.on('socket', (socket) => {
+      socket.on('error', (err) => {
+        if (err.code === 'ECONNRESET') {
+          // Socket was reset; retry without keep-alive
+          req.destroy();
+          http.request({ ...options, agent: false }, resolve).end();
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      if (err.code === 'ECONNRESET') {
+        // Retry once with a new connection
+        http.request({ ...options, agent: false }, resolve)
+          .on('error', reject)
+          .end();
+      } else {
+        reject(err);
+      }
+    });
+
+    req.end();
+  });
+}</code></pre>
+
+  <h2>Fix 5 – Tune keep-alive timeouts</h2>
+  <p>
+    If you control the server, set its keep-alive timeout to be <em>longer</em> than
+    your load balancer's idle timeout. This prevents the server from closing sockets
+    that the load balancer still considers open.
+  </p>
+  <pre><code>const http = require('http');
+const app = require('./app'); // your Express/Fastify app
+
+const server = http.createServer(app);
+
+// Set server keep-alive timeout longer than your load balancer's idle timeout.
+// AWS ALB default idle timeout is 60 s — set this to 65 s or higher.
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000; // must be > keepAliveTimeout
+
+server.listen(3000);</code></pre>
+
+  <div class="callout">
+    <strong>AWS ALB / nginx tip:</strong> The default ALB idle timeout is 60 seconds.
+    If your Node.js <code>keepAliveTimeout</code> is lower than that (Node.js default is 5 s),
+    the server closes the socket before the load balancer does, causing ECONNRESET on the
+    next request routed through that socket. Always set <code>keepAliveTimeout</code> &gt;
+    load balancer idle timeout.
+  </div>
+
+  <h2>Fix 6 – Handle ECONNRESET on streams</h2>
+  <p>
+    When piping or reading from an HTTP response stream, a connection reset causes an
+    <code>'error'</code> event on the stream. Always attach an error handler.
+  </p>
+  <pre><code>const https = require('https');
+const fs = require('fs');
+
+https.get('https://example.com/large-file.zip', (res) => {
+  const out = fs.createWriteStream('file.zip');
+
+  res.on('error', (err) => {
+    if (err.code === 'ECONNRESET') {
+      console.error('Download interrupted, retry logic here');
+      out.close();
+    }
+  });
+
+  res.pipe(out);
+}).on('error', (err) => {
+  console.error('Request error:', err.code, err.message);
+});</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Check <code>err.syscall</code>: <code>'read'</code> = reset while receiving, <code>'write'</code> = reset while sending, <code>'connect'</code> = reset during handshake.</li>
+    <li>Check server logs for crashes, OOM kills, or intentional connection limits around the time of the error.</li>
+    <li>Verify your <code>keepAliveTimeout</code> is higher than your load balancer's idle timeout.</li>
+    <li>If using a proxy or VPN, check whether it enforces connection time limits.</li>
+    <li>Enable <code>NODE_DEBUG=net,http</code> to trace socket lifecycle events and see exactly when the reset occurs.</li>
+    <li>Use <code>tcpdump</code> or Wireshark to confirm a <code>RST</code> packet is actually arriving from the remote host.</li>
+  </ol>
+
+  <pre><code># Enable Node.js network debug output
+NODE_DEBUG=net,http node app.js 2>&amp;1 | grep -E "(ECONNRESET|RST|socket)"</code></pre>
+
+  <div class="callout warn">
+    <strong>Do not silently swallow ECONNRESET:</strong> Catching the error without retrying
+    or logging it hides connectivity problems that may indicate a misconfigured server,
+    failing infrastructure, or a security-relevant connection termination.
+    Always log the error and consider whether a retry is safe for your use case (idempotent
+    GET requests: safe to retry; POST requests that mutate state: may not be safe).
+  </div>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/EADDRINUSE/"><code>EADDRINUSE: address already in use</code></a> — port conflict when starting a server</li>
+    <li><code>ECONNREFUSED: connection refused</code> — nothing is listening on the target port; the connection was never established</li>
+    <li><code>ETIMEDOUT: connection timed out</code> — no response within the timeout window; the connection was not actively reset</li>
+    <li><code>ENOTFOUND: getaddrinfo ENOTFOUND</code> — DNS resolution failed before a TCP connection could be made</li>
+    <li><code>HPE_INVALID_EOF_STATE</code> — HTTP parser received unexpected EOF, often seen alongside ECONNRESET on truncated responses</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-09 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#common-system-errors">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

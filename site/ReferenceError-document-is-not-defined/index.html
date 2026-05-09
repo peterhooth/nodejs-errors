@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>ReferenceError: document is not defined – Node.js Fix</title>
+  <meta name="description" content="Node.js throws ReferenceError: document is not defined when browser-only globals like document, window, navigator, or localStorage are accessed in a Node.js environment. Learn the exact causes and how to fix it in SSR, Jest, and shared code." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ReferenceError-document-is-not-defined/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="ReferenceError: document is not defined – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws ReferenceError: document is not defined when browser-only globals like document, window, navigator, or localStorage are accessed in a Node.js environment. Learn the exact causes and how to fix it in SSR, Jest, and shared code." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ReferenceError-document-is-not-defined/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "ReferenceError: document is not defined – Node.js Fix",
+    "description": "Node.js throws ReferenceError: document is not defined when code accesses browser-only globals such as document, window, navigator, or localStorage in a Node.js runtime that has no DOM.",
+    "url": "https://nodejs-errors.dev/ReferenceError-document-is-not-defined/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-09",
+    "dateModified": "2026-05-09"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Why does Node.js throw ReferenceError: document is not defined?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Node.js has no DOM. Globals like document, window, navigator, localStorage, and location only exist in browser environments. When code that was written for a browser runs in Node.js — such as during server-side rendering, Jest tests, or by importing a browser-only library — Node.js cannot find these globals and throws ReferenceError."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ReferenceError: document is not defined in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The most universal fix is to guard every browser-global access with a typeof check: if (typeof document !== 'undefined') { ... }. For Next.js components, use dynamic import with ssr: false. For React, move browser code into useEffect. For Jest/Vitest, set testEnvironment: 'jsdom' in your config. For module-level access, defer it inside a function rather than executing it at import time."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ReferenceError: window is not defined in Next.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "In Next.js, use next/dynamic with ssr: false to prevent a component from rendering on the server: const MyChart = dynamic(() => import('./MyChart'), { ssr: false }). Alternatively, move window access inside useEffect, which only runs in the browser. Never access window at the module's top level."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ReferenceError: document is not defined in Jest?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Add testEnvironment: 'jsdom' to jest.config.js (or jest.config.ts). Jest uses the 'node' environment by default, which has no DOM globals. The jsdom environment simulates a browser environment including document, window, and navigator. You may also need to install jest-environment-jsdom as a devDependency."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between document is not defined and window is not defined?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "They are the same class of error: both document and window are browser-only globals that do not exist in Node.js. ReferenceError: window is not defined is usually thrown by code that checks for a browser environment using window, while document is not defined typically appears when code tries to manipulate the DOM directly. The same typeof guard fixes both."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ReferenceError: document is not defined", "item": "https://nodejs-errors.dev/ReferenceError-document-is-not-defined/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix ReferenceError: document is not defined in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Identify which code accesses the browser global", "text": "Read the stack trace to find the exact file and line. If the error is inside a node_modules package, the library accesses document or window at import time — you need to lazy-load it on the client only." },
+      { "@type": "HowToStep", "position": 2, "name": "Add a typeof guard for direct DOM access", "text": "Wrap every reference to document, window, navigator, or localStorage with: if (typeof document !== 'undefined') { ... }. This is safe in both browser and Node.js environments." },
+      { "@type": "HowToStep", "position": 3, "name": "Use dynamic import with ssr: false in Next.js", "text": "For components that rely on browser globals, use next/dynamic with ssr: false so the component is never rendered on the server: const MyComponent = dynamic(() => import('./MyComponent'), { ssr: false })." },
+      { "@type": "HowToStep", "position": 4, "name": "Move browser code into useEffect or onMounted", "text": "In React, move all document/window access into a useEffect hook. In Vue 3, use the onMounted lifecycle hook. These hooks only run in the browser, never during SSR." },
+      { "@type": "HowToStep", "position": 5, "name": "Configure Jest or Vitest to use jsdom", "text": "Set testEnvironment: 'jsdom' in jest.config.js or vitest.config.ts. This provides document, window, and other browser globals during tests. Install jest-environment-jsdom if needed." },
+      { "@type": "HowToStep", "position": 6, "name": "Separate browser and server entry points", "text": "For libraries or shared utilities that behave differently per environment, create separate entry points (browser.js / server.js) and use the package.json 'browser' field or bundler conditions to select the correct one at build time." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ReferenceError: document is not defined</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>ReferenceError: document is not defined</h1>
+  <span class="error-code">error type: <code>ReferenceError</code> &nbsp;·&nbsp; globals: <code>document</code>, <code>window</code>, <code>navigator</code>, <code>localStorage</code>, <code>location</code></span>
+  <p>Complete reference — why Node.js has no DOM, how this error appears in SSR, Jest, and shared code, and how to fix it with typeof guards, dynamic imports, and lifecycle hooks.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js has no browser DOM. Globals like <code>document</code>, <code>window</code>, <code>navigator</code>, and <code>localStorage</code> do not exist in Node.js. Guard every access with <code>if (typeof document !== 'undefined')</code>, move browser code into <code>useEffect</code> / <code>onMounted</code>, or use Next.js <code>dynamic()</code> with <code>ssr: false</code>. For Jest/Vitest, add <code>testEnvironment: 'jsdom'</code> to your config.
+  </div>
+
+  <h2>What does "ReferenceError: document is not defined" mean?</h2>
+  <p>
+    Node.js is a server-side JavaScript runtime built on V8. Unlike a web browser, it has no
+    <strong>Document Object Model (DOM)</strong> and does not expose browser globals such as
+    <code>document</code>, <code>window</code>, <code>navigator</code>, <code>localStorage</code>,
+    or <code>location</code>. When any code — your own or a third-party library — references one
+    of these globals in a Node.js process, the JavaScript engine cannot find the identifier in
+    the scope chain and throws a <code>ReferenceError</code>.
+  </p>
+  <p>
+    This error is particularly common in <strong>isomorphic (universal) JavaScript</strong>
+    applications that share code between the browser and server, such as Next.js, Nuxt.js, Remix,
+    and Astro SSR. It also appears frequently when running browser-targeted code through Node.js
+    test runners like Jest or Vitest with their default <code>node</code> environment.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error messages you will see:</strong><br>
+    <code>ReferenceError: document is not defined</code><br>
+    <code>ReferenceError: window is not defined</code><br>
+    <code>ReferenceError: navigator is not defined</code><br>
+    <code>ReferenceError: localStorage is not defined</code><br>
+    <code>ReferenceError: location is not defined</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>ReferenceError: document is not defined
+    at Object.&lt;anonymous&gt; (/app/lib/analytics.js:3:1)
+    at Module._compile (node:internal/modules/cjs/loader:1364:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1422:10)
+    at Module.load (node:internal/modules/cjs/loader:1203:32)
+    at Module._load (node:internal/modules/cjs/loader:1019:12)
+    at Module.require (node:internal/modules/cjs/loader:1231:19)
+    at require (node:internal/modules/helpers:179:18)
+    at Object.&lt;anonymous&gt; (/app/pages/index.js:1:18)</code></pre>
+
+  <p>
+    Notice that the error originates inside <code>analytics.js</code> at line 3, but the
+    stack trace shows it was triggered by <code>require()</code> in <code>pages/index.js</code>.
+    This pattern — error inside a library, triggered at your import — means the library accesses
+    <code>document</code> or <code>window</code> at <strong>module load time</strong> (top level),
+    not inside a function. You cannot defer the access by calling the function later; you must
+    prevent the import from running on the server at all.
+  </p>
+
+  <h2>Common Causes</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Why it happens</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Direct DOM access in shared isomorphic code</td>
+        <td>A utility module references <code>document.cookie</code> or <code>window.location</code> at the top level. When Node.js imports the module for SSR, the reference is evaluated immediately.</td>
+      </tr>
+      <tr>
+        <td>Importing a browser-only npm library</td>
+        <td>Some packages (analytics SDKs, charting libraries, UI toolkits) access <code>document</code> or <code>window</code> at import time. Using them in a server-side module propagates the error.</td>
+      </tr>
+      <tr>
+        <td>SSR rendering a React/Vue component that accesses document on mount</td>
+        <td>If DOM access is outside <code>useEffect</code> / <code>onMounted</code> — e.g., in the component body or in a top-level variable initializer — it runs during the server render pass.</td>
+      </tr>
+      <tr>
+        <td>Jest or Vitest with default <code>node</code> test environment</td>
+        <td>Jest's default <code>testEnvironment</code> is <code>'node'</code>, which has no DOM. Tests that import components or utilities touching browser globals fail immediately.</td>
+      </tr>
+      <tr>
+        <td>Browser globals accessed at module load time</td>
+        <td>Code like <code>const ua = navigator.userAgent</code> at the top of a file evaluates when the module is first <code>require()</code>-d or <code>import</code>-ed, not when a function is called.</td>
+      </tr>
+      <tr>
+        <td>Third-party analytics or tracking scripts used in SSR</td>
+        <td>Analytics libraries (Google Tag Manager, Segment, Hotjar) are designed for browsers only. They typically reference <code>document</code> and <code>window</code> immediately on load.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Fix 1 – Guard with typeof check</h2>
+  <p>
+    The most portable fix for any environment. Before accessing a browser global, check whether
+    it exists using <code>typeof</code>. Unlike a direct reference, <code>typeof</code> does not
+    throw a <code>ReferenceError</code> for undefined identifiers.
+  </p>
+  <pre><code>// Bad – throws ReferenceError in Node.js
+const theme = document.documentElement.getAttribute('data-theme');
+
+// Good – safe in both browser and Node.js
+const theme =
+  typeof document !== 'undefined'
+    ? document.documentElement.getAttribute('data-theme')
+    : null;
+
+// Guard a whole block
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', handleResize);
+}
+
+// Guard localStorage access
+function getStoredUser() {
+  if (typeof localStorage === 'undefined') return null;
+  return JSON.parse(localStorage.getItem('user') ?? 'null');
+}</code></pre>
+
+  <div class="callout">
+    <strong>Why typeof and not a try/catch?</strong> <code>typeof undeclaredVar</code> returns
+    <code>'undefined'</code> without throwing. A bare <code>if (document)</code> still throws
+    <code>ReferenceError</code> in Node.js. Always use <code>typeof</code> for global existence
+    checks.
+  </div>
+
+  <h2>Fix 2 – Next.js: dynamic import with ssr: false</h2>
+  <p>
+    When a React component or a library it imports accesses browser globals at the module level,
+    you cannot simply guard inside the component — the <code>import</code> itself triggers the
+    error. Use <code>next/dynamic</code> with <code>ssr: false</code> to defer loading entirely
+    to the browser.
+  </p>
+  <pre><code>// pages/dashboard.tsx  (or app/dashboard/page.tsx)
+import dynamic from 'next/dynamic';
+
+// The chart library accesses `document` at import time — never SSR it
+const RevenueChart = dynamic(
+  () => import('../components/RevenueChart'),
+  {
+    ssr: false,
+    loading: () => &lt;p&gt;Loading chart...&lt;/p&gt;,
+  }
+);
+
+export default function DashboardPage() {
+  return (
+    &lt;main&gt;
+      &lt;h1&gt;Dashboard&lt;/h1&gt;
+      &lt;RevenueChart /&gt;  {/* only rendered in the browser */}
+    &lt;/main&gt;
+  );
+}</code></pre>
+
+  <pre><code>// For the App Router (Next.js 13+) — same pattern, 'use client' is required
+'use client';
+import dynamic from 'next/dynamic';
+
+const MapComponent = dynamic(() => import('./Map'), { ssr: false });</code></pre>
+
+  <h2>Fix 3 – Move browser code to useEffect (React) or onMounted (Vue)</h2>
+  <p>
+    In React and Vue SSR, lifecycle hooks that only run in the browser are the correct place
+    for any DOM interaction. The server render pass never calls <code>useEffect</code> or
+    <code>onMounted</code>, so browser globals are only accessed after hydration.
+  </p>
+  <pre><code>// React – move DOM access inside useEffect
+import { useState, useEffect } from 'react';
+
+export function ThemeSwitcher() {
+  const [theme, setTheme] = useState('light');
+
+  useEffect(() => {
+    // Runs only in the browser, never during SSR
+    const stored = localStorage.getItem('theme') ?? 'light';
+    setTheme(stored);
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', (e) => {
+      setTheme(e.matches ? 'dark' : 'light');
+    });
+  }, []);
+
+  return &lt;button onClick={() => setTheme(t =&gt; t === 'light' ? 'dark' : 'light')}&gt;{theme}&lt;/button&gt;;
+}</code></pre>
+
+  <pre><code>// Vue 3 – move DOM access inside onMounted
+&lt;script setup&gt;
+import { ref, onMounted } from 'vue';
+
+const scrollY = ref(0);
+
+onMounted(() => {
+  // Runs only in the browser, never during SSR
+  scrollY.value = window.scrollY;
+  window.addEventListener('scroll', () => {
+    scrollY.value = window.scrollY;
+  });
+});
+&lt;/script&gt;</code></pre>
+
+  <h2>Fix 4 – Jest / Vitest: configure testEnvironment jsdom</h2>
+  <p>
+    Jest defaults to a <code>'node'</code> test environment with no DOM. Switch to
+    <code>'jsdom'</code> to make <code>document</code>, <code>window</code>, and
+    <code>navigator</code> available in all tests. Vitest uses the same option.
+  </p>
+  <pre><code>// jest.config.js
+module.exports = {
+  testEnvironment: 'jsdom',   // provides document, window, navigator
+  // ... other options
+};</code></pre>
+
+  <pre><code>// jest.config.ts (TypeScript)
+import type { Config } from 'jest';
+
+const config: Config = {
+  testEnvironment: 'jsdom',
+  setupFilesAfterFramework: ['@testing-library/jest-dom'],
+};
+
+export default config;</code></pre>
+
+  <pre><code>// vitest.config.ts
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    environment: 'jsdom',   // or 'happy-dom' for a faster alternative
+  },
+});</code></pre>
+
+  <div class="callout warn">
+    <strong>jest-environment-jsdom is a separate package:</strong> In Jest 27+, the jsdom
+    environment was moved out of the core package. Install it separately:
+    <code>npm install --save-dev jest-environment-jsdom</code>. Without it, Jest throws
+    <code>Cannot find module 'jest-environment-jsdom'</code>.
+  </div>
+
+  <pre><code># Install the jsdom environment for Jest 27+
+npm install --save-dev jest-environment-jsdom
+
+# For Vitest, jsdom is bundled — no extra install needed</code></pre>
+
+  <p>
+    To apply <code>jsdom</code> only to specific test files instead of globally, add a
+    docblock at the top of the file:
+  </p>
+  <pre><code>/**
+ * @jest-environment jsdom
+ */
+
+import { render, screen } from '@testing-library/react';
+import { ThemeSwitcher } from './ThemeSwitcher';
+
+test('renders theme button', () => {
+  render(&lt;ThemeSwitcher /&gt;);
+  expect(screen.getByRole('button')).toBeInTheDocument();
+});</code></pre>
+
+  <h2>Fix 5 – Separate browser and server entry points</h2>
+  <p>
+    For libraries or shared utilities that need fundamentally different implementations per
+    environment, create separate entry points and let the bundler or Node.js resolver select
+    the correct file.
+  </p>
+  <pre><code>// package.json — use the "browser" field for bundlers (webpack, esbuild, Vite)
+{
+  "name": "my-storage-lib",
+  "main": "./server.js",       // used by Node.js (require())
+  "browser": "./browser.js",   // used by bundlers targeting browsers
+  "exports": {
+    "node": "./server.js",
+    "browser": "./browser.js",
+    "default": "./browser.js"
+  }
+}</code></pre>
+
+  <pre><code>// browser.js — real localStorage implementation
+export function getItem(key) {
+  return localStorage.getItem(key);
+}
+
+export function setItem(key, value) {
+  localStorage.setItem(key, value);
+}</code></pre>
+
+  <pre><code>// server.js — no-op / in-memory fallback for Node.js
+const store = new Map();
+
+export function getItem(key) {
+  return store.get(key) ?? null;
+}
+
+export function setItem(key, value) {
+  store.set(key, value);
+}</code></pre>
+
+  <h2>Fix 6 – globalThis polyfill / mock for test environments</h2>
+  <p>
+    When you need a lightweight polyfill for tests or non-browser Node.js scripts without
+    switching to jsdom, assign the missing globals to <code>globalThis</code> in a setup file.
+  </p>
+  <pre><code>// jest.setup.js  (referenced via setupFiles in jest.config.js)
+const { JSDOM } = require('jsdom');
+
+const dom = new JSDOM('', { url: 'http://localhost' });
+
+globalThis.window    = dom.window;
+globalThis.document  = dom.window.document;
+globalThis.navigator = dom.window.navigator;
+
+// Mock localStorage with a simple in-memory implementation
+const localStorageMock = (() => {
+  let store = {};
+  return {
+    getItem: (key) => store[key] ?? null,
+    setItem: (key, value) => { store[key] = String(value); },
+    removeItem: (key) => { delete store[key]; },
+    clear: () => { store = {}; },
+  };
+})();
+
+Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock });</code></pre>
+
+  <pre><code>// jest.config.js — reference the setup file
+module.exports = {
+  testEnvironment: 'node',
+  setupFiles: ['./jest.setup.js'],
+};</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <p>Follow these steps to identify which code accesses a browser global at import time:</p>
+  <ol>
+    <li>
+      Read the <strong>full stack trace</strong>. The first frame inside <code>node_modules</code>
+      is the library accessing the global. The frame above it (in your code) shows the
+      <code>import</code> or <code>require()</code> that triggered the load.
+    </li>
+    <li>
+      If the offending frame is deep inside <code>node_modules</code>, check whether the library
+      has a <strong>dedicated SSR build</strong> or an option to disable DOM access. Many UI
+      libraries export separate <code>/server</code> or <code>/ssr</code> entry points.
+    </li>
+    <li>
+      Search the library source for <code>document</code>, <code>window</code>, or
+      <code>navigator</code> <strong>outside of any function</strong> — at the module's top level
+      or in a class field initializer. These execute at import time and cannot be guarded by your code.
+    </li>
+    <li>
+      Try importing the problematic module inside a <code>useEffect</code> or with a dynamic
+      <code>import()</code> to confirm it is the source:
+      <pre><code>useEffect(() => {
+  import('suspect-library').then(({ doThing }) => doThing());
+}, []);</code></pre>
+    </li>
+    <li>
+      Check whether the library's <code>package.json</code> has a <strong><code>"browser"</code>
+      field</strong>. If it does, your bundler may be ignoring it. Verify your webpack/Vite/esbuild
+      target is set to <code>'web'</code> for client bundles and <code>'node'</code> for server bundles.
+    </li>
+    <li>
+      For Next.js, enable verbose logging with <code>NODE_OPTIONS='--trace-warnings' next dev</code>
+      to see which module triggers the warning before the <code>ReferenceError</code>.
+    </li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Avoid using typeof window as an isomorphic environment check in components:</strong>
+    In some SSR frameworks, <code>window</code> is polyfilled on the server with a partial
+    implementation. A <code>typeof window !== 'undefined'</code> check may return <code>true</code>
+    on the server but the polyfilled <code>window</code> does not support the full browser API,
+    causing different bugs. Always consult your framework's recommended pattern for environment detection.
+  </div>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><code>ReferenceError: window is not defined</code> — same cause; <code>window</code> is another browser-only global absent from Node.js</li>
+    <li><code>ReferenceError: navigator is not defined</code> — <code>navigator.userAgent</code> or <code>navigator.language</code> accessed in Node.js</li>
+    <li><code>ReferenceError: localStorage is not defined</code> — Web Storage API accessed outside a browser context</li>
+    <li><code>ReferenceError: location is not defined</code> — <code>window.location</code> or bare <code>location</code> accessed during SSR</li>
+    <li><a href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/"><code>TypeError: Cannot read properties of undefined</code></a> — accessing a property on a value that is <code>undefined</code>, often after a failed polyfill or stub</li>
+    <li><a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/"><code>ERR_REQUIRE_ESM</code></a> — thrown when using <code>require()</code> for a pure ESM package, common alongside browser-only library migration issues</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-09 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#class-referenceerror">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

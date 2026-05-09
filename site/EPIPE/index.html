@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>EPIPE: write EPIPE – Node.js Fix</title>
+  <meta name="description" content="Node.js throws EPIPE: write EPIPE when writing to a stream or socket whose reading end has been closed. Learn exact causes and how to fix it — from piping to head/grep to HTTP response and socket errors." />
+  <link rel="canonical" href="https://nodejs-errors.dev/EPIPE/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="EPIPE: write EPIPE – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws EPIPE: write EPIPE when writing to a stream or socket whose reading end has been closed. Learn exact causes and how to fix it — from piping to head/grep to HTTP response and socket errors." />
+  <meta property="og:url" content="https://nodejs-errors.dev/EPIPE/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "EPIPE: write EPIPE – Node.js Fix",
+    "description": "Node.js throws EPIPE when a write is attempted on a stream or socket whose reading end has already been closed. Common when piping output to shell commands like head or grep, writing to closed HTTP responses, or streaming to disconnected TCP clients.",
+    "url": "https://nodejs-errors.dev/EPIPE/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-09",
+    "dateModified": "2026-05-09"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is EPIPE in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "EPIPE stands for 'Error PIPE'. Node.js throws it as 'Error: write EPIPE' when code tries to write data to a stream, socket, or pipe whose reading end has already been closed. The OS-level errno is EPIPE (32 on Linux). It is most commonly encountered when piping Node.js output to commands like head or grep that exit after reading a limited number of lines, causing process.stdout to throw EPIPE when the script tries to write more output."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix EPIPE on process.stdout in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Add an error handler on process.stdout: process.stdout.on('error', (err) => { if (err.code === 'EPIPE') process.exit(0); }); This treats the broken pipe as a normal exit — the consumer (head, grep) has finished and your script should stop too. Do not throw or log this error; it is expected behavior when output is piped to a command that closes stdin early."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does Node.js throw EPIPE when I pipe output to head or grep?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "When you run 'node script.js | head -10', the head command exits after reading 10 lines, closing its stdin (the read end of the pipe). Your Node.js process continues writing to stdout (the write end of the pipe). The OS detects the read end is closed and delivers EPIPE to the next write call. This is normal Unix pipe behavior. Fix by catching the EPIPE error on process.stdout and calling process.exit(0)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between EPIPE and ECONNRESET?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "EPIPE occurs when the local process tries to write to a pipe or socket whose remote reading end has been closed gracefully. ECONNRESET occurs when the remote peer forcibly resets a TCP connection mid-session by sending a RST packet. EPIPE is common with named pipes and stdout piping; ECONNRESET is a TCP-level error on network sockets."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "EPIPE", "item": "https://nodejs-errors.dev/EPIPE/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix EPIPE: write EPIPE in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Identify the source of the write", "text": "Check the stack trace to determine which stream threw EPIPE. Common sources: process.stdout (when piping to head/grep), an HTTP response object (res.write after client disconnected), a child process stdin, or a raw TCP socket." },
+      { "@type": "HowToStep", "position": 2, "name": "Handle EPIPE on process.stdout", "text": "If the error originates from process.stdout, add: process.stdout.on('error', (err) => { if (err.code === 'EPIPE') process.exit(0); }); This is expected behavior when a downstream command closes stdin early." },
+      { "@type": "HowToStep", "position": 3, "name": "Guard HTTP response writes", "text": "Before calling res.write() or res.end(), check res.writableEnded and listen for the 'close' event to stop writing when the client disconnects." },
+      { "@type": "HowToStep", "position": 4, "name": "Use stream.pipeline() instead of stream.pipe()", "text": "Replace manual pipe() calls with pipeline() from the 'stream' module. pipeline() automatically handles cleanup and propagates errors when any stream in the chain closes early." },
+      { "@type": "HowToStep", "position": 5, "name": "Attach error handlers to all writable streams", "text": "Any writable stream can emit EPIPE. Always attach an 'error' event listener. An unhandled 'error' event crashes the Node.js process with 'Unhandled error event'." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">EPIPE</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>EPIPE: write EPIPE</h1>
+  <span class="error-code">error code: <code>EPIPE</code></span>
+  <p>Complete reference — what it means, why it happens when piping to head/grep or writing to closed HTTP responses, and how to fix it.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> <code>Error: write EPIPE</code> means your code wrote to a stream or socket after the reading end was closed. The most common cause is piping Node.js output to <code>head</code> or <code>grep</code> — fix by adding <code>process.stdout.on('error', (err) => { if (err.code === 'EPIPE') process.exit(0); });</code>. For HTTP responses, check <code>res.writableEnded</code> before writing and listen for the <code>'close'</code> event when the client disconnects.
+  </div>
+
+  <h2>What is EPIPE?</h2>
+  <p>
+    <strong>EPIPE</strong> stands for <em>Error PIPE</em> — a
+    <a href="https://nodejs.org/api/errors.html#common-system-errors" rel="noopener noreferrer">POSIX system error</a>
+    (errno 32 on Linux) thrown when a process tries to write to a pipe, socket, or stream
+    whose reading end has already been closed. Unlike
+    <a href="https://nodejs-errors.dev/ECONNRESET/">ECONNRESET</a> (which is a TCP RST from a remote host),
+    EPIPE is the OS telling you the local write target is gone — there is no reader left to consume
+    the data you are trying to send.
+  </p>
+  <p>
+    Node.js surfaces EPIPE as an <code>Error</code> object with <code>code: 'EPIPE'</code> and
+    <code>syscall: 'write'</code>. On streams and sockets this appears as an <code>'error'</code> event.
+    An unhandled <code>'error'</code> event crashes the process immediately.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error messages you will see:</strong><br>
+    <code>Error: write EPIPE</code><br>
+    <code>Error: write EPIPE</code> with <code>syscall: 'write'</code>, <code>code: 'EPIPE'</code><br>
+    <code>events.js:292 throw er; // Unhandled 'error' event ... Error: write EPIPE</code><br>
+    <code>write EPIPE</code> on <code>process.stdout</code> when piping to <code>head</code> or <code>grep</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>Error: write EPIPE
+    at Socket.write (node:net:777:12)
+    at write (node:internal/streams/writable:370:10)
+    at Writable.write (node:internal/streams/writable:429:10)
+    at process.stdout.write (/home/user/project/script.js:14:16)
+    at Object.&lt;anonymous&gt; (/home/user/project/script.js:14:16) {
+  errno: -32,
+  code: 'EPIPE',
+  syscall: 'write'
+}</code></pre>
+
+  <p>
+    The <code>errno: -32</code> is the Linux EPIPE errno value. On macOS it is also
+    <code>-32</code>. The <code>syscall: 'write'</code> confirms the error occurred during a
+    write operation — distinguishing it from read-side errors like
+    <a href="https://nodejs-errors.dev/ECONNRESET/">ECONNRESET</a>.
+  </p>
+
+  <h3>Unhandled EPIPE crash (events.js)</h3>
+  <p>
+    If no <code>'error'</code> listener is attached to the stream that emits EPIPE, Node.js
+    crashes the entire process with this output:
+  </p>
+  <pre><code>events.js:292
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: write EPIPE
+    at Socket.write (node:net:777:12)
+    ...
+Emitted 'error' event on Socket instance at:
+    at emitErrorNT (node:internal/streams/destroy:164:8) {
+  errno: -32,
+  code: 'EPIPE',
+  syscall: 'write'
+}</code></pre>
+
+  <h2>Common Causes</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Why it happens</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Piping output to <code>head</code>, <code>grep</code>, or <code>less</code></td>
+        <td>Running <code>node script.js | head -10</code> causes <code>head</code> to exit after reading 10 lines, closing its stdin. Node.js then gets EPIPE when it next writes to <code>process.stdout</code>.</td>
+      </tr>
+      <tr>
+        <td>Writing to an HTTP response after client disconnected</td>
+        <td>The client closed the connection (navigated away, timeout, network drop). Calling <code>res.write()</code> or <code>res.end()</code> after the response stream is destroyed causes EPIPE.</td>
+      </tr>
+      <tr>
+        <td>Client disconnects during server-sent streaming</td>
+        <td>The server is streaming a large payload (SSE, file download, chunked response) and the client closes the connection before the stream completes.</td>
+      </tr>
+      <tr>
+        <td>Writing to a child process stdin after it exited</td>
+        <td>The spawned child process exited (or crashed) but the parent process continues to write to <code>child.stdin</code>, which is now a broken pipe.</td>
+      </tr>
+      <tr>
+        <td>Database connection closed during result streaming</td>
+        <td>The underlying TCP socket or connection pool connection was closed while a database driver was still streaming query result rows to the application.</td>
+      </tr>
+      <tr>
+        <td>TCP socket closed by remote while still writing data</td>
+        <td>The remote end performed a graceful half-close (FIN) or the connection was dropped, and the local side received EPIPE on the next write to that socket.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Fix 1 – Handle EPIPE on process.stdout (piping to head/grep)</h2>
+  <p>
+    This is the most common cause: running <code>node script.js | head -10</code> or
+    <code>node script.js | grep pattern</code>. When the downstream command exits, your script
+    gets EPIPE on the next <code>process.stdout.write()</code>. This is <em>expected</em> behavior —
+    the correct response is to exit cleanly.
+  </p>
+  <pre><code>// Add this near the top of your script (before any output)
+process.stdout.on('error', (err) => {
+  if (err.code === 'EPIPE') {
+    // The consumer (head, grep, less) has closed stdin.
+    // Exit cleanly — this is normal pipe behavior, not a bug.
+    process.exit(0);
+  }
+  // Re-throw unexpected stdout errors
+  throw err;
+});
+
+// process.stderr may also receive EPIPE in some shells
+process.stderr.on('error', (err) => {
+  if (err.code === 'EPIPE') process.exit(0);
+  throw err;
+});</code></pre>
+
+  <div class="callout">
+    <strong>Why <code>process.exit(0)</code> and not <code>process.exit(1)</code>?</strong>
+    When output is piped to <code>head</code> and the consumer closes the pipe, the writer
+    is expected to stop. Exiting with code <code>0</code> signals success. Using <code>1</code>
+    would incorrectly signal an error to shell scripts or CI pipelines that check exit codes.
+  </div>
+
+  <h2>Fix 2 – Check res.writableEnded before writing to HTTP responses</h2>
+  <p>
+    Before calling <code>res.write()</code> or <code>res.end()</code>, check whether the response
+    has already been ended or the client has disconnected. This avoids EPIPE on HTTP response streams.
+  </p>
+  <pre><code>const http = require('http');
+
+const server = http.createServer((req, res) => {
+  let i = 0;
+  const interval = setInterval(() => {
+    // Guard: stop if the response has already been finished or destroyed
+    if (res.writableEnded || res.destroyed) {
+      clearInterval(interval);
+      return;
+    }
+
+    i++;
+    res.write(`data chunk ${i}\n`);
+
+    if (i >= 10) {
+      clearInterval(interval);
+      res.end();
+    }
+  }, 100);
+
+  // Also clean up when the client disconnects
+  res.on('close', () => {
+    clearInterval(interval);
+  });
+});
+
+server.listen(3000);</code></pre>
+
+  <h2>Fix 3 – Listen for the 'close' event to stop streaming</h2>
+  <p>
+    The <code>'close'</code> event on an HTTP response fires when the underlying connection is
+    closed — whether by the server finishing the response or the client disconnecting. Use it to
+    cancel any ongoing work and prevent writing to a destroyed stream.
+  </p>
+  <pre><code>const http = require('http');
+const fs = require('fs');
+
+const server = http.createServer((req, res) => {
+  const fileStream = fs.createReadStream('/path/to/large-file.bin');
+
+  // Track whether client is still connected
+  let clientConnected = true;
+  res.on('close', () => {
+    clientConnected = false;
+    fileStream.destroy(); // Stop reading the file
+  });
+
+  fileStream.on('error', (err) => {
+    if (!clientConnected) return; // Client already gone, ignore
+    res.statusCode = 500;
+    res.end('Internal Server Error');
+  });
+
+  fileStream.pipe(res);
+});
+
+server.listen(3000);</code></pre>
+
+  <h2>Fix 4 – Use stream.pipeline() instead of manual pipe()</h2>
+  <p>
+    The <code>stream.pipeline()</code> function (Node.js 10+) automatically destroys all streams
+    in the chain if any stream closes or errors. This prevents EPIPE from propagating unhandled
+    when a downstream consumer closes early.
+  </p>
+  <pre><code>const { pipeline } = require('stream');
+const { promisify } = require('util');
+const fs = require('fs');
+const http = require('http');
+
+const pipelineAsync = promisify(pipeline);
+
+const server = http.createServer(async (req, res) => {
+  try {
+    await pipelineAsync(
+      fs.createReadStream('/path/to/large-file.bin'),
+      res
+    );
+  } catch (err) {
+    // pipeline() catches EPIPE when the client disconnects mid-stream
+    if (err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED') {
+      // Client disconnected — nothing more to do
+      return;
+    }
+    console.error('Streaming error:', err);
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.end('Internal Server Error');
+    }
+  }
+});
+
+server.listen(3000);</code></pre>
+
+  <div class="callout">
+    <strong>Node.js 15+ stream/promises:</strong> Use <code>require('stream/promises').pipeline()</code>
+    directly instead of <code>promisify(pipeline)</code>. It returns a native Promise and has the
+    same error-handling semantics.
+    <br><br>
+    <code>const { pipeline } = require('stream/promises');</code>
+  </div>
+
+  <h2>Fix 5 – Handle EPIPE on writable streams gracefully</h2>
+  <p>
+    For custom writable streams or any stream you manage directly, attach an <code>'error'</code>
+    listener and handle <code>EPIPE</code> explicitly. Without this listener, the first EPIPE event
+    crashes the process.
+  </p>
+  <pre><code>const net = require('net');
+
+const client = net.createConnection({ host: 'example.com', port: 9000 });
+
+client.on('connect', () => {
+  // Send data in a loop
+  const interval = setInterval(() => {
+    const canContinue = client.write('ping\n');
+    if (!canContinue) {
+      // Backpressure: wait for drain before writing more
+      client.once('drain', () => { /* resume */ });
+    }
+  }, 100);
+
+  client.on('close', () => clearInterval(interval));
+});
+
+// Always handle 'error' on writable streams
+client.on('error', (err) => {
+  if (err.code === 'EPIPE') {
+    console.log('Remote closed the connection while writing.');
+    client.destroy();
+  } else {
+    console.error('Socket error:', err);
+    client.destroy(err);
+  }
+});</code></pre>
+
+  <h2>Fix 6 – Destroy the stream on EPIPE</h2>
+  <p>
+    When EPIPE is not expected (i.e., not a pipe-to-head scenario), the correct response is to
+    destroy the stream immediately. Attempting to write to it again will keep generating errors.
+  </p>
+  <pre><code>const { Writable } = require('stream');
+
+function createSafeWriter(destination) {
+  destination.on('error', (err) => {
+    if (err.code === 'EPIPE') {
+      // Stop writing — the read end is gone
+      console.warn('EPIPE: reader closed, destroying stream');
+      destination.destroy();
+    } else {
+      // Unexpected error — propagate or handle
+      console.error('Unexpected stream error:', err);
+      destination.destroy(err);
+    }
+  });
+  return destination;
+}
+
+// Example: write to a child process stdin safely
+const { spawn } = require('child_process');
+const child = spawn('some-command', ['--arg']);
+const safeStdin = createSafeWriter(child.stdin);
+
+safeStdin.write('input data\n');
+safeStdin.end();</code></pre>
+
+  <h2>When is EPIPE Expected vs a Real Bug?</h2>
+  <table>
+    <thead><tr><th>Scenario</th><th>Expected?</th><th>Correct Action</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>node script.js | head -10</code> — script produces more than 10 lines</td>
+        <td>Yes — expected</td>
+        <td>Catch EPIPE on <code>process.stdout</code> and call <code>process.exit(0)</code></td>
+      </tr>
+      <tr>
+        <td><code>node script.js | grep pattern</code> — no matching lines found, grep exits early</td>
+        <td>Yes — expected</td>
+        <td>Catch EPIPE on <code>process.stdout</code> and call <code>process.exit(0)</code></td>
+      </tr>
+      <tr>
+        <td>HTTP client closes browser tab mid-download</td>
+        <td>Yes — expected</td>
+        <td>Listen for <code>'close'</code> on <code>res</code>, stop writing, clean up resources</td>
+      </tr>
+      <tr>
+        <td>Writing to <code>child.stdin</code> after child exited with an error</td>
+        <td>No — real bug</td>
+        <td>Check child's exit code before writing, or handle the <code>'exit'</code> event to stop writing</td>
+      </tr>
+      <tr>
+        <td>Writing to a database socket after connection pool timeout</td>
+        <td>No — real bug</td>
+        <td>Handle EPIPE in the database driver error handler, reconnect, and retry the operation</td>
+      </tr>
+      <tr>
+        <td>TCP socket EPIPE on a keep-alive connection</td>
+        <td>Sometimes</td>
+        <td>Treat like ECONNRESET: catch, destroy the socket, and retry with a new connection</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Check the stack trace for which stream threw EPIPE: <code>process.stdout</code>, an HTTP <code>res</code> object, a <code>net.Socket</code>, or a child process <code>stdin</code>.</li>
+    <li>If the script is invoked via a shell pipe (<code>| head</code>, <code>| grep</code>, <code>| less</code>), EPIPE is expected — add the <code>process.stdout</code> error handler.</li>
+    <li>Check <code>res.writableEnded</code> and <code>res.destroyed</code> before every write in long-running HTTP handlers.</li>
+    <li>Use <code>stream.pipeline()</code> instead of <code>stream.pipe()</code> — it handles cleanup automatically when consumers close early.</li>
+    <li>Enable <code>NODE_DEBUG=net,stream</code> to trace stream lifecycle events and see exactly when the write end is destroyed.</li>
+    <li>Search for any writable stream that does not have an <code>'error'</code> event listener — any unhandled EPIPE will crash the process.</li>
+  </ol>
+
+  <pre><code># Trace stream and socket events to find where EPIPE originates
+NODE_DEBUG=net,stream node app.js 2&gt;&amp;1 | grep -i epipe</code></pre>
+
+  <div class="callout warn">
+    <strong>Do not silently swallow EPIPE on unexpected streams:</strong> For expected cases
+    (piping to <code>head</code>/<code>grep</code>), catching EPIPE and exiting cleanly is correct.
+    But for unexpected EPIPE errors on database connections, child process stdin, or HTTP clients
+    that should still be connected, log the error and investigate. Silently swallowing it hides
+    connectivity bugs, resource leaks, and race conditions that worsen under load.
+  </div>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/ECONNRESET/"><code>ECONNRESET: connection reset by peer</code></a> — remote TCP peer sent a RST packet; differs from EPIPE which is a local write to a closed pipe</li>
+    <li><code>ECONNREFUSED: connection refused</code> — the connection was never established; nothing listening on the target port</li>
+    <li><code>ERR_STREAM_DESTROYED</code> — Node.js stream-level error thrown when writing to an already-destroyed stream, often accompanies EPIPE</li>
+    <li><code>ERR_STREAM_WRITE_AFTER_END</code> — writing to a stream after <code>end()</code> has been called on the writable side</li>
+    <li><a href="https://nodejs-errors.dev/ETIMEDOUT/"><code>ETIMEDOUT: connection timed out</code></a> — no response within timeout; the connection was not actively closed, just silent</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-09 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#common-system-errors">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

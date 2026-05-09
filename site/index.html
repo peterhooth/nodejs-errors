@@ -36,7 +36,18 @@
       { "@type": "ListItem", "position": 3, "name": "ERR_REQUIRE_ESM", "url": "https://nodejs-errors.dev/ERR_REQUIRE_ESM/" },
       { "@type": "ListItem", "position": 4, "name": "ENOENT: no such file or directory", "url": "https://nodejs-errors.dev/ENOENT/" },
       { "@type": "ListItem", "position": 5, "name": "EADDRINUSE: address already in use", "url": "https://nodejs-errors.dev/EADDRINUSE/" },
-      { "@type": "ListItem", "position": 6, "name": "TypeError: Cannot read properties of undefined", "url": "https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/" }
+      { "@type": "ListItem", "position": 6, "name": "ECONNRESET: connection reset by peer", "url": "https://nodejs-errors.dev/ECONNRESET/" },
+      { "@type": "ListItem", "position": 7, "name": "ECONNREFUSED: connection refused", "url": "https://nodejs-errors.dev/ECONNREFUSED/" },
+      { "@type": "ListItem", "position": 8, "name": "TypeError: Cannot read properties of undefined", "url": "https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/" },
+      { "@type": "ListItem", "position": 9, "name": "ETIMEDOUT: connection timed out", "url": "https://nodejs-errors.dev/ETIMEDOUT/" },
+      { "@type": "ListItem", "position": 10, "name": "ENOTFOUND: getaddrinfo ENOTFOUND", "url": "https://nodejs-errors.dev/ENOTFOUND/" },
+      { "@type": "ListItem", "position": 11, "name": "EMFILE: too many open files", "url": "https://nodejs-errors.dev/EMFILE/" },
+      { "@type": "ListItem", "position": 12, "name": "TypeError [ERR_INVALID_ARG_TYPE]: The argument must be of type string", "url": "https://nodejs-errors.dev/ERR_INVALID_ARG_TYPE/" },
+      { "@type": "ListItem", "position": 13, "name": "ReferenceError: document is not defined", "url": "https://nodejs-errors.dev/ReferenceError-document-is-not-defined/" },
+      { "@type": "ListItem", "position": 14, "name": "UnhandledPromiseRejection: Promise rejected without a .catch() handler", "url": "https://nodejs-errors.dev/UnhandledPromiseRejection/" },
+      { "@type": "ListItem", "position": 15, "name": "EPIPE: write EPIPE", "url": "https://nodejs-errors.dev/EPIPE/" },
+      { "@type": "ListItem", "position": 16, "name": "SyntaxError: Cannot use import statement outside a module", "url": "https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/" },
+      { "@type": "ListItem", "position": 17, "name": "FATAL ERROR: JavaScript heap out of memory", "url": "https://nodejs-errors.dev/JavaScript-heap-out-of-memory/" }
     ]
   }
   </script>
@@ -154,6 +165,17 @@
       <span class="card-cta">View causes &amp; fixes →</span>
     </a>
 
+    <a class="error-card" href="https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/">
+      <div class="card-name">SyntaxError: Cannot use import statement outside a module</div>
+      <div class="card-desc">
+        Thrown when <code>import</code> or <code>export</code> syntax is used in a file Node.js
+        treats as CommonJS. Fix by adding <code>"type": "module"</code> to <code>package.json</code>,
+        renaming the file to <code>.mjs</code>, or replacing <code>import</code> with
+        <code>require()</code>. Also covers <code>SyntaxError: Unexpected token 'export'</code>.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
   </div>
 
   <h2>File System</h2>
@@ -165,6 +187,17 @@
         Thrown by any <code>fs</code> operation when the target path does not exist.
         Caused by path typos, wrong working directory, missing intermediate directories,
         or case-sensitivity mismatches on Linux.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/EMFILE/">
+      <div class="card-name">EMFILE: too many open files</div>
+      <div class="card-desc">
+        Thrown when the process exceeds the OS per-process file descriptor limit.
+        Common during bulk file operations, file watching with webpack or jest, or
+        socket-heavy workloads. Fix with <code>ulimit -n 65536</code>,
+        <code>graceful-fs</code>, or <code>p-limit</code> concurrency control.
       </div>
       <span class="card-cta">View causes &amp; fixes →</span>
     </a>
@@ -184,6 +217,60 @@
       <span class="card-cta">View causes &amp; fixes →</span>
     </a>
 
+    <a class="error-card" href="https://nodejs-errors.dev/ECONNRESET/">
+      <div class="card-name">ECONNRESET: connection reset by peer</div>
+      <div class="card-desc">
+        Thrown when the remote server forcibly closes a TCP connection mid-transfer.
+        Most often caused by a stale keep-alive socket or a load balancer idle timeout.
+        Fix with retry logic and proper <code>keepAliveTimeout</code> settings.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/ECONNREFUSED/">
+      <div class="card-name">ECONNREFUSED: connection refused</div>
+      <div class="card-desc">
+        Thrown as <code>Error: connect ECONNREFUSED 127.0.0.1:PORT</code> when nothing
+        is listening on the target host and port. Caused by a service not running, wrong
+        port, or Docker containers using <code>localhost</code> instead of the service name.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/ETIMEDOUT/">
+      <div class="card-name">ETIMEDOUT: connection timed out</div>
+      <div class="card-desc">
+        Thrown when a TCP connect or read operation exceeds the timeout window with no
+        response — the remote host went silent. Common causes: firewall silently dropping
+        packets, overloaded server, or too-short default timeout. Fix with
+        <code>AbortSignal.timeout()</code> and exponential backoff retry logic.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/ENOTFOUND/">
+      <div class="card-name">ENOTFOUND: getaddrinfo ENOTFOUND</div>
+      <div class="card-desc">
+        Thrown when DNS resolution fails — the hostname cannot be translated to an IP address.
+        Also covers <code>EAI_AGAIN</code> (temporary DNS failure). Common causes: typo in hostname,
+        wrong <code>API_URL</code> env var, using <code>localhost</code> inside Docker, or no
+        internet connectivity.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/EPIPE/">
+      <div class="card-name">EPIPE: write EPIPE</div>
+      <div class="card-desc">
+        Thrown as <code>Error: write EPIPE</code> when writing to a stream or socket whose
+        reading end has been closed. Most common when piping output to <code>head</code> or
+        <code>grep</code>, or writing to an HTTP response after the client disconnected.
+        Fix with an <code>error</code> handler on <code>process.stdout</code> or use
+        <code>stream.pipeline()</code>.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
   </div>
 
   <h2>Runtime</h2>
@@ -195,6 +282,56 @@
         Thrown when a property is accessed on a value that is <code>undefined</code>.
         The most universal JavaScript error — fix with optional chaining (<code>obj?.prop</code>),
         null checks, or by ensuring async data has loaded.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/ERR_INVALID_ARG_TYPE/">
+      <div class="card-name">TypeError [ERR_INVALID_ARG_TYPE]</div>
+      <div class="card-desc">
+        Thrown when a Node.js built-in receives an argument of the wrong type — almost always
+        <code>undefined</code> instead of a string for <code>path</code>, <code>data</code>,
+        or <code>chunk</code> arguments. Common causes: missing env var, missing
+        <code>await</code>, or passing an unserialized object to <code>response.end()</code>.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/ReferenceError-document-is-not-defined/">
+      <div class="card-name">ReferenceError: document is not defined</div>
+      <div class="card-desc">
+        Thrown when browser-only globals like <code>document</code>, <code>window</code>,
+        <code>navigator</code>, or <code>localStorage</code> are accessed in Node.js. Common
+        in SSR frameworks (Next.js, Nuxt.js) and Jest tests. Fix with <code>typeof</code>
+        guards, <code>dynamic()</code> with <code>ssr: false</code>, or <code>testEnvironment: 'jsdom'</code>.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/UnhandledPromiseRejection/">
+      <div class="card-name">UnhandledPromiseRejection</div>
+      <div class="card-desc">
+        Thrown when a <code>Promise</code> is rejected with no <code>.catch()</code> handler
+        or <code>try/catch</code> around an <code>await</code>. <strong>Fatal since Node.js 15</strong>
+        — crashes the process with exit code 1. Common causes: missing <code>await</code>,
+        <code>forEach(async</code> anti-pattern, and async Express route handlers without a wrapper.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+  </div>
+
+  <h2>Memory</h2>
+  <div class="error-grid">
+
+    <a class="error-card" href="https://nodejs-errors.dev/JavaScript-heap-out-of-memory/">
+      <div class="card-name">FATAL ERROR: JavaScript heap out of memory</div>
+      <div class="card-desc">
+        A fatal V8 crash — not a catchable JavaScript error — that occurs when the Node.js
+        process exhausts its heap. The default limit is ~1.5 GB. Triggered by loading large
+        JSON/CSV files entirely into memory, memory leaks, or build tools on large codebases.
+        Fix with <code>--max-old-space-size=4096</code>, streaming, batch processing, or
+        <code>worker_threads</code>.
       </div>
       <span class="card-cta">View causes &amp; fixes →</span>
     </a>

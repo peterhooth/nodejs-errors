@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>FATAL ERROR: JavaScript heap out of memory – Node.js Fix</title>
+  <meta name="description" content="Node.js crashes with 'FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory' when the V8 heap is exhausted. Learn to increase heap size with --max-old-space-size and fix memory leaks." />
+  <link rel="canonical" href="https://nodejs-errors.dev/JavaScript-heap-out-of-memory/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="FATAL ERROR: JavaScript heap out of memory – Node.js Fix" />
+  <meta property="og:description" content="Node.js crashes with 'FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory' when the V8 heap is exhausted. Learn to increase heap size with --max-old-space-size and fix memory leaks." />
+  <meta property="og:url" content="https://nodejs-errors.dev/JavaScript-heap-out-of-memory/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "FATAL ERROR: JavaScript heap out of memory – Node.js Fix",
+    "description": "Node.js crashes with FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory when the V8 engine exhausts its heap. This is not a JavaScript Error object — it is a fatal V8 crash with no err.code. Fix by increasing --max-old-space-size, streaming large data, fixing memory leaks, or offloading to worker threads.",
+    "url": "https://nodejs-errors.dev/JavaScript-heap-out-of-memory/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-09",
+    "dateModified": "2026-05-09"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What causes 'JavaScript heap out of memory' in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Node.js crashes with 'FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory' when the V8 JavaScript engine cannot allocate more memory because the heap has reached its limit. The default heap limit is approximately 1.5 GB on 64-bit systems and 512 MB on 32-bit systems. Common causes include loading large JSON or CSV files entirely into memory, memory leaks from retained event listeners or closures, unbounded arrays or caches, and build tools like webpack or Next.js processing large codebases."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix JavaScript heap out of memory in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The quickest fix is to increase the V8 heap limit with the --max-old-space-size flag: run 'node --max-old-space-size=4096 app.js' to allocate 4 GB. For npm scripts set NODE_OPTIONS='--max-old-space-size=4096'. For Next.js or webpack builds prepend NODE_OPTIONS to the build command. The root cause fix is to stream large files instead of loading them entirely into memory, process data in batches, and fix memory leaks by removing event listeners and using WeakMap for caches."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does 'JavaScript heap out of memory' have an err.code?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Unlike most Node.js errors, JavaScript heap out of memory is not a JavaScript Error object — it is a fatal V8 engine crash. There is no err.code property to catch. The process exits abruptly with exit code 134 (SIGABRT) on Linux/macOS or is terminated by the OS OOM killer. You cannot catch it with try/catch or process.on('uncaughtException')."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix JavaScript heap out of memory for Next.js build?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Prepend NODE_OPTIONS to the build script in package.json: set the 'build' script to 'NODE_OPTIONS=\"--max-old-space-size=4096\" next build'. This allocates 4 GB of heap for the build process. On Windows use cross-env: 'cross-env NODE_OPTIONS=--max-old-space-size=4096 next build'. For very large apps, 8192 (8 GB) may be needed."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I find what is causing a memory leak in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Use --inspect to open Chrome DevTools, take heap snapshots before and after suspected leak operations, and compare them to find retained objects. Alternatively, log process.memoryUsage().heapUsed at regular intervals to see if memory grows monotonically. Use --expose-gc with global.gc() to force garbage collection and check if memory is actually released. Third-party tools like clinic.js heap or memwatch-next can also help."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "JavaScript heap out of memory", "item": "https://nodejs-errors.dev/JavaScript-heap-out-of-memory/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix JavaScript heap out of memory in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Increase V8 heap size with --max-old-space-size", "text": "Run 'node --max-old-space-size=4096 app.js' to give the V8 engine 4 GB of heap. For npm scripts, set NODE_OPTIONS='--max-old-space-size=4096' before the node command in package.json. For Next.js builds prepend NODE_OPTIONS to 'next build'." },
+      { "@type": "HowToStep", "position": 2, "name": "Stream large files instead of loading them into memory", "text": "Replace fs.readFileSync or JSON.parse on large files with streaming alternatives. Use fs.createReadStream with readline for line-by-line processing, or the csv-parse streaming API for CSV files. This keeps memory usage constant regardless of file size." },
+      { "@type": "HowToStep", "position": 3, "name": "Process data in batches", "text": "Instead of building a large array of all records, process data in fixed-size chunks. Await each batch before moving to the next so processed records can be garbage-collected before the next batch is allocated." },
+      { "@type": "HowToStep", "position": 4, "name": "Fix memory leaks", "text": "Remove event listeners with emitter.off() or removeListener() when they are no longer needed. Use WeakMap or WeakRef for caches so entries are garbage-collected when no other references exist. Clear setInterval and setTimeout handles when finished." },
+      { "@type": "HowToStep", "position": 5, "name": "Diagnose the leak with heap snapshots", "text": "Start the process with 'node --inspect app.js', open Chrome DevTools at chrome://inspect, and take heap snapshots before and after suspected leak operations. Compare two snapshots to find objects that grew unexpectedly and trace their GC roots." },
+      { "@type": "HowToStep", "position": 6, "name": "Offload memory-intensive work to worker threads or child processes", "text": "Use worker_threads or child_process.fork() to run memory-intensive operations in a separate V8 isolate. Each worker has its own heap, so OOM in the worker does not crash the main process." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">JavaScript heap out of memory</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Fatal Error</span>
+  <h1>FATAL ERROR: JavaScript heap out of memory</h1>
+  <span class="error-code">V8 fatal crash — no <code>err.code</code> — process exits with code 134</span>
+  <p>Complete reference — what it means, why V8 runs out of heap, and how to fix it with <code>--max-old-space-size</code>, streaming, batch processing, and memory leak fixes.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js is printing <code>FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory</code> because the V8 engine ran out of heap space. The fastest fix is <code>node --max-old-space-size=4096 app.js</code> (gives V8 4 GB). For npm scripts or build tools, set <code>NODE_OPTIONS=--max-old-space-size=4096</code> before the command. The root-cause fix is to stream large files, process data in batches, and eliminate memory leaks.
+  </div>
+
+  <h2>What is "JavaScript heap out of memory"?</h2>
+  <p>
+    When V8 — the JavaScript engine inside Node.js — cannot allocate memory for a new object
+    because the heap has reached its configured maximum size, it prints a fatal error and
+    terminates the process. Unlike most Node.js errors, this is <strong>not</strong> a JavaScript
+    <code>Error</code> object. You cannot catch it with <code>try/catch</code> or
+    <code>process.on('uncaughtException')</code>. The process simply dies.
+  </p>
+  <p>
+    The default V8 heap limit is approximately <strong>1.5 GB</strong> on 64-bit systems and
+    <strong>512 MB</strong> on 32-bit systems. When your application allocates more live objects
+    than this limit allows, V8 first runs garbage collection; if GC cannot free enough memory,
+    it aborts.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error messages you will see:</strong><br>
+    <code>FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory</code><br>
+    <code>FATAL ERROR: CALL_AND_RETRY_LAST Allocation failed - JavaScript heap out of memory</code><br>
+    <code>&lt;--- Last few GCs ---&gt;</code><br>
+    <code>&lt;--- JS stacktrace ---&gt;</code><br>
+    <code>Killed</code> (on Linux when the OS OOM killer terminates the process before V8 can print the message)
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>&lt;--- Last few GCs ---&gt;
+
+[12345:0x...] 45123 ms: Mark-sweep (reduce) 1396.8 (1458.5) -&gt; 1395.7 (1459.0) MB, ...
+[12345:0x...] 47201 ms: Mark-sweep (reduce) 1397.1 (1459.0) -&gt; 1396.8 (1459.5) MB, ...
+
+&lt;--- JS stacktrace ---&gt;
+
+FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+ 1: 0xb7c6e0 node::Abort() [node]
+ 2: 0xa9149b node::FatalError(char const*, char const*) [node]
+ 3: 0xd9b89e v8::Utils::ReportOOMFailure(v8::internal::Isolate*, char const*, bool) [node]
+ 4: 0xd9bbf7 v8::internal::V8::FatalProcessOutOfMemory(v8::internal::Isolate*, char const*, bool) [node]
+ 5: 0xf2ae95  [node]
+Aborted (core dumped)</code></pre>
+
+  <div class="callout warn">
+    <strong>No err.code — cannot be caught:</strong> This error is a V8-level crash, not a
+    JavaScript exception. <code>err.code</code> does not exist. <code>try/catch</code>,
+    <code>Promise.catch()</code>, and <code>process.on('uncaughtException')</code> will
+    <em>not</em> intercept it. The process exits with code <code>134</code> (SIGABRT) or
+    is killed by the OS OOM killer (exit code <code>137</code>, SIGKILL).
+  </div>
+
+  <h2>Common Causes</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Why it happens</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Loading large datasets entirely in memory</td>
+        <td>Reading a multi-GB JSON or CSV file with <code>fs.readFileSync</code> or <code>JSON.parse</code> allocates the entire file contents as a string and then again as a parsed object simultaneously.</td>
+      </tr>
+      <tr>
+        <td>Memory leaks — retained event listeners or closures</td>
+        <td>Event listeners added with <code>emitter.on()</code> keep the enclosing scope alive. Without a corresponding <code>off()</code> call, every request or loop iteration accumulates more listeners, growing memory without bound.</td>
+      </tr>
+      <tr>
+        <td>Unbounded arrays, Maps, or caches</td>
+        <td>Appending to an array or Map inside a loop without a size cap or eviction policy causes the collection to grow until the heap is exhausted.</td>
+      </tr>
+      <tr>
+        <td>Build tools with large codebases</td>
+        <td>webpack, esbuild, TypeScript compiler, and <code>next build</code> hold the entire module graph in memory. Large monorepos or projects with many dependencies can easily exceed the default 1.5 GB limit.</td>
+      </tr>
+      <tr>
+        <td>Recursive functions without a base case</td>
+        <td>Infinite or very deep recursion fills the call stack <em>and</em> keeps all intermediate stack frames — and their closures — alive in the heap until memory is exhausted.</td>
+      </tr>
+      <tr>
+        <td>Default V8 heap limit too small</td>
+        <td>The 1.5 GB default is intentionally conservative. Applications that legitimately process large amounts of data in memory simply need a higher limit set via <code>--max-old-space-size</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Fix 1 – Increase heap size with --max-old-space-size</h2>
+  <p>
+    The <code>--max-old-space-size</code> flag sets the maximum size (in MB) of the V8 old-generation
+    heap — where long-lived objects are stored. This is the fastest fix when you need to run a
+    build or process a dataset that is genuinely large.
+  </p>
+
+  <h3>Command line</h3>
+  <pre><code># Give Node.js 4 GB of heap
+node --max-old-space-size=4096 app.js
+
+# Give Node.js 8 GB of heap
+node --max-old-space-size=8192 app.js</code></pre>
+
+  <h3>npm scripts in package.json</h3>
+  <pre><code>{
+  "scripts": {
+    "start": "NODE_OPTIONS=--max-old-space-size=4096 node app.js",
+    "build": "NODE_OPTIONS=--max-old-space-size=4096 webpack --config webpack.config.js"
+  }
+}</code></pre>
+
+  <h3>Next.js / webpack build</h3>
+  <pre><code>{
+  "scripts": {
+    "build": "NODE_OPTIONS=\"--max-old-space-size=4096\" next build"
+  }
+}
+
+# On Windows (use cross-env to avoid quoting issues):
+# cross-env NODE_OPTIONS=--max-old-space-size=4096 next build</code></pre>
+
+  <h3>Heap size reference</h3>
+  <table>
+    <thead><tr><th>--max-old-space-size value</th><th>Heap limit</th><th>When to use</th></tr></thead>
+    <tbody>
+      <tr><td><code>1024</code></td><td>1 GB</td><td>Small apps, default is already 1.5 GB so this is rarely needed</td></tr>
+      <tr><td><code>2048</code></td><td>2 GB</td><td>Medium codebases, moderate data processing</td></tr>
+      <tr><td><code>4096</code></td><td>4 GB</td><td>Large Next.js / webpack builds, large CSV/JSON processing</td></tr>
+      <tr><td><code>8192</code></td><td>8 GB</td><td>Very large monorepos, data-heavy batch jobs</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>Important:</strong> <code>--max-old-space-size</code> raises the limit but does not
+    solve a memory leak. If memory grows unboundedly, the process will eventually hit even a
+    higher limit. Use this flag as a short-term fix while you diagnose the root cause.
+  </div>
+
+  <h2>Fix 2 – Stream large files instead of loading them into memory</h2>
+  <p>
+    The most reliable long-term fix for large-file processing is streaming: read and process one
+    line (or one record) at a time instead of loading the entire file. Memory usage stays constant
+    regardless of file size.
+  </p>
+
+  <h3>Stream a large text file line by line (readline)</h3>
+  <pre><code>const fs = require('fs');
+const readline = require('readline');
+
+async function processLargeFile(filePath) {
+  const fileStream = fs.createReadStream(filePath);
+  const rl = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity,
+  });
+
+  let lineCount = 0;
+  for await (const line of rl) {
+    // Process one line at a time — never more than one line in memory
+    processLine(line);
+    lineCount++;
+  }
+
+  console.log(`Processed ${lineCount} lines`);
+}
+
+function processLine(line) {
+  // your per-line logic here
+}
+
+processLargeFile('./large-dataset.csv');</code></pre>
+
+  <h3>Stream a large CSV file with csv-parse</h3>
+  <pre><code>const fs = require('fs');
+const { parse } = require('csv-parse');
+
+fs.createReadStream('large.csv')
+  .pipe(parse({ columns: true, trim: true }))
+  .on('data', (record) => {
+    // Each record is one row — processed and released before the next arrives
+    processRecord(record);
+  })
+  .on('error', (err) => {
+    console.error('CSV parse error:', err.message);
+  })
+  .on('end', () => {
+    console.log('Done processing CSV');
+  });
+
+function processRecord(record) {
+  // your per-record logic here
+}</code></pre>
+
+  <h2>Fix 3 – Process data in batches</h2>
+  <p>
+    When streaming is not possible (e.g. you need random access), process records in fixed-size
+    chunks. Awaiting each batch before fetching the next allows the garbage collector to reclaim
+    memory from the previous batch.
+  </p>
+  <pre><code>const BATCH_SIZE = 500;
+
+async function processInBatches(getAllIds, processRecord) {
+  const ids = await getAllIds(); // fetch IDs only — not full records
+
+  for (let i = 0; i &lt; ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+
+    // Fetch and process only this batch
+    const records = await fetchRecords(batch);
+    await Promise.all(records.map(processRecord));
+
+    // records goes out of scope here and can be GC'd before the next iteration
+    console.log(`Processed ${Math.min(i + BATCH_SIZE, ids.length)} / ${ids.length}`);
+  }
+}
+
+async function fetchRecords(ids) {
+  // return only the records for these IDs from DB or API
+}
+
+async function processRecord(record) {
+  // your per-record logic here
+}</code></pre>
+
+  <h2>Fix 4 – Fix memory leaks</h2>
+  <p>
+    Memory leaks are the most insidious cause of heap exhaustion because memory grows slowly
+    and the crash only happens after extended runtime. The three most common patterns are
+    unremoved event listeners, growing caches, and forgotten intervals.
+  </p>
+
+  <h3>Remove event listeners when done</h3>
+  <pre><code>const EventEmitter = require('events');
+const emitter = new EventEmitter();
+
+// BAD: listener is never removed — leaks if called in a loop or per-request
+function badSetup() {
+  emitter.on('data', handleData);
+}
+
+// GOOD: remove the listener when no longer needed
+function goodSetup() {
+  emitter.on('data', handleData);
+
+  // Clean up when the associated resource closes
+  return function cleanup() {
+    emitter.off('data', handleData);
+  };
+}
+
+function handleData(data) {
+  // process data
+}</code></pre>
+
+  <h3>Use WeakMap for caches (allows GC when key is no longer referenced)</h3>
+  <pre><code>// BAD: regular Map holds strong references — keys never GC'd
+const cache = new Map();
+function processRequest(req) {
+  cache.set(req, computeExpensiveResult(req)); // req is retained forever
+}
+
+// GOOD: WeakMap holds weak references — entry is GC'd when req goes out of scope
+const weakCache = new WeakMap();
+function processRequestSafe(req) {
+  if (!weakCache.has(req)) {
+    weakCache.set(req, computeExpensiveResult(req));
+  }
+  return weakCache.get(req);
+}
+
+function computeExpensiveResult(req) {
+  // expensive computation
+}</code></pre>
+
+  <h3>Clear intervals and timeouts</h3>
+  <pre><code>// BAD: interval keeps its callback closure alive forever
+function startPolling() {
+  const data = loadLargeDataStructure();
+  setInterval(() => {
+    // data is captured in this closure and can never be GC'd
+    processData(data);
+  }, 1000);
+}
+
+// GOOD: store the handle and clear it when done
+function startPollingManaged() {
+  const data = loadLargeDataStructure();
+  const intervalId = setInterval(() => {
+    processData(data);
+  }, 1000);
+
+  // Return a cleanup function or store intervalId somewhere accessible
+  return () => clearInterval(intervalId);
+}
+
+function loadLargeDataStructure() { return {}; }
+function processData(data) { /* ... */ }</code></pre>
+
+  <h2>Fix 5 – Diagnose memory leaks with built-in tools</h2>
+  <p>
+    Before reaching for <code>--max-old-space-size</code>, confirm whether you have a genuine
+    memory leak. Node.js has built-in diagnostics that require no additional npm packages.
+  </p>
+
+  <h3>Log memory usage over time</h3>
+  <pre><code>// Add this to your app to track heap growth
+setInterval(() => {
+  const mem = process.memoryUsage();
+  console.log({
+    heapUsed: `${Math.round(mem.heapUsed / 1024 / 1024)} MB`,
+    heapTotal: `${Math.round(mem.heapTotal / 1024 / 1024)} MB`,
+    rss: `${Math.round(mem.rss / 1024 / 1024)} MB`,
+    external: `${Math.round(mem.external / 1024 / 1024)} MB`,
+  });
+}, 5000);</code></pre>
+
+  <h3>Take heap snapshots with Chrome DevTools</h3>
+  <pre><code># Start the app with the inspector enabled
+node --inspect app.js
+
+# Then open Chrome and navigate to:
+# chrome://inspect
+# Click "Open dedicated DevTools for Node"
+# Go to the "Memory" tab → "Heap snapshot" → "Take snapshot"
+# Reproduce the leak, take another snapshot
+# Compare snapshots to find objects that grew</code></pre>
+
+  <h3>Force garbage collection to isolate leaks</h3>
+  <pre><code># Expose the global.gc() function
+node --expose-gc app.js</code></pre>
+
+  <pre><code>// In your code, force GC and measure memory before/after
+global.gc();
+const before = process.memoryUsage().heapUsed;
+
+// ... run the operation you suspect is leaking ...
+runSuspectedLeakOperation();
+
+global.gc();
+const after = process.memoryUsage().heapUsed;
+const leaked = after - before;
+
+console.log(`Memory delta after GC: ${Math.round(leaked / 1024)} KB`);
+// A positive value after GC means memory is genuinely retained (leaked)
+// Zero or negative means the previous operation did not leak</code></pre>
+
+  <h2>Fix 6 – Offload to worker_threads or child_process</h2>
+  <p>
+    Memory-intensive operations can be moved to a separate V8 isolate. Each worker thread and
+    child process has its own heap, so an OOM crash in the worker does not bring down the main
+    process.
+  </p>
+  <pre><code>// main.js — spawns a worker for memory-intensive processing
+const { Worker } = require('worker_threads');
+const path = require('path');
+
+function runInWorker(filePath) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(path.join(__dirname, 'worker.js'), {
+      workerData: { filePath },
+      // Give the worker its own higher heap limit if needed:
+      // execArgv: ['--max-old-space-size=4096'],
+    });
+
+    worker.on('message', resolve);
+    worker.on('error', reject);
+    worker.on('exit', (code) => {
+      if (code !== 0) reject(new Error(`Worker exited with code ${code}`));
+    });
+  });
+}
+
+runInWorker('./large-dataset.json')
+  .then((result) => console.log('Result:', result))
+  .catch((err) => console.error('Worker failed:', err));</code></pre>
+
+  <pre><code>// worker.js — runs in a separate thread with its own heap
+const { workerData, parentPort } = require('worker_threads');
+const fs = require('fs');
+
+const rawData = fs.readFileSync(workerData.filePath, 'utf8');
+const parsed = JSON.parse(rawData);
+
+// Do memory-intensive processing here
+const result = processData(parsed);
+
+// Send result back to main thread and exit (freeing all worker memory)
+parentPort.postMessage(result);
+
+function processData(data) {
+  // heavy computation
+  return { count: data.length };
+}</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Check whether memory grows monotonically using <code>process.memoryUsage()</code> logged at intervals. Monotonic growth strongly indicates a leak.</li>
+    <li>Run with <code>node --expose-gc --inspect app.js</code>, then use Chrome DevTools "Memory" tab to take and compare heap snapshots before and after suspected operations.</li>
+    <li>Search for <code>emitter.on()</code> calls inside request handlers, loops, or factory functions without corresponding <code>emitter.off()</code> cleanup.</li>
+    <li>Look for global or module-scope <code>Map</code>, <code>Set</code>, or plain object caches that are written to but never evicted.</li>
+    <li>Check for <code>setInterval</code> calls whose handles are never cleared, especially those whose callbacks close over large data structures.</li>
+    <li>If the crash happens only during <code>npm run build</code> or <code>next build</code>, increase <code>NODE_OPTIONS=--max-old-space-size=4096</code> — build tools have legitimately high memory requirements.</li>
+    <li>On Linux, check <code>dmesg | grep -i killed</code> to confirm whether the OOM killer terminated the process rather than V8 itself crashing.</li>
+  </ol>
+
+  <pre><code># Check if the Linux OOM killer killed the process
+dmesg | grep -i "out of memory"
+dmesg | grep -i "killed process"
+
+# Monitor heap growth in real time (every 2 seconds)
+node -e "
+  setInterval(() => {
+    const m = process.memoryUsage();
+    process.stdout.write(\`heap: \${Math.round(m.heapUsed/1e6)}MB / \${Math.round(m.heapTotal/1e6)}MB  rss: \${Math.round(m.rss/1e6)}MB\r\`);
+  }, 2000);
+  require('./app'); // your app
+"</code></pre>
+
+  <div class="callout warn">
+    <strong>Do not just increase --max-old-space-size without investigating:</strong> Raising the
+    heap limit on a leaking process only delays the crash. If <code>heapUsed</code> grows
+    continuously over time even with GC running, you have a leak. Investigate with heap snapshots
+    first and only increase the limit as a temporary measure while you fix the root cause.
+  </div>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><code>ENOMEM: not enough memory</code> — OS-level memory allocation failure; the system itself is out of RAM, not just the V8 heap</li>
+    <li><code>RangeError: Maximum call stack size exceeded</code> — stack overflow from deep recursion; a different kind of memory exhaustion affecting the call stack, not the heap</li>
+    <li><a href="https://nodejs-errors.dev/EMFILE/"><code>EMFILE: too many open files</code></a> — the process exceeded the OS file descriptor limit, a different resource exhaustion error</li>
+    <li><code>Worker terminated due to reaching memory limit</code> — the same OOM condition inside a <code>worker_threads</code> Worker</li>
+    <li><code>Allocation failed - process out of memory</code> — older phrasing of the same V8 OOM crash seen in Node.js versions before v12</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-09 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/cli.html#--max-old-space-sizesize-in-megabytes">Official Node.js docs: --max-old-space-size</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

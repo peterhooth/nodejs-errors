@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>ECONNREFUSED: connection refused – Node.js Fix</title>
+  <meta name="description" content="Node.js throws ECONNREFUSED: connection refused when nothing is listening on the target host and port. Learn the exact causes and how to fix it — service not running, wrong port, Docker networking, and retry patterns." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ECONNREFUSED/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="ECONNREFUSED: connection refused – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws ECONNREFUSED: connection refused when nothing is listening on the target host and port. Learn the exact causes and how to fix it — service not running, wrong port, Docker networking, and retry patterns." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ECONNREFUSED/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "ECONNREFUSED: connection refused – Node.js Fix",
+    "description": "Node.js throws ECONNREFUSED when it tries to connect to a server or port that is not listening. Nothing is accepting connections on that address and port.",
+    "url": "https://nodejs-errors.dev/ECONNREFUSED/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-09",
+    "dateModified": "2026-05-09"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ECONNREFUSED in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ECONNREFUSED stands for 'Error CONNection REFUSEd'. Node.js throws it as 'Error: connect ECONNREFUSED 127.0.0.1:PORT' when the operating system actively rejects a TCP connection attempt because no process is listening on the target host and port. Unlike ETIMEDOUT (no response) or ECONNRESET (mid-session close), ECONNREFUSED means the connection was never accepted at all."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ECONNREFUSED in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "First verify that the target service is actually running on the expected host and port — this is the most common cause. Use lsof -i :PORT or netstat -tlnp to confirm something is listening. Then check that your host and port configuration match (environment variables, .env file, Docker service names). If the service may not be ready yet, add retry logic with exponential backoff."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ECONNREFUSED happen in Docker?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Inside Docker Compose, containers cannot reach each other via 'localhost' or '127.0.0.1'. Each container has its own network namespace, so localhost resolves to the container itself, not to a sibling service. Replace localhost with the Docker Compose service name (e.g., 'postgres', 'redis') in your connection strings. Also ensure both containers are on the same Docker network."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between ECONNREFUSED and ECONNRESET?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ECONNREFUSED means the connection was never established — nothing is listening on that port and the OS immediately rejected the SYN packet. ECONNRESET means the connection was established but then forcibly closed mid-session by the remote peer. ECONNREFUSED points to a configuration or startup problem; ECONNRESET points to a runtime or keep-alive problem."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ECONNREFUSED happen with localhost vs 127.0.0.1?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "On systems with IPv6 enabled, 'localhost' resolves to ::1 (IPv6 loopback) while the server may be listening only on 127.0.0.1 (IPv4). If Node.js resolves localhost to ::1 but the server binds to 0.0.0.0 or 127.0.0.1 only, you get ECONNREFUSED on ::1. Fix by binding the server to '::' (dual-stack) or by using '127.0.0.1' explicitly in the client connection string."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ECONNREFUSED", "item": "https://nodejs-errors.dev/ECONNREFUSED/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix ECONNREFUSED: connection refused in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Verify the target service is running", "text": "Run lsof -i :PORT (macOS/Linux) or netstat -ano | findstr :PORT (Windows) to confirm a process is listening on the expected port. If nothing appears, start the service before running your Node.js code." },
+      { "@type": "HowToStep", "position": 2, "name": "Check host and port configuration", "text": "Confirm the host and port in your connection string or environment variables match where the service is actually listening. Look for localhost vs 127.0.0.1 vs ::1 mismatches caused by IPv6." },
+      { "@type": "HowToStep", "position": 3, "name": "Fix Docker networking", "text": "Inside Docker Compose, replace 'localhost' with the service name from docker-compose.yml (e.g., DB_HOST=postgres). Containers cannot reach sibling services via localhost." },
+      { "@type": "HowToStep", "position": 4, "name": "Add retry logic for startup race conditions", "text": "When your app starts before a dependency (database, cache) is ready, wrap the connection in a retry loop with exponential backoff. Wait for the service to become healthy before proceeding." },
+      { "@type": "HowToStep", "position": 5, "name": "Check firewall and network rules", "text": "If connecting to a remote host, verify that firewalls, security groups, or network policies allow TCP traffic on the target port. Use telnet or curl to test connectivity independently of Node.js." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ECONNREFUSED</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>ECONNREFUSED: connection refused</h1>
+  <span class="error-code">error code: <code>ECONNREFUSED</code></span>
+  <p>Complete reference — what it means, why Node.js cannot connect, and how to fix it with service checks, config corrections, Docker networking, and retry logic.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> <code>Error: connect ECONNREFUSED 127.0.0.1:PORT</code> means nothing is listening on that host and port — the OS rejected the connection immediately. Start the target service (database, API server, Redis), verify you are using the correct port and host, and if running inside Docker replace <code>localhost</code> with the Compose service name.
+  </div>
+
+  <h2>What is ECONNREFUSED?</h2>
+  <p>
+    <strong>ECONNREFUSED</strong> stands for <em>Error CONNection REFUSEd</em> — a
+    <a href="https://nodejs.org/api/errors.html#common-system-errors" rel="noopener noreferrer">POSIX system error</a>
+    thrown when Node.js sends a TCP <code>SYN</code> packet to a host and port and the
+    operating system immediately replies with a <code>RST</code> (reset) or an ICMP
+    port-unreachable packet. This happens because no process is bound to that port and
+    accepting connections.
+  </p>
+  <p>
+    Unlike <code>ETIMEDOUT</code> (where the packet disappears into the network) or
+    <code>ECONNRESET</code> (where an established connection is later closed), ECONNREFUSED
+    is an <em>immediate</em> and <em>unambiguous</em> rejection: the connection was never
+    established.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error messages you will see:</strong><br>
+    <code>Error: connect ECONNREFUSED 127.0.0.1:3000</code><br>
+    <code>Error: connect ECONNREFUSED ::1:5432</code><br>
+    <code>Error: connect ECONNREFUSED 0.0.0.0:6379</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>Error: connect ECONNREFUSED 127.0.0.1:5432
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1494:16)
+    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17) {
+  errno: -61,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 5432
+}</code></pre>
+
+  <p>
+    The error object exposes <code>err.address</code> and <code>err.port</code> alongside
+    <code>err.code</code>. These tell you exactly which host and port Node.js tried to reach,
+    which is the starting point for diagnosis. The <code>syscall</code> is always
+    <code>'connect'</code> for ECONNREFUSED — the failure happens before any data is exchanged.
+  </p>
+
+  <h2>Common Causes</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Why it happens</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Target service not running</strong> (most common)</td>
+        <td>The database, API server, or cache process was never started, or it has not finished starting up yet. No process is bound to the port so every connection attempt is refused.</td>
+      </tr>
+      <tr>
+        <td>Wrong port number</td>
+        <td>The client is connecting to a different port than the one the server is listening on — e.g., connecting to 5432 when PostgreSQL was started on 5433, or a misconfigured <code>PORT</code> environment variable.</td>
+      </tr>
+      <tr>
+        <td>Wrong host or IP</td>
+        <td>The server listens on <code>127.0.0.1</code> (IPv4) but the client connects to <code>::1</code> (IPv6) because <code>localhost</code> resolved to the IPv6 loopback. Or the server only binds to one interface but the client uses a different one.</td>
+      </tr>
+      <tr>
+        <td>Service crashed</td>
+        <td>The target process was running but exited due to an error, OOM kill, or signal. The port is now unbound and new connections are refused.</td>
+      </tr>
+      <tr>
+        <td>Firewall blocking connection</td>
+        <td>A local firewall rule (iptables, ufw, Windows Firewall) or cloud security group is dropping or rejecting packets on the target port before they reach the listening process.</td>
+      </tr>
+      <tr>
+        <td>Docker networking</td>
+        <td>Inside Docker Compose, <code>localhost</code> resolves to the container itself, not to sibling services. A service listening in another container is unreachable via <code>localhost</code> or <code>127.0.0.1</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Fix 1 – Verify the target service is running</h2>
+  <p>
+    Before anything else, confirm that a process is actually listening on the expected port.
+    The address and port are shown directly in the error message.
+  </p>
+  <pre><code># macOS / Linux — list processes listening on a specific port
+lsof -i :3000
+lsof -i :5432   # PostgreSQL default
+lsof -i :6379   # Redis default
+
+# Linux alternative
+netstat -tlnp | grep :3000
+ss -tlnp | grep :3000
+
+# Check if a service process is running at all
+ps aux | grep postgres
+ps aux | grep redis-server
+
+# Windows
+netstat -ano | findstr :3000
+Get-Process -Name "node" | Select-Object Id, Name</code></pre>
+
+  <p>
+    If the port shows no listener, start the service. For common services:
+  </p>
+  <pre><code># Start PostgreSQL
+brew services start postgresql@16   # macOS with Homebrew
+sudo systemctl start postgresql     # Linux systemd
+
+# Start Redis
+brew services start redis           # macOS
+sudo systemctl start redis          # Linux
+
+# Start your Node.js app
+npm start
+node server.js</code></pre>
+
+  <div class="callout">
+    <strong>Race condition at startup:</strong> If your Node.js app and a dependency (e.g.,
+    PostgreSQL) start simultaneously, the app may attempt to connect before the database
+    is ready. This is especially common with Docker Compose. Use retry logic (Fix 4) or
+    a health-check dependency in your <code>docker-compose.yml</code>.
+  </div>
+
+  <h2>Fix 2 – Check and correct the host/port configuration</h2>
+  <p>
+    Mismatched environment variables are the second most common cause. The error message
+    shows the exact address Node.js used — compare it against where the service is actually
+    bound.
+  </p>
+  <pre><code># .env file — verify these match the running service
+DB_HOST=127.0.0.1
+DB_PORT=5432
+REDIS_URL=redis://127.0.0.1:6379
+API_URL=http://127.0.0.1:3000
+
+# In Node.js — log resolved values before connecting
+console.log('Connecting to', process.env.DB_HOST, ':', process.env.DB_PORT);
+
+const { Pool } = require('pg');
+const pool = new Pool({
+  host: process.env.DB_HOST || '127.0.0.1',
+  port: Number(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+});</code></pre>
+
+  <h3>localhost vs 127.0.0.1 vs ::1</h3>
+  <p>
+    On systems with IPv6 enabled, <code>localhost</code> may resolve to <code>::1</code>
+    (IPv6) rather than <code>127.0.0.1</code> (IPv4). If the server is only bound to
+    <code>127.0.0.1</code>, connecting via <code>::1</code> fails with ECONNREFUSED.
+  </p>
+  <pre><code>// Problem: localhost resolves to ::1 but server listens on 127.0.0.1 only
+const client = new Client({ host: 'localhost', port: 5432 }); // may hit ::1
+
+// Fix option 1: use explicit IPv4 address
+const client = new Client({ host: '127.0.0.1', port: 5432 });
+
+// Fix option 2: bind the server to both IPv4 and IPv6
+const server = net.createServer();
+server.listen(3000, '::', () => {  // '::' = dual-stack on most systems
+  console.log('Listening on IPv4 and IPv6');
+});</code></pre>
+
+  <h2>Fix 3 – Fix Docker networking</h2>
+  <p>
+    In Docker Compose, each container has its own network namespace. A service cannot
+    reach a sibling container via <code>localhost</code> — use the Compose service name
+    as the hostname instead. Docker's internal DNS resolves service names to the correct
+    container IP.
+  </p>
+  <pre><code># docker-compose.yml
+version: "3.9"
+services:
+  app:
+    build: .
+    environment:
+      # WRONG: localhost resolves to the app container itself
+      # DB_HOST: localhost
+      # CORRECT: use the Compose service name
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: secret
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7</code></pre>
+
+  <div class="callout">
+    <strong>depends_on is not enough:</strong> <code>depends_on</code> waits for the
+    container to <em>start</em>, not for the service inside to be <em>ready</em>. Use
+    <code>condition: service_healthy</code> combined with a <code>healthcheck</code>
+    to ensure the database is accepting connections before your app starts.
+  </div>
+
+  <h2>Fix 4 – Retry with exponential backoff for startup race conditions</h2>
+  <p>
+    When two services start in parallel and the order is not guaranteed, your app may
+    get ECONNREFUSED during the dependency's startup window. Wrap the initial connection
+    attempt in a retry loop that backs off exponentially.
+  </p>
+  <pre><code>const { Client } = require('pg');
+
+async function connectWithRetry({ host, port, retries = 10, baseDelayMs = 500 } = {}) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const client = new Client({ host, port, database: 'mydb', user: 'app', password: 'secret' });
+    try {
+      await client.connect();
+      console.log(`Connected to ${host}:${port} on attempt ${attempt}`);
+      return client;
+    } catch (err) {
+      if (err.code === 'ECONNREFUSED') {
+        const delay = baseDelayMs * 2 ** (attempt - 1);
+        console.warn(`ECONNREFUSED – attempt ${attempt}/${retries}, retrying in ${delay}ms`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      } else {
+        throw err; // Non-retryable error (auth failure, etc.)
+      }
+    }
+  }
+  throw new Error(`Could not connect to ${host}:${port} after ${retries} attempts`);
+}
+
+// Usage
+const db = await connectWithRetry({ host: process.env.DB_HOST, port: 5432 });</code></pre>
+
+  <h2>Fix 5 – Health check before connecting</h2>
+  <p>
+    For HTTP services, probe the health endpoint before your app marks itself as ready
+    and begins serving traffic. This prevents cascading failures when a downstream
+    dependency is unavailable.
+  </p>
+  <pre><code">const net = require('net');
+
+/**
+ * Checks whether a TCP port is accepting connections.
+ * Resolves true if the port is open, false if ECONNREFUSED.
+ */
+function isPortOpen(host, port, timeoutMs = 1000) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const cleanup = (result) => {
+      socket.destroy();
+      resolve(result);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.on('connect', () => cleanup(true));
+    socket.on('error', (err) => cleanup(err.code !== 'ECONNREFUSED'));
+    socket.on('timeout', () => cleanup(false));
+    socket.connect(port, host);
+  });
+}
+
+async function waitForService(host, port, { retries = 20, intervalMs = 1000 } = {}) {
+  for (let i = 0; i < retries; i++) {
+    if (await isPortOpen(host, port)) {
+      console.log(`${host}:${port} is ready`);
+      return;
+    }
+    console.log(`Waiting for ${host}:${port}... (${i + 1}/${retries})`);
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`Service ${host}:${port} not available after ${retries} attempts`);
+}
+
+// Usage — wait for PostgreSQL before starting the app
+await waitForService(process.env.DB_HOST || '127.0.0.1', 5432);
+await startApp();</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read <code>err.address</code> and <code>err.port</code> from the error object — they tell you exactly what Node.js tried to connect to.</li>
+    <li>Run <code>lsof -i :PORT</code> (macOS/Linux) or <code>netstat -ano | findstr :PORT</code> (Windows) to confirm a listener exists.</li>
+    <li>Check whether the service process is alive: <code>ps aux | grep &lt;service&gt;</code> or check systemd with <code>systemctl status &lt;service&gt;</code>.</li>
+    <li>If inside Docker, confirm you are using the Compose service name, not <code>localhost</code>. Run <code>docker compose ps</code> to check service status.</li>
+    <li>Try connecting independently of Node.js: <code>curl http://127.0.0.1:PORT/</code> or <code>telnet 127.0.0.1 PORT</code> to isolate whether this is a Node.js issue or a general connectivity issue.</li>
+    <li>Verify environment variables are loaded: add <code>console.log(process.env.DB_HOST, process.env.DB_PORT)</code> before the connection call.</li>
+    <li>Check recent logs for the target service to see if it crashed: <code>journalctl -u postgresql --since "5 minutes ago"</code> or <code>docker compose logs postgres</code>.</li>
+    <li>If connecting to a remote host, test with <code>nc -zv hostname PORT</code> to rule out firewall or security group issues.</li>
+  </ol>
+
+  <pre><code># Quick connectivity test outside Node.js
+curl -v http://127.0.0.1:3000/
+telnet 127.0.0.1 5432
+nc -zv 127.0.0.1 6379
+
+# Check Docker Compose service health
+docker compose ps
+docker compose logs --tail=50 postgres
+
+# Enable Node.js network debug output
+NODE_DEBUG=net node app.js 2>&amp;1 | grep -E "(ECONNREFUSED|connect|error)"</code></pre>
+
+  <div class="callout warn">
+    <strong>Do not silently swallow ECONNREFUSED:</strong> Catching the error without
+    logging or retrying hides the fact that a required dependency is unavailable. Your
+    application should fail fast and loudly on startup if a critical service (database,
+    message broker) is unreachable, rather than silently degrading or returning incorrect
+    results to users.
+  </div>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/EADDRINUSE/"><code>EADDRINUSE: address already in use</code></a> — port conflict when starting a server; the opposite problem — something is already listening on the port you want to bind</li>
+    <li><a href="https://nodejs-errors.dev/ECONNRESET/"><code>ECONNRESET: connection reset by peer</code></a> — the connection was established but then forcibly closed mid-session; contrast with ECONNREFUSED which never establishes a connection</li>
+    <li><code>ETIMEDOUT: connect ETIMEDOUT</code> — the connection attempt timed out with no response; a firewall is dropping packets silently rather than actively refusing them</li>
+    <li><code>ENOTFOUND: getaddrinfo ENOTFOUND</code> — DNS resolution failed before a TCP connection could be attempted; the hostname does not exist</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-09 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#common-system-errors">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>
