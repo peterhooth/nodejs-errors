@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Error: EPERM: operation not permitted – Node.js Fix</title>
+  <meta name="description" content="Node.js throws Error: EPERM: operation not permitted on Windows during npm install, symlink creation, or writes to read-only paths. Fix by closing VS Code, adding antivirus exclusions, deleting node_modules with rimraf, enabling Windows Developer Mode for symlinks, and using npm cache clean --force." />
+  <link rel="canonical" href="https://nodejs-errors.dev/EPERM/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Error: EPERM: operation not permitted – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws Error: EPERM: operation not permitted on Windows during npm install, symlink creation, or writes to read-only paths. Fix by closing VS Code, adding antivirus exclusions, deleting node_modules with rimraf, enabling Windows Developer Mode for symlinks, and using npm cache clean --force." />
+  <meta property="og:url" content="https://nodejs-errors.dev/EPERM/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Error: EPERM: operation not permitted – Node.js Fix",
+    "description": "Node.js throws EPERM: operation not permitted when an OS-level permission check refuses a file system operation. Predominantly a Windows problem during npm install and npm ci. Covers all causes: IDE/antivirus file-handle conflicts on node_modules, symlink creation without privilege, read-only filesystem paths, corrupted npm cache, WSL drive mounting, and how EPERM differs from EACCES. Includes rimraf cleanup, Windows Developer Mode, junction workarounds, antivirus exclusion steps, and CI/Docker specifics.",
+    "url": "https://nodejs-errors.dev/EPERM/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-10",
+    "dateModified": "2026-05-10"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is EPERM: operation not permitted in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "EPERM stands for 'Error: operation not PERMitted'. It is a POSIX system error code (errno 1) returned by the OS kernel when a file system operation is refused not because of file-level read/write permission bits (that would be EACCES) but because the operation itself is forbidden in the current context — such as creating a symlink without the SeCreateSymbolicLinkPrivilege on Windows, renaming a file that another process holds open, or writing to a read-only filesystem."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What causes EPERM: operation not permitted during npm install on Windows?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The most common causes on Windows are: (1) VS Code or another IDE holding open a file handle inside node_modules while npm tries to rename or delete it; (2) Windows Defender or antivirus scanning node_modules and locking files at the exact moment npm writes them; (3) a leftover stuck node.exe or npm.cmd process from a previous run; (4) npm trying to create symlinks (for .bin entries) without the SeCreateSymbolicLinkPrivilege, which requires Developer Mode or Administrator rights; (5) a corrupted npm cache producing a bad rename target; (6) node_modules residing on a network share or WSL mount with restricted permissions."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix EPERM: operation not permitted during npm install?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Step-by-step: (1) Close VS Code and any IDE that has the project open. (2) Open Task Manager and end any stuck node.exe or npm.cmd processes. (3) Add node_modules to your antivirus exclusion list. (4) Delete node_modules and package-lock.json — on Windows use: rd /s /q node_modules &amp; del package-lock.json, or npx rimraf node_modules. (5) Run npm cache clean --force. (6) Rerun npm install. If symlink errors persist, enable Windows Developer Mode or run the terminal as Administrator."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix EPERM symlink errors on Windows without running as Administrator?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Enable Windows Developer Mode: Settings → System → For developers → Developer Mode → On. This grants the SeCreateSymbolicLinkPrivilege to your user account without requiring a UAC prompt. Alternatively, use npm install --no-bin-links to skip creating symlinks in .bin, or use mklink /J (junction) instead of mklink /D (directory symlink) since junctions do not require elevated rights."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between EPERM and EACCES in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "EACCES (permission denied) means the process lacks the read, write, or execute permission bits on the specific file or directory — a chmod/ownership problem. EPERM (operation not permitted) means the operation itself is not allowed regardless of file permissions — for example, creating a symlink without the required Windows privilege, renaming an open file, changing the owner of a file you do not own, or performing an operation on a read-only filesystem. On Windows, EPERM is far more common than EACCES because Windows maps many kernel-level refusals to EPERM."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does EPERM happen in WSL (Windows Subsystem for Linux)?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "In WSL, EPERM commonly occurs when: (1) the project is on a Windows NTFS mount (/mnt/c/...) rather than the native WSL filesystem — NTFS mounts have restricted metadata support and symlink creation over the 9P protocol often fails with EPERM; fix by moving the project into the WSL home directory (~/projects/) instead. (2) Mixing WSL and Windows npm — running npm from the WSL shell on a path that Windows npm already locked. Always run npm from inside WSL using the Linux Node.js installation, not the Windows one."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I delete node_modules on Windows when EPERM blocks rmdir?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Use one of these methods: (1) npx rimraf node_modules — cross-platform, handles long paths and retries on EPERM; (2) PowerShell: Remove-Item -Recurse -Force node_modules; (3) Command Prompt: rd /s /q node_modules; (4) If still blocked, reboot to release all file handles then delete. On very long paths enable long-path support: git config --system core.longpaths true and enable the Windows Group Policy 'Enable Win32 long paths'."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I add node_modules to the Windows Defender exclusion list?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Open Windows Security → Virus &amp; threat protection → Manage settings → Exclusions → Add or remove exclusions → Add an exclusion → Folder → select your project's node_modules folder (or the entire project root). For global coverage, also exclude the npm cache directory at %APPDATA%\\npm-cache. This prevents Defender from scanning files as npm writes them, which eliminates the file-lock race condition that causes EPERM."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "EPERM", "item": "https://nodejs-errors.dev/EPERM/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix Error: EPERM: operation not permitted in Node.js on Windows",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Close VS Code and IDEs", "text": "Close Visual Studio Code and any other editor that has the project directory open. IDEs maintain file watchers that hold open handles inside node_modules, causing rename and unlink operations to fail with EPERM." },
+      { "@type": "HowToStep", "position": 2, "name": "Kill stuck node and npm processes", "text": "Open Task Manager (Ctrl+Shift+Esc) → Details tab → end all node.exe and npm.cmd processes. Or in PowerShell: Get-Process node,npm -ErrorAction SilentlyContinue | Stop-Process -Force" },
+      { "@type": "HowToStep", "position": 3, "name": "Add node_modules to antivirus exclusions", "text": "Open Windows Security → Virus & threat protection → Manage settings → Exclusions → Add or remove exclusions → Add an exclusion → Folder → select the project root or node_modules folder. Also exclude %APPDATA%\\npm-cache." },
+      { "@type": "HowToStep", "position": 4, "name": "Delete node_modules and package-lock.json", "text": "Run: npx rimraf node_modules followed by del package-lock.json (Command Prompt) or Remove-Item package-lock.json (PowerShell). rimraf handles long paths and retries on locked files." },
+      { "@type": "HowToStep", "position": 5, "name": "Clean the npm cache", "text": "Run: npm cache clean --force. A corrupted cache can produce bad intermediate files that trigger EPERM during the rename phase of installation." },
+      { "@type": "HowToStep", "position": 6, "name": "Enable Windows Developer Mode for symlink support", "text": "Go to Settings → System → For developers → Developer Mode → On. This grants SeCreateSymbolicLinkPrivilege to your user without Administrator rights, fixing EPERM on symlink creation in .bin." },
+      { "@type": "HowToStep", "position": 7, "name": "Rerun npm install", "text": "Run npm install (or npm ci). If the error persists, open the terminal as Administrator and retry." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">EPERM</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>Error: EPERM: operation not permitted</h1>
+  <span class="error-code">error code: <code>EPERM</code></span>
+  <p>Complete reference — all causes on Windows, macOS, Linux, and WSL, with every fix pattern.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js throws <code>Error: EPERM: operation not permitted</code> most often on Windows when <code>npm install</code> tries to rename or delete a file inside <code>node_modules</code> that another process (VS Code, antivirus, a stuck <code>node.exe</code>) holds open. Fix: (1) close VS Code; (2) kill all <code>node.exe</code> processes in Task Manager; (3) add <code>node_modules</code> to Windows Defender exclusions; (4) delete <code>node_modules</code> with <code>npx rimraf node_modules</code>; (5) run <code>npm cache clean --force</code>; (6) rerun <code>npm install</code>. For symlink errors, enable <strong>Windows Developer Mode</strong>.
+  </div>
+
+  <h2>What is EPERM?</h2>
+  <p>
+    <strong>EPERM</strong> stands for <em>Error: operation not PERMitted</em> — a
+    <a href="https://nodejs.org/api/errors.html#common-system-errors" rel="noopener noreferrer">POSIX system error</a>
+    (errno 1 on Linux/macOS, errno <code>-4048</code> on Windows) returned by the OS kernel when a
+    file system operation is refused at a level <em>above</em> ordinary file permission bits.
+  </p>
+  <p>
+    It is important to distinguish EPERM from its sibling
+    <strong>EACCES (permission denied)</strong>: EACCES means the process lacks read/write/execute
+    permission on a specific file or directory (a <code>chmod</code>/<code>chown</code> problem).
+    EPERM means the <em>operation itself</em> is not permitted in the current OS context, regardless
+    of file permissions — for example, creating a symlink without the required Windows privilege,
+    renaming a file another process has locked, or writing to a read-only filesystem.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error messages you will see:</strong><br>
+    <code>Error: EPERM: operation not permitted, rename 'C:\project\node_modules\.staging\...' -&gt; 'C:\project\node_modules\...'</code><br>
+    <code>Error: EPERM: operation not permitted, unlink 'C:\project\node_modules\some-package\index.js'</code><br>
+    <code>Error: EPERM: operation not permitted, symlink '../some-bin' -&gt; 'C:\project\node_modules\.bin\some-bin'</code><br>
+    <code>Error: EPERM: operation not permitted, mkdir 'C:\project\node_modules\.cache'</code><br>
+    <code>npm ERR! code EPERM</code><br>
+    <code>npm ERR! syscall rename</code><br>
+    <code>npm ERR! path C:\Users\user\AppData\Roaming\npm-cache\_cacache\tmp\...</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>npm ERR! code EPERM
+npm ERR! syscall rename
+npm ERR! path C:\project\node_modules\.staging\lodash-9a4f2c1b\package.json
+npm ERR! dest C:\project\node_modules\lodash\package.json
+npm ERR! errno -4048
+npm ERR! Error: EPERM: operation not permitted, rename
+npm ERR!   'C:\project\node_modules\.staging\lodash-9a4f2c1b\package.json'
+npm ERR!   -> 'C:\project\node_modules\lodash\package.json'
+npm ERR!
+npm ERR! The operation was rejected by your operating system.
+npm ERR! It is likely you do not have the permissions to access this file as the current user
+npm ERR! If you believe this might be a permissions problem, please double-check the
+npm ERR! permissions of the file and its containing directories, or try running
+npm ERR! the command again as root/Administrator.
+    at Object.rename (node:fs:1281:3) {
+  errno: -4048,
+  code: 'EPERM',
+  syscall: 'rename',
+  path: 'C:\\project\\node_modules\\.staging\\lodash-9a4f2c1b\\package.json',
+  dest: 'C:\\project\\node_modules\\lodash\\package.json'
+}</code></pre>
+
+  <p>Key diagnostic fields on the error object:</p>
+  <table>
+    <thead><tr><th>Field</th><th>Value in example</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>code</code></td><td><code>'EPERM'</code></td><td>Operation not permitted — OS-level refusal</td></tr>
+      <tr><td><code>syscall</code></td><td><code>'rename'</code></td><td>The fs operation that failed: <code>rename</code>, <code>unlink</code>, <code>symlink</code>, <code>mkdir</code>, <code>open</code>, <code>rmdir</code></td></tr>
+      <tr><td><code>path</code></td><td>staging path</td><td>The source path — check which process owns this file</td></tr>
+      <tr><td><code>dest</code></td><td>final path</td><td>The destination (present on <code>rename</code> errors)</td></tr>
+      <tr><td><code>errno</code></td><td><code>-4048</code></td><td>Windows error mapping; <code>-1</code> on Linux/macOS</td></tr>
+    </tbody>
+  </table>
+
+  <h2>EPERM vs. EACCES — Know Which You Have</h2>
+  <table>
+    <thead><tr><th>Error</th><th>Kernel meaning</th><th>Common Node.js scenario</th><th>Primary fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>EPERM</code></td>
+        <td>Operation not permitted in this context</td>
+        <td>Symlink without privilege, rename of locked file, write to read-only FS</td>
+        <td>Close conflicting process, enable Developer Mode, run as admin</td>
+      </tr>
+      <tr>
+        <td><code>EACCES</code></td>
+        <td>Permission bits deny access</td>
+        <td><code>chmod 000 file</code> then read it; npm global install without sudo</td>
+        <td><code>chmod +r</code> / <code>chown</code> / fix npm prefix</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    On Windows, EPERM is used far more broadly than POSIX strictly defines it because the Windows
+    kernel maps many error conditions (sharing violations, privilege checks) to a single EPERM code.
+    If you see EPERM during <code>npm install</code> on Windows, a <strong>file handle conflict</strong>
+    is the first thing to investigate, not file permission bits.
+  </p>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Syscall in error</th><th>OS most affected</th><th>Fix summary</th></tr></thead>
+    <tbody>
+      <tr><td>IDE/file watcher holding a handle in <code>node_modules</code></td><td><code>rename</code>, <code>unlink</code></td><td>Windows</td><td>Close VS Code; kill all <code>node.exe</code> processes</td></tr>
+      <tr><td>Antivirus scanning <code>node_modules</code> while npm writes</td><td><code>rename</code>, <code>mkdir</code></td><td>Windows</td><td>Add <code>node_modules</code> and npm cache to exclusions</td></tr>
+      <tr><td>Stuck <code>node.exe</code> or <code>npm.cmd</code> process from prior run</td><td><code>rename</code>, <code>rmdir</code></td><td>Windows</td><td>Task Manager → end <code>node.exe</code> / <code>npm.cmd</code></td></tr>
+      <tr><td>Symlink creation without <code>SeCreateSymbolicLinkPrivilege</code></td><td><code>symlink</code></td><td>Windows</td><td>Enable Developer Mode or run as Administrator</td></tr>
+      <tr><td>Corrupted npm cache</td><td><code>rename</code></td><td>All (worse on Windows)</td><td><code>npm cache clean --force</code></td></tr>
+      <tr><td>Read-only file or directory</td><td><code>open</code>, <code>unlink</code>, <code>rename</code></td><td>All</td><td><code>chmod +w</code> (Linux/macOS) / <code>attrib -r</code> (Windows)</td></tr>
+      <tr><td>Project on NTFS mount in WSL (<code>/mnt/c/...</code>)</td><td><code>symlink</code>, <code>rename</code></td><td>WSL</td><td>Move project to WSL native filesystem (<code>~/projects/</code>)</td></tr>
+      <tr><td>Mixing Windows Node.js and WSL Node.js on same path</td><td>varies</td><td>WSL</td><td>Use Linux Node.js exclusively within WSL shell</td></tr>
+      <tr><td>npm cache/prefix on a network share</td><td><code>rename</code></td><td>Windows (corporate)</td><td>Move npm cache to local path with <code>npm config set cache</code></td></tr>
+      <tr><td>Long paths exceeding 260 characters</td><td><code>open</code>, <code>mkdir</code></td><td>Windows</td><td>Enable Win32 long paths; use <code>rimraf</code></td></tr>
+      <tr><td>Writing to <code>C:\Program Files</code> or system paths</td><td><code>open</code>, <code>mkdir</code></td><td>Windows</td><td>Move project to user home directory</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – IDE / File Watcher Holds an Open Handle</h2>
+  <p>
+    This is by far the most common cause on Windows. Visual Studio Code, WebStorm, and other
+    IDEs use file system watchers to provide features like auto-import, IntelliSense, and live
+    reload. These watchers hold open read handles on files inside <code>node_modules</code>. When
+    <code>npm install</code> needs to rename a staging file into its final location — or delete an
+    old version of a package — Windows refuses the operation with EPERM because the file is held
+    by the IDE.
+  </p>
+  <pre><code># Symptom — seen during npm install or npm ci
+npm ERR! code EPERM
+npm ERR! syscall rename
+npm ERR! path C:\project\node_modules\.staging\react-abc123\index.js
+npm ERR! dest C:\project\node_modules\react\index.js</code></pre>
+
+  <h3>Fix: close VS Code and kill node processes</h3>
+  <pre><code># PowerShell — kill all Node.js and npm processes
+Get-Process node, npm -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Then verify no node processes remain
+Get-Process node -ErrorAction SilentlyContinue</code></pre>
+  <p>
+    After killing the processes, wait 5–10 seconds for Windows to release all file handles, then
+    rerun <code>npm install</code>. If the error still occurs, reboot — Windows releases all
+    handles on reboot unconditionally.
+  </p>
+
+  <div class="callout">
+    <strong>Tip:</strong> In VS Code settings, add <code>node_modules</code> to
+    <code>files.watcherExclude</code> so the editor never watches inside it:
+    <pre style="margin-top:0.5rem"><code>// .vscode/settings.json
+{
+  "files.watcherExclude": {
+    "**/node_modules/**": true
+  },
+  "files.exclude": {
+    "**/node_modules": true
+  }
+}</code></pre>
+  </div>
+
+  <h2>Cause 2 – Antivirus Scanning node_modules</h2>
+  <p>
+    Windows Defender and third-party antivirus software (McAfee, Norton, Avast, Kaspersky) scan
+    each file as it is written to disk. When <code>npm install</code> unpacks hundreds of small
+    files rapidly, the antivirus scanner opens each file for reading at the exact moment npm tries
+    to rename it from the staging directory. The rename fails with EPERM.
+  </p>
+  <p>
+    This cause produces <strong>intermittent</strong> EPERM failures — the error appears on some
+    runs but not others, depending on which file the antivirus happened to be scanning at that
+    moment.
+  </p>
+
+  <h3>Fix: add exclusions to Windows Defender</h3>
+  <pre><code># PowerShell — add project node_modules to Defender exclusions
+Add-MpPreference -ExclusionPath "C:\project\node_modules"
+
+# Also exclude the npm cache directory
+Add-MpPreference -ExclusionPath "$env:APPDATA\npm-cache"
+
+# Or exclude by process: exclude node.exe and npm.cmd from scanning
+Add-MpPreference -ExclusionProcess "node.exe"
+Add-MpPreference -ExclusionProcess "npm.cmd"</code></pre>
+
+  <p>Via GUI: <strong>Windows Security → Virus &amp; threat protection → Manage settings → Exclusions → Add or remove exclusions → Add an exclusion → Folder</strong> → select your project root.</p>
+
+  <div class="callout warn">
+    <strong>Security note:</strong> Excluding <code>node_modules</code> from antivirus scanning is
+    standard practice in professional development environments — npm's own documentation recommends
+    it. The packages installed via npm are from a registry with its own integrity checks
+    (<code>package-lock.json</code> SHA hashes). However, never exclude paths you do not control.
+  </div>
+
+  <h2>Cause 3 – Stuck node.exe or npm.cmd Processes</h2>
+  <p>
+    A prior <code>npm install</code> that was Ctrl+C'd, a crashed dev server, or a runaway
+    build script can leave a <code>node.exe</code> process running in the background with files
+    in <code>node_modules</code> still open. The next <code>npm install</code> then fails because
+    Windows will not rename or delete an open file.
+  </p>
+  <pre><code># Command Prompt — find all node and npm processes
+tasklist | findstr /i "node npm"
+
+# Kill by name (closes all instances)
+taskkill /IM node.exe /F
+taskkill /IM npm.cmd /F
+
+# PowerShell alternative
+Get-Process -Name node, npm -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Verify they are gone
+Get-Process -Name node -ErrorAction SilentlyContinue</code></pre>
+
+  <h2>Cause 4 – Symlink Creation Without Sufficient Privilege</h2>
+  <p>
+    npm creates symbolic links in <code>node_modules/.bin/</code> for every package that exposes
+    a CLI binary. On Windows, creating a symlink (as opposed to a junction) requires the
+    <code>SeCreateSymbolicLinkPrivilege</code>. Standard user accounts do not have this privilege
+    by default — only Administrator accounts and accounts with Developer Mode enabled.
+  </p>
+  <pre><code>npm ERR! code EPERM
+npm ERR! syscall symlink
+npm ERR! path ..\typescript\bin\tsc
+npm ERR! dest C:\project\node_modules\.bin\tsc
+npm ERR! errno -4048
+npm ERR! Error: EPERM: operation not permitted, symlink
+npm ERR!   '..\typescript\bin\tsc' -> 'C:\project\node_modules\.bin\tsc'</code></pre>
+
+  <h3>Fix A – Enable Windows Developer Mode (recommended)</h3>
+  <pre><code># Settings → System → For developers → Developer Mode → On
+# (No UAC prompt required, persists across reboots)
+# After enabling, run npm install normally — no Administrator terminal needed</code></pre>
+
+  <h3>Fix B – Run terminal as Administrator</h3>
+  <pre><code># Right-click "Command Prompt" or "PowerShell" → "Run as administrator"
+# Then run: npm install</code></pre>
+
+  <h3>Fix C – Use --no-bin-links (workaround, not a full fix)</h3>
+  <pre><code># Skips creating .bin symlinks entirely
+# CLI tools installed via npm will NOT be directly runnable as commands
+npm install --no-bin-links
+
+# You can still run them explicitly via node_modules path:
+./node_modules/typescript/bin/tsc --version</code></pre>
+
+  <h3>Fix D – Use junctions instead (advanced)</h3>
+  <p>
+    NTFS <em>junctions</em> (directory hard links) do not require the symlink privilege and work
+    for directory entries. You cannot tell npm to use junctions automatically, but you can replace
+    broken <code>.bin</code> symlinks with junctions manually for directory targets:
+  </p>
+  <pre><code># CMD — create a junction (no admin required, directories only)
+mklink /J "node_modules\.bin\myapp" "node_modules\myapp\bin"
+
+# Compare: /D creates a symbolic directory link (requires privilege)
+mklink /D "node_modules\.bin\myapp" "node_modules\myapp\bin"  &lt;-- needs Developer Mode</code></pre>
+
+  <h2>Cause 5 – Corrupted npm Cache</h2>
+  <p>
+    The npm cache stores tarballs and extracted package files in
+    <code>%APPDATA%\npm-cache</code> (Windows) or <code>~/.npm</code> (Linux/macOS). A partial
+    download, a crashed extraction, or a prior EPERM during a cache write can leave corrupt
+    staging files. Subsequent <code>npm install</code> runs try to use these corrupt entries and
+    fail with EPERM when they attempt the final rename.
+  </p>
+  <pre><code># Step 1: clean the npm cache
+npm cache clean --force
+
+# Step 2: verify the cache is clean
+npm cache verify
+
+# Step 3: delete node_modules and package-lock.json
+# Windows Command Prompt:
+rd /s /q node_modules
+del package-lock.json
+
+# Windows PowerShell:
+Remove-Item -Recurse -Force node_modules
+Remove-Item package-lock.json
+
+# Cross-platform (handles long paths and locked files better):
+npx rimraf node_modules
+npx rimraf package-lock.json
+
+# Step 4: reinstall
+npm install</code></pre>
+
+  <h2>Cause 6 – Read-Only File or Directory</h2>
+  <p>
+    Files checked out from version control with read-only attributes, files on a CD-ROM or
+    read-only mount, or files manually marked read-only via Windows Explorer properties will throw
+    EPERM when Node.js tries to write to them. This also affects <code>npm ci</code> which
+    performs a clean reinstall and needs to delete existing <code>node_modules</code>.
+  </p>
+
+  <h3>Linux / macOS</h3>
+  <pre><code># Check permissions on the file or directory
+ls -la ./node_modules/some-package/index.js
+
+# Remove the read-only attribute
+chmod +w ./node_modules/some-package/index.js
+
+# Recursively fix permissions on node_modules
+chmod -R u+w node_modules/
+
+# Or fix ownership if root owns the files (common after sudo npm install)
+sudo chown -R $(whoami) node_modules/</code></pre>
+
+  <h3>Windows</h3>
+  <pre><code># Remove read-only attribute from a single file
+attrib -r "node_modules\some-package\index.js"
+
+# Remove read-only attribute recursively from all files in node_modules
+attrib -r /s /d "node_modules\*"
+
+# PowerShell — set full control for current user on node_modules
+icacls node_modules /grant "%USERNAME%":F /T
+
+# Take ownership first if needed (run as Administrator)
+takeown /f node_modules /r /d y
+icacls node_modules /grant "%USERNAME%":F /T</code></pre>
+
+  <h2>Cause 7 – WSL: Project on NTFS Mount (/mnt/c/...)</h2>
+  <p>
+    Running <code>npm install</code> inside WSL (Windows Subsystem for Linux) on a path under
+    <code>/mnt/c/</code> (or any <code>/mnt/</code> drive) means Node.js is operating on an NTFS
+    volume accessed via the 9P file system protocol. Symlink creation and certain atomic rename
+    operations over 9P fail with EPERM because the Windows NTFS driver does not support them
+    through this protocol path.
+  </p>
+  <pre><code># Bad — project is on the NTFS mount
+cd /mnt/c/Users/alice/my-project
+npm install
+# Error: EPERM: operation not permitted, symlink
+
+# Good — project is on the native WSL ext4 filesystem
+cd ~/projects/my-project
+npm install   # works correctly</code></pre>
+
+  <h3>Moving an existing project into WSL filesystem</h3>
+  <pre><code># From inside WSL:
+mkdir -p ~/projects
+cp -r /mnt/c/Users/alice/my-project ~/projects/my-project
+cd ~/projects/my-project
+
+# Delete the Windows-side node_modules first (they may have Windows-format bin links)
+rm -rf node_modules package-lock.json
+npm install   # now installs with Linux symlinks</code></pre>
+
+  <div class="callout">
+    <strong>WSL Node.js vs Windows Node.js:</strong> Make sure your WSL shell is using the Linux
+    installation of Node.js and npm, not the Windows version. Check with
+    <code>which node</code> — it should return <code>/usr/bin/node</code> or
+    <code>/home/user/.nvm/versions/node/.../bin/node</code>, <em>not</em>
+    <code>/mnt/c/Program Files/nodejs/node</code>. Running the Windows npm binary from WSL on a
+    WSL path is a common source of EPERM and other permission errors.
+  </div>
+
+  <h2>Cause 8 – npm Cache or Prefix on a Network Share</h2>
+  <p>
+    In corporate environments, Windows roaming profiles often redirect <code>%APPDATA%</code>
+    to a network share. The default npm cache path (<code>%APPDATA%\npm-cache</code>) ends up on
+    that network share, which has higher latency and more restrictive locking semantics. Antivirus
+    on the file server compounds the problem.
+  </p>
+  <pre><code># Check where npm is putting its cache and prefix
+npm config get cache
+npm config get prefix
+
+# If they point to a network share (e.g. \\server\users\alice\...)
+# redirect them to a local directory:
+npm config set cache "C:\npm-cache"
+npm config set prefix "C:\npm-global"
+
+# Create the directories first
+mkdir C:\npm-cache
+mkdir C:\npm-global
+
+# Add the new prefix to PATH so global binaries remain accessible
+# System Properties → Environment Variables → Path → add C:\npm-global\bin</code></pre>
+
+  <h2>Cause 9 – Windows Long Path Limit (260 characters)</h2>
+  <p>
+    Deeply nested packages in <code>node_modules</code> can exceed Windows' default 260-character
+    path limit (MAX_PATH). When Node.js or npm tries to create a path beyond this limit, Windows
+    returns an error that Node.js maps to EPERM (or ENAMETOOLONG on some configurations).
+  </p>
+
+  <h3>Enable long paths on Windows 10/11</h3>
+  <pre><code># Option 1: Group Policy (requires local admin)
+# Computer Configuration → Administrative Templates →
+# System → Filesystem → Enable Win32 long paths → Enabled
+
+# Option 2: Registry (run PowerShell as Administrator)
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+  -Name "LongPathsEnabled" -Value 1
+
+# Option 3: Git-managed repos — enable for git operations
+git config --system core.longpaths true</code></pre>
+
+  <h3>Use rimraf for deletion of long-path node_modules</h3>
+  <pre><code># rimraf handles long paths and retries on EPERM — safer than rd /s /q
+npx rimraf node_modules
+
+# Or install globally once:
+npm install -g rimraf
+rimraf node_modules</code></pre>
+
+  <h2>Clean Reinstall Patterns</h2>
+
+  <h3>Windows — full clean reinstall</h3>
+  <pre><code># Step 1: Close VS Code and kill all node processes
+taskkill /IM node.exe /F
+taskkill /IM npm.cmd /F
+
+# Step 2: Delete node_modules (use rimraf — handles long paths &amp; retries)
+npx rimraf node_modules
+
+# Step 3: Delete the lockfile
+del package-lock.json
+
+# Step 4: Clean npm cache
+npm cache clean --force
+
+# Step 5: Reinstall
+npm install</code></pre>
+
+  <h3>PowerShell — full clean reinstall</h3>
+  <pre><code># Kill processes
+Get-Process node, npm -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Remove node_modules and lockfile
+Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
+Remove-Item -Force package-lock.json -ErrorAction SilentlyContinue
+
+# Clean cache
+npm cache clean --force
+
+# Reinstall
+npm install</code></pre>
+
+  <h3>Linux / macOS — clean reinstall</h3>
+  <pre><code">rm -rf node_modules package-lock.json
+npm cache clean --force
+npm install</code></pre>
+
+  <h3>WSL — clean reinstall</h3>
+  <pre><code># Make sure you are in the WSL filesystem, not /mnt/c/...
+pwd   # should NOT start with /mnt/
+
+rm -rf node_modules package-lock.json
+npm cache clean --force
+npm install</code></pre>
+
+  <h2>Handling EPERM in Code</h2>
+  <p>
+    If your Node.js application performs file system operations that may hit EPERM (for example,
+    writing to a path where another process may hold a lock), catch the error explicitly and
+    distinguish EPERM from other fs errors.
+  </p>
+  <pre><code>const fs = require('fs/promises');
+
+async function writeFileSafe(filePath, content) {
+  try {
+    await fs.writeFile(filePath, content, 'utf8');
+  } catch (err) {
+    if (err.code === 'EPERM') {
+      // Operation not permitted — check for read-only flag or process lock
+      console.error(
+        `EPERM writing to ${filePath}. ` +
+        `Check that no other process holds the file open and that it is not read-only.`
+      );
+      // On Windows: check attrib -r, or retry after a short delay
+      throw err;
+    }
+    if (err.code === 'EACCES') {
+      // Permission bits deny access — chmod or chown the file
+      console.error(`EACCES writing to ${filePath}. Check file permissions.`);
+      throw err;
+    }
+    throw err; // re-throw all other errors (ENOENT, EMFILE, etc.)
+  }
+}
+
+// Retry helper — useful on Windows where EPERM is often transient
+async function writeFileWithRetry(filePath, content, retries = 3, delayMs = 200) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await fs.writeFile(filePath, content, 'utf8');
+      return; // success
+    } catch (err) {
+      if (err.code === 'EPERM' &amp;&amp; attempt &lt; retries) {
+        console.warn(`EPERM on attempt ${attempt}, retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+        throw err;
+      }
+    }
+  }
+}</code></pre>
+
+  <h2>Symlink Fix for CI / Docker on Windows</h2>
+  <p>
+    CI pipelines running on Windows agents (GitHub Actions <code>windows-latest</code>,
+    Azure Pipelines Windows agents) need Developer Mode or the symlink privilege to be
+    explicitly granted. The cleanest workaround is to avoid symlinks altogether in CI by using
+    <code>npm ci --ignore-scripts</code> or to enable the privilege in the pipeline definition.
+  </p>
+  <pre><code># GitHub Actions — Windows runner, enable Developer Mode equivalent
+# The windows-latest runner runs as Administrator, so symlinks work by default.
+# If you use a self-hosted Windows runner, add this step:
+- name: Enable long paths and symlinks
+  shell: powershell
+  run: |
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+      -Name "LongPathsEnabled" -Value 1
+    # Grant symlink privilege to current user (requires admin runner)
+    $acl = Get-Acl "C:\Windows\System32\drivers\etc"  # dummy path to load SDDL
+    Write-Host "Symlinks enabled for: $env:USERNAME"
+
+# Alternative: skip bin symlinks entirely in CI
+- run: npm ci --ignore-scripts</code></pre>
+
+  <pre><code># Dockerfile on Windows base image — Node.js symlinks in node_modules
+# Use linux containers whenever possible; Windows containers need explicit privilege grants.
+# In a Windows container Dockerfile:
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
+RUN powershell Set-ItemProperty `
+      -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' `
+      -Name LongPathsEnabled -Value 1
+# ... rest of Dockerfile</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read <code>err.syscall</code> — <code>rename</code>/<code>unlink</code>/<code>rmdir</code> = file-handle conflict; <code>symlink</code> = privilege problem; <code>open</code> = read-only or locked file.</li>
+    <li>Read <code>err.path</code> and <code>err.dest</code> — identifies exactly which file triggered the error.</li>
+    <li>Close VS Code and all IDEs that have the project open.</li>
+    <li>Run <code>tasklist | findstr node</code> (Windows) or <code>pgrep -l node</code> (Linux/macOS) to find stuck processes; kill them.</li>
+    <li>Check if the error is for a <code>symlink</code> syscall — if so, enable Windows Developer Mode.</li>
+    <li>Add <code>node_modules</code> and <code>%APPDATA%\npm-cache</code> to Windows Defender exclusions.</li>
+    <li>Run <code>npm config get cache</code> — if it points to a network share, redirect to a local directory.</li>
+    <li>In WSL, run <code>pwd</code> and confirm you are not on a <code>/mnt/</code> path.</li>
+    <li>Run <code>npm cache clean --force</code> then delete <code>node_modules</code> with <code>npx rimraf node_modules</code>.</li>
+    <li>If all else fails, reboot Windows — this releases all file handles unconditionally — then reinstall.</li>
+    <li>On Linux/macOS, check for read-only files: <code>ls -la node_modules/some-package/</code>; fix with <code>chmod -R u+w node_modules/</code>.</li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Avoid <code>sudo npm install</code>:</strong> Running <code>sudo npm install</code> on
+    Linux/macOS installs files owned by <code>root</code> into <code>node_modules</code>. Subsequent
+    runs without <code>sudo</code> fail with EACCES or EPERM because the current user cannot
+    modify root-owned files. Fix with <code>sudo chown -R $(whoami) node_modules/</code> or
+    <a href="https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally" rel="noopener noreferrer">configure a user-level npm prefix</a>.
+  </div>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is EPERM: operation not permitted in Node.js?</summary>
+    <div class="faq-answer">
+      <p><strong>EPERM</strong> stands for <em>Error: operation not PERMitted</em>. It is a POSIX system error (errno 1) returned by the OS kernel when a file system operation is refused not because of file permission bits (that is EACCES), but because the operation itself is disallowed — for example, creating a symlink without the required Windows privilege, renaming a file that another process has open, or writing to a read-only filesystem.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What causes EPERM: operation not permitted during npm install on Windows?</summary>
+    <div class="faq-answer">
+      <p>The most common causes are: (1) VS Code or another IDE holding a file handle in <code>node_modules</code> while npm tries to rename a staging file; (2) Windows Defender or antivirus locking a file it is scanning at the moment npm renames it; (3) a leftover <code>node.exe</code> process from a crashed prior run; (4) npm trying to create symlinks in <code>.bin</code> without <code>SeCreateSymbolicLinkPrivilege</code>; (5) a corrupted npm cache. Fix: close the IDE, kill <code>node.exe</code> processes, add antivirus exclusions, then do a clean reinstall.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I delete node_modules on Windows when I get EPERM?</summary>
+    <div class="faq-answer">
+      <p>Use <code>npx rimraf node_modules</code> — rimraf handles long paths and retries on locked files automatically. Alternatively: <code>Remove-Item -Recurse -Force node_modules</code> (PowerShell) or <code>rd /s /q node_modules</code> (Command Prompt). If all three fail, close VS Code, kill all <code>node.exe</code> processes in Task Manager, wait 10 seconds, then retry. A reboot is the last resort — it unconditionally releases all file handles.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix EPERM symlink errors without running as Administrator?</summary>
+    <div class="faq-answer">
+      <p>Enable <strong>Windows Developer Mode</strong>: Settings → System → For developers → Developer Mode → On. This grants the <code>SeCreateSymbolicLinkPrivilege</code> to your user account without requiring a UAC prompt on each npm install. As a workaround (not a full fix), you can also run <code>npm install --no-bin-links</code> to skip creating symlinks in <code>.bin</code>, but then CLI tools from packages will not be directly runnable as commands.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between EPERM and EACCES in Node.js?</summary>
+    <div class="faq-answer">
+      <p><strong>EACCES</strong> (permission denied) means the process lacks the read, write, or execute <em>permission bits</em> on a specific file or directory — a <code>chmod</code>/<code>chown</code> problem. <strong>EPERM</strong> (operation not permitted) means the <em>operation itself</em> is forbidden in the current OS context regardless of file permissions — for example, creating a symlink without the required Windows privilege, renaming an open file, or writing to a read-only filesystem. On Windows, EPERM is used broadly for many kernel-level refusals that POSIX would distinguish more granularly.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does EPERM happen in WSL during npm install?</summary>
+    <div class="faq-answer">
+      <p>In WSL, EPERM occurs when the project is on an NTFS mount (<code>/mnt/c/...</code>) rather than the native WSL ext4 filesystem. Symlink creation and atomic renames over the 9P NTFS protocol fail with EPERM. Fix: move your project to the WSL home directory (<code>~/projects/my-project</code>), delete <code>node_modules</code> and <code>package-lock.json</code>, then run <code>npm install</code> again. Also ensure you are using the WSL Linux Node.js installation, not the Windows one — check with <code>which node</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I add node_modules to Windows Defender exclusions?</summary>
+    <div class="faq-answer">
+      <p>Via GUI: Windows Security → Virus &amp; threat protection → Manage settings → Exclusions → Add or remove exclusions → Add an exclusion → Folder → select your project root (or the <code>node_modules</code> subfolder). Also exclude <code>%APPDATA%\npm-cache</code>. Via PowerShell (run as Administrator): <code>Add-MpPreference -ExclusionPath "C:\your\project\node_modules"</code> and <code>Add-MpPreference -ExclusionPath "$env:APPDATA\npm-cache"</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does EPERM happen in CI on Windows but not locally?</summary>
+    <div class="faq-answer">
+      <p>Common CI-specific causes: (1) the CI Windows agent user account does not have the symlink privilege — grant it or use <code>npm ci --ignore-scripts</code>; (2) the agent runs antivirus that is not configured with exclusions; (3) the project path is long and exceeds the 260-character limit — enable long paths with the registry key or Group Policy; (4) the npm cache is on a network share — set a local cache path with <code>npm config set cache C:\npm-cache</code> in the pipeline.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/ENOENT/"><code>ENOENT: no such file or directory</code></a> — path not found; npm ENOENT during install usually means node_modules is missing, not a permissions issue</li>
+    <li><a href="https://nodejs-errors.dev/EMFILE/"><code>EMFILE: too many open files</code></a> — process exceeded OS file descriptor limit; often occurs alongside EPERM when node_modules is very large</li>
+    <li><code>EACCES: permission denied</code> — file-level permission bit refusal; use <code>chmod</code>/<code>chown</code> to fix rather than the process-kill approach needed for EPERM</li>
+    <li><code>EBUSY: resource busy or locked</code> — the file or device is busy; similar to EPERM but indicates the resource is actively in use rather than the operation being prohibited</li>
+    <li><code>ENOTEMPTY: directory not empty</code> — rmdir fails because the directory has contents; use rimraf or <code>rm -rf</code> instead</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-10 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#common-system-errors">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

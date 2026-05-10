@@ -47,7 +47,17 @@
       { "@type": "ListItem", "position": 14, "name": "UnhandledPromiseRejection: Promise rejected without a .catch() handler", "url": "https://nodejs-errors.dev/UnhandledPromiseRejection/" },
       { "@type": "ListItem", "position": 15, "name": "EPIPE: write EPIPE", "url": "https://nodejs-errors.dev/EPIPE/" },
       { "@type": "ListItem", "position": 16, "name": "SyntaxError: Cannot use import statement outside a module", "url": "https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/" },
-      { "@type": "ListItem", "position": 17, "name": "FATAL ERROR: JavaScript heap out of memory", "url": "https://nodejs-errors.dev/JavaScript-heap-out-of-memory/" }
+      { "@type": "ListItem", "position": 17, "name": "FATAL ERROR: JavaScript heap out of memory", "url": "https://nodejs-errors.dev/JavaScript-heap-out-of-memory/" },
+      { "@type": "ListItem", "position": 18, "name": "Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client", "url": "https://nodejs-errors.dev/ERR_HTTP_HEADERS_SENT/" },
+      { "@type": "ListItem", "position": 19, "name": "Error: EACCES: permission denied", "url": "https://nodejs-errors.dev/EACCES/" },
+      { "@type": "ListItem", "position": 20, "name": "RangeError: Maximum call stack size exceeded", "url": "https://nodejs-errors.dev/RangeError-Maximum-call-stack-size-exceeded/" },
+      { "@type": "ListItem", "position": 21, "name": "Error [ERR_STREAM_WRITE_AFTER_END]: write after end", "url": "https://nodejs-errors.dev/ERR_STREAM_WRITE_AFTER_END/" },
+      { "@type": "ListItem", "position": 22, "name": "Error: EPERM: operation not permitted", "url": "https://nodejs-errors.dev/EPERM/" },
+      { "@type": "ListItem", "position": 23, "name": "Error [ERR_UNSUPPORTED_DIR_IMPORT]: Directory import is not supported resolving ES modules", "url": "https://nodejs-errors.dev/ERR_UNSUPPORTED_DIR_IMPORT/" },
+      { "@type": "ListItem", "position": 24, "name": "Error: ERR_DLOPEN_FAILED — native addon ABI mismatch", "url": "https://nodejs-errors.dev/ERR_DLOPEN_FAILED/" },
+      { "@type": "ListItem", "position": 25, "name": "Error: ENOSPC: no space left on device / System limit for number of file watchers reached", "url": "https://nodejs-errors.dev/ENOSPC/" },
+      { "@type": "ListItem", "position": 26, "name": "Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close", "url": "https://nodejs-errors.dev/ERR_STREAM_PREMATURE_CLOSE/" },
+      { "@type": "ListItem", "position": 27, "name": "TypeError: Cannot set properties of undefined", "url": "https://nodejs-errors.dev/TypeError-Cannot-set-properties-of-undefined/" }
     ]
   }
   </script>
@@ -176,6 +186,30 @@
       <span class="card-cta">View causes &amp; fixes →</span>
     </a>
 
+    <a class="error-card" href="https://nodejs-errors.dev/ERR_UNSUPPORTED_DIR_IMPORT/">
+      <div class="card-name">ERR_UNSUPPORTED_DIR_IMPORT</div>
+      <div class="card-desc">
+        Thrown when an ESM <code>import</code> targets a directory instead of a specific file.
+        CommonJS resolved <code>./utils</code> to <code>./utils/index.js</code>; ESM forbids this.
+        Fix with explicit extensions (<code>./utils/index.js</code>), a <code>package.json</code>
+        <code>exports</code> map, or TypeScript <code>moduleResolution: "node16"</code>. The
+        <code>--experimental-specifier-resolution=node</code> flag was removed in Node.js 19.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/ERR_DLOPEN_FAILED/">
+      <div class="card-name">ERR_DLOPEN_FAILED</div>
+      <div class="card-desc">
+        Thrown when Node.js cannot load a native addon (<code>.node</code> file) because it was
+        compiled for a different <code>NODE_MODULE_VERSION</code>. Common after upgrading Node.js
+        or on Apple Silicon when an x86_64 binary is loaded under arm64. Fix with
+        <code>npm rebuild</code>, a clean reinstall, or <code>electron-rebuild</code> for Electron.
+        Affects <code>bcrypt</code>, <code>sharp</code>, <code>canvas</code>, <code>sqlite3</code>.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
   </div>
 
   <h2>File System</h2>
@@ -198,6 +232,42 @@
         Common during bulk file operations, file watching with webpack or jest, or
         socket-heavy workloads. Fix with <code>ulimit -n 65536</code>,
         <code>graceful-fs</code>, or <code>p-limit</code> concurrency control.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/EACCES/">
+      <div class="card-name">EACCES: permission denied</div>
+      <div class="card-desc">
+        Thrown when the OS denies a file system or socket bind operation. Three common scenarios:
+        <code>app.listen(80)</code> on Linux/macOS (privileged port), <code>npm install -g</code>
+        against root-owned global <code>node_modules</code>, and <code>fs</code> operations on
+        files the current user cannot access. Fix with reverse proxy, <code>setcap</code>,
+        <code>nvm</code>, or <code>chmod</code>/<code>chown</code>. Never run Node.js as root.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/EPERM/">
+      <div class="card-name">EPERM: operation not permitted</div>
+      <div class="card-desc">
+        Predominantly a Windows error during <code>npm install</code> — VS Code or antivirus
+        holds open file handles in <code>node_modules</code> while npm tries to rename them, or
+        npm needs to create symlinks without <code>SeCreateSymbolicLinkPrivilege</code>. Fix by
+        closing the IDE, adding antivirus exclusions, <code>rimraf node_modules</code>,
+        <code>npm cache clean --force</code>, and enabling Windows Developer Mode for symlinks.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/ENOSPC/">
+      <div class="card-name">ENOSPC: no space left on device</div>
+      <div class="card-desc">
+        Same error code, two completely different causes: the Linux <code>inotify</code> watcher
+        limit is exhausted by webpack/Vite/Jest/nodemon, or the disk is genuinely full during
+        <code>npm install</code> or a CI build. Fix the watcher variant with
+        <code>fs.inotify.max_user_watches=524288</code>; fix the disk variant with
+        <code>df -h</code>, <code>npm cache clean</code>, and <code>docker system prune</code>.
       </div>
       <span class="card-cta">View causes &amp; fixes →</span>
     </a>
@@ -271,6 +341,48 @@
       <span class="card-cta">View causes &amp; fixes →</span>
     </a>
 
+    <a class="error-card" href="https://nodejs-errors.dev/ERR_HTTP_HEADERS_SENT/">
+      <div class="card-name">ERR_HTTP_HEADERS_SENT</div>
+      <div class="card-desc">
+        Thrown as <code>Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent
+        to the client</code> when code attempts a second response after the first has flushed.
+        Almost always caused by a missing <code>return</code> before <code>res.send</code>,
+        double <code>next()</code> calls, or async callbacks firing after the response. Fix
+        with <code>return res.json(...)</code> and the <code>res.headersSent</code> guard.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+  </div>
+
+  <h2>Streams</h2>
+  <div class="error-grid">
+
+    <a class="error-card" href="https://nodejs-errors.dev/ERR_STREAM_WRITE_AFTER_END/">
+      <div class="card-name">ERR_STREAM_WRITE_AFTER_END</div>
+      <div class="card-desc">
+        Thrown as <code>Error [ERR_STREAM_WRITE_AFTER_END]: write after end</code> when
+        <code>stream.write()</code> or <code>res.write()</code> is called after
+        <code>stream.end()</code>. Common with <code>http-proxy</code> after client disconnect,
+        async callbacks landing after an early <code>res.end()</code>, and pipeline error
+        handlers writing to a destroyed sink. Fix with <code>writableEnded</code> guards and
+        <code>stream.pipeline()</code>.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/ERR_STREAM_PREMATURE_CLOSE/">
+      <div class="card-name">ERR_STREAM_PREMATURE_CLOSE</div>
+      <div class="card-desc">
+        Thrown as <code>Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close</code> when a stream
+        in <code>stream.pipeline()</code> is destroyed before emitting <code>end</code>. Common
+        with HTTP client disconnects mid-download, <code>AbortController</code>-aborted fetch
+        bodies, and OpenAI/Anthropic LLM streams cancelled by the browser. Often expected — check
+        <code>err.code</code> and treat as a client abort, not a server error.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
   </div>
 
   <h2>Runtime</h2>
@@ -315,6 +427,30 @@
         or <code>try/catch</code> around an <code>await</code>. <strong>Fatal since Node.js 15</strong>
         — crashes the process with exit code 1. Common causes: missing <code>await</code>,
         <code>forEach(async</code> anti-pattern, and async Express route handlers without a wrapper.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/TypeError-Cannot-set-properties-of-undefined/">
+      <div class="card-name">TypeError: Cannot set properties of undefined</div>
+      <div class="card-desc">
+        The write-side complement to <em>Cannot read properties of undefined</em>. Thrown when
+        assigning a property to an <code>undefined</code> value — uninitialized parent objects,
+        nested paths, missing <code>await</code>, <code>Map</code>/<code>Set</code> confusion,
+        or the optional-chaining write-side trap (<code>obj?.x = v</code> does not work). Fix
+        with <code>obj.a ??= {}</code>, lodash <code>set()</code>, or <code>Map.set()</code>.
+      </div>
+      <span class="card-cta">View causes &amp; fixes →</span>
+    </a>
+
+    <a class="error-card" href="https://nodejs-errors.dev/RangeError-Maximum-call-stack-size-exceeded/">
+      <div class="card-name">RangeError: Maximum call stack size exceeded</div>
+      <div class="card-desc">
+        Thrown when V8's call stack runs out of frames (~10–15k). Causes: missing or wrong base
+        case in recursion, <code>JSON.stringify</code> on an object with circular references,
+        <code>push.apply</code> with a huge array, or mutual recursion. Fix with a correct base
+        case, trampoline pattern, iterative stack, or <code>WeakSet</code> replacer for
+        circular JSON. <code>--stack-size</code> only buys headroom — not a real fix.
       </div>
       <span class="card-cta">View causes &amp; fixes →</span>
     </a>

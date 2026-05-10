@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>RangeError: Maximum call stack size exceeded – Node.js Fix</title>
+  <meta name="description" content="Node.js throws RangeError: Maximum call stack size exceeded on unbounded recursion (missing base case), circular JSON.stringify, Array push.apply with huge arrays, or mutual recursion. Every cause and fix with code — trampoline, iterative stack, WeakSet replacer, structured-clone, and --stack-size flag." />
+  <link rel="canonical" href="https://nodejs-errors.dev/RangeError-Maximum-call-stack-size-exceeded/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="RangeError: Maximum call stack size exceeded – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws RangeError: Maximum call stack size exceeded on unbounded recursion, circular JSON.stringify, Array push.apply with huge arrays, or mutual recursion. Every cause and fix with code." />
+  <meta property="og:url" content="https://nodejs-errors.dev/RangeError-Maximum-call-stack-size-exceeded/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "RangeError: Maximum call stack size exceeded – Node.js Fix",
+    "description": "Node.js throws RangeError: Maximum call stack size exceeded when the V8 call stack runs out of frames. Causes: missing or wrong base case in recursion, JSON.stringify on an object with circular references, spreading or push.apply-ing a huge array, indirect mutual recursion across modules, and framework event-loop recursion. Fixes: correct base case, trampoline pattern, explicit iterative stack, WeakSet-based JSON replacer, structured-clone, concat or chunk loop for large arrays, and --stack-size V8 flag as a temporary workaround.",
+    "url": "https://nodejs-errors.dev/RangeError-Maximum-call-stack-size-exceeded/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-10",
+    "dateModified": "2026-05-10"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is RangeError: Maximum call stack size exceeded in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "RangeError: Maximum call stack size exceeded is thrown by the V8 JavaScript engine when the call stack — the data structure that tracks active function invocations — runs out of space. Each function call pushes a new frame onto the stack. When a recursive or mutually-recursive chain never terminates, the stack grows until it hits V8's limit (roughly 10,000–15,000 frames in Node.js at default settings), and Node.js throws this RangeError and terminates the process."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does JSON.stringify throw Maximum call stack size exceeded?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "JSON.stringify walks the object graph recursively. If any object in the graph references one of its own ancestors (a circular reference), JSON.stringify recurses infinitely and exhausts the call stack. Fix this with a WeakSet-based replacer function, the Node.js structured-clone API, or a library like flatted. Example: const seen = new WeakSet(); JSON.stringify(obj, (k, v) => { if (typeof v === 'object' && v !== null) { if (seen.has(v)) return '[Circular]'; seen.add(v); } return v; });"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does Array.prototype.push.apply throw Maximum call stack size exceeded?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Function.prototype.apply spreads the second argument array into individual arguments on the call stack. Each element occupies a stack slot. When the source array contains more than roughly 125,000–150,000 elements, the arguments list overflows the stack. Replace push.apply(target, source) with a chunked loop or target.push(...source) only for small arrays. For large arrays use: for (const item of source) target.push(item); or target = target.concat(source);"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I convert a recursive function to avoid Maximum call stack size exceeded?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Two main strategies: (1) Rewrite to iteration with an explicit stack array — use a while loop and a manual stack: const stack = [root]; while (stack.length) { const node = stack.pop(); /* process */; stack.push(...node.children); }. (2) Use a trampoline — wrap the recursive step in a returned function and loop: function trampoline(fn) { return function(...args) { let r = fn(...args); while (typeof r === 'function') r = r(); return r; }; }. Trampolines work best with tail-recursive functions converted to return thunks."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does the Node.js --stack-size flag fix Maximum call stack size exceeded?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The --stack-size=N flag (N in kilobytes, e.g. node --stack-size=65536 app.js) increases the V8 stack size and can delay the error. It is NOT a real fix — it only buys headroom. If your recursion is truly unbounded, it will still exhaust the larger stack, just later. Use --stack-size only as a temporary diagnostic or workaround while you fix the root cause."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I debug Maximum call stack size exceeded in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Run Node.js with --stack-trace-limit=100 (or higher) to see more frames in the stack trace: node --stack-trace-limit=100 app.js. The repeated function name in the stack trace identifies the recursion loop. For production crashes, set Error.stackTraceLimit = 50 at the top of your entry file. Use the V8 inspector (node --inspect app.js) and set a breakpoint inside the suspected recursive function; the Call Stack panel in Chrome DevTools shows depth in real time."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is mutual recursion and how does it cause Maximum call stack size exceeded?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Mutual (indirect) recursion occurs when function A calls function B, which calls function A again, with no path to exit. Each call pushes two frames (one for A, one for B) instead of one, so the stack fills in half the steps of simple recursion. This is especially common across module boundaries where the circular call chain is not obvious from reading any single file. The fix is the same: add a base case or convert to iteration."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does Maximum call stack size exceeded happen in production but not locally?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The stack depth required to hit the limit depends on the input data. Locally you may test with small datasets that stay within the limit, while production processes deeper trees, longer chains, or larger arrays. Docker/container environments and some cloud runtimes also default to lower per-thread stack sizes than a developer workstation, which can reduce the effective limit further."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "RangeError: Maximum call stack size exceeded", "item": "https://nodejs-errors.dev/RangeError-Maximum-call-stack-size-exceeded/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix RangeError: Maximum call stack size exceeded in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Expand the stack trace", "text": "Run your script with node --stack-trace-limit=100 app.js to see enough frames to identify the repeating function. The repeated function name is your recursion loop entry point." },
+      { "@type": "HowToStep", "position": 2, "name": "Identify the root cause", "text": "Determine which of the four causes applies: missing base case in recursion, circular reference in JSON.stringify, Array.prototype.push.apply / spread with a huge array, or mutual/indirect recursion between modules." },
+      { "@type": "HowToStep", "position": 3, "name": "Fix missing base case", "text": "Add a terminating condition that is guaranteed to be reached. Verify the condition reduces the problem size on every call so it converges. Add a depth guard as a safety net: if (depth > 1000) throw new Error('Max depth exceeded');" },
+      { "@type": "HowToStep", "position": 4, "name": "Fix circular JSON.stringify", "text": "Use a WeakSet-based replacer: const seen = new WeakSet(); JSON.stringify(obj, (k, v) => { if (typeof v === 'object' && v !== null) { if (seen.has(v)) return '[Circular]'; seen.add(v); } return v; }); Or use structuredClone(obj) to deep-clone without circular refs, or the flatted package for full round-trip serialization." },
+      { "@type": "HowToStep", "position": 5, "name": "Fix large-array push.apply", "text": "Replace target.push.apply(target, hugeArr) or target.push(...hugeArr) with a chunked loop: for (const item of hugeArr) target.push(item); or target = target.concat(hugeArr);" },
+      { "@type": "HowToStep", "position": 6, "name": "Convert recursion to iteration", "text": "Rewrite the function using an explicit stack array and a while loop. This uses heap memory instead of call-stack frames and has no depth limit other than available RAM." },
+      { "@type": "HowToStep", "position": 7, "name": "Apply the trampoline pattern", "text": "Wrap the recursive step to return a thunk (function) instead of calling itself. A trampoline driver loops, calling each thunk until a non-function value is returned. This keeps the call stack at constant depth." },
+      { "@type": "HowToStep", "position": 8, "name": "Use --stack-size only as a temporary workaround", "text": "node --stack-size=65536 app.js increases the V8 stack size (in KB). Use it only while diagnosing — it does not fix unbounded recursion, it only delays the crash." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">RangeError: Maximum call stack size exceeded</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js / JavaScript Error</span>
+  <h1>RangeError: Maximum call stack size exceeded</h1>
+  <span class="error-code">error type: <code>RangeError</code> &nbsp;·&nbsp; engine: V8 &nbsp;·&nbsp; also: <code>RangeError: Maximum call stack size exceeded (V8)</code></span>
+  <p>Complete reference — every cause (missing base case, circular JSON, large push.apply, mutual recursion), every fix (trampoline, iterative stack, WeakSet replacer, structured-clone), and Node.js-specific debugging with <code>--stack-trace-limit</code> and the V8 inspector.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> <code>RangeError: Maximum call stack size exceeded</code> means V8 ran out of call-stack frames. The four most common causes in Node.js are: (1) a recursive function with a missing or wrong base case — add a correct termination condition or convert to iteration; (2) <code>JSON.stringify</code> on an object with a circular reference — use a <code>WeakSet</code> replacer or <code>structuredClone</code>; (3) <code>Array.prototype.push.apply(target, hugeArray)</code> or <code>target.push(...hugeArray)</code> with &gt;~125k elements — use a <code>for...of</code> loop instead; (4) mutual recursion between two functions or modules with no exit — break the cycle with an iterative approach.
+  </div>
+
+  <h2>What is RangeError: Maximum call stack size exceeded?</h2>
+  <p>
+    Every time JavaScript calls a function, V8 pushes a <em>stack frame</em> onto the call stack.
+    The frame holds the function's local variables, arguments, and the return address. When the
+    function returns, V8 pops its frame off the stack. In a normal recursive or iterative program
+    the stack depth stays bounded.
+  </p>
+  <p>
+    When recursion has no terminating path — or when a single operation expands into hundreds of
+    thousands of nested calls — the stack fills completely. V8 enforces a hard limit (roughly
+    10,000–15,000 frames at Node.js default settings) and throws <code>RangeError: Maximum call
+    stack size exceeded</code>. The process then terminates unless the error is caught very high
+    up the call chain.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error strings you will see in the terminal:</strong><br>
+    <code>RangeError: Maximum call stack size exceeded</code><br>
+    <code>RangeError: Maximum call stack size exceeded (V8)</code><br>
+    <code>RangeError: Maximum call stack size exceeded at JSON.stringify (&lt;anonymous&gt;)</code><br>
+    <code>RangeError: Maximum call stack size exceeded at Array.push.apply (&lt;anonymous&gt;)</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>// app.js — classic infinite recursion
+function countdown(n) {
+  return countdown(n - 1); // no base case
+}
+countdown(1000);
+
+// Output:
+RangeError: Maximum call stack size exceeded
+    at countdown (/project/app.js:2:10)
+    at countdown (/project/app.js:2:10)
+    at countdown (/project/app.js:2:10)
+    at countdown (/project/app.js:2:10)
+    ... (repeating — the same function listed hundreds of times)
+    at countdown (/project/app.js:2:10)
+    at Object.&lt;anonymous&gt; (/project/app.js:5:1)</code></pre>
+
+  <p>
+    The key diagnostic signal is the <strong>same function name repeated</strong> throughout the
+    stack trace. That function is in the recursive loop. The number of frames shown by default is
+    capped at 10 — see the <a href="#debugging">Debugging section</a> below to expand it.
+  </p>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Typical error context</th><th>Fix summary</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Missing or wrong base case in recursion</td>
+        <td>Same function repeated in stack trace</td>
+        <td>Add correct terminating condition; verify it is always reached</td>
+      </tr>
+      <tr>
+        <td><code>JSON.stringify</code> on a circular object</td>
+        <td><code>at JSON.stringify (&lt;anonymous&gt;)</code> in stack</td>
+        <td>WeakSet replacer, <code>structuredClone</code>, or <code>flatted</code> library</td>
+      </tr>
+      <tr>
+        <td><code>push.apply(target, hugeArr)</code> or <code>push(...hugeArr)</code></td>
+        <td><code>at Array.push.apply</code> in stack; array &gt; ~125k elements</td>
+        <td><code>for...of</code> loop, chunked push, or <code>concat</code></td>
+      </tr>
+      <tr>
+        <td>Mutual / indirect recursion between functions or modules</td>
+        <td>Two or more different function names alternating in stack trace</td>
+        <td>Break the cycle; add shared base case; convert to iteration</td>
+      </tr>
+      <tr>
+        <td>Recursive event or callback loop in a framework</td>
+        <td>Event handler calling itself synchronously</td>
+        <td>Debounce, emit with <code>setImmediate</code>, or restructure handler</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Missing or Wrong Base Case in Recursion</h2>
+  <p>
+    The most common cause. A recursive function calls itself on every invocation with no
+    condition that terminates the chain, or the termination condition is correct in theory but
+    never reached because the input never satisfies it (e.g., the argument is not reduced
+    toward the base case on each step).
+  </p>
+  <pre><code>// CJS — wrong: no base case
+function factorial(n) {
+  return n * factorial(n - 1); // calls forever; n eventually becomes -Infinity
+}
+
+console.log(factorial(5)); // RangeError: Maximum call stack size exceeded
+
+// Fixed: add the base case
+function factorial(n) {
+  if (n &lt;= 1) return 1;          // base case — terminates the chain
+  return n * factorial(n - 1);   // n always decreases toward 1
+}
+
+console.log(factorial(5)); // 120</code></pre>
+
+  <pre><code>// ESM equivalent — same logic applies
+export function factorial(n) {
+  if (n &lt;= 1) return 1;
+  return n * factorial(n - 1);
+}</code></pre>
+
+  <h3>Wrong base case — condition never satisfied</h3>
+  <pre><code>// Wrong — base case checks n === 0 but n starts at 5.5 and steps by 1
+// It skips 0 entirely (5.5 → 4.5 → 3.5 → 2.5 → 1.5 → 0.5 → -0.5 → ...)
+function countdown(n) {
+  if (n === 0) return 'done'; // never reached for non-integer n
+  return countdown(n - 1);
+}
+countdown(5.5); // RangeError
+
+// Fix — use &lt;= 0 instead of === 0
+function countdown(n) {
+  if (n &lt;= 0) return 'done';
+  return countdown(n - 1);
+}</code></pre>
+
+  <h3>Depth-guard safety net</h3>
+  <p>
+    For production code where the input depth is not fully controlled, add an explicit depth
+    limit that throws a descriptive error instead of crashing with a generic RangeError.
+  </p>
+  <pre><code>function processTree(node, depth = 0) {
+  if (depth > 1000) {
+    throw new RangeError(
+      `processTree: exceeded maximum depth of 1000 — possible circular reference in input`
+    );
+  }
+  if (!node.children || node.children.length === 0) return node.value;
+
+  return node.children.reduce(
+    (sum, child) => sum + processTree(child, depth + 1),
+    0
+  );
+}</code></pre>
+
+  <h2>Cause 2 – Circular Reference in JSON.stringify</h2>
+  <p>
+    <code>JSON.stringify</code> traverses the object graph recursively. If any object in the
+    graph holds a reference back to one of its ancestors, the traversal loops forever and the
+    call stack overflows.
+  </p>
+  <pre><code>// Circular reference — obj.self points back to obj
+const obj = { name: 'root' };
+obj.self = obj;
+
+JSON.stringify(obj);
+// RangeError: Maximum call stack size exceeded
+//     at JSON.stringify (&lt;anonymous&gt;)
+
+// Another common case: parent ↔ child back-reference
+const parent = { id: 1, children: [] };
+const child  = { id: 2, parent };
+parent.children.push(child);
+
+JSON.stringify(parent); // RangeError</code></pre>
+
+  <h3>Fix A — WeakSet-based replacer (zero dependencies)</h3>
+  <pre><code>function safeStringify(obj, indent) {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, function (key, value) {
+    if (typeof value === 'object' &amp;&amp; value !== null) {
+      if (seen.has(value)) {
+        return '[Circular]';   // omit or replace the back-reference
+      }
+      seen.add(value);
+    }
+    return value;
+  }, indent);
+}
+
+const obj = { name: 'root' };
+obj.self = obj;
+
+console.log(safeStringify(obj));
+// {"name":"root","self":"[Circular]"}</code></pre>
+
+  <h3>Fix B — structuredClone to break the cycle first (Node.js 17+)</h3>
+  <p>
+    <code>structuredClone</code> is a global available in Node.js 17+ that performs a deep clone
+    using the structured-clone algorithm. It <em>does</em> handle circular references — but the
+    clone itself will still contain the cycle, so you cannot <code>JSON.stringify</code> the
+    clone directly. Use it to produce a non-circular snapshot by breaking the cycle manually
+    before cloning, or use it as a deep-copy mechanism unrelated to JSON.
+  </p>
+  <pre><code>// structuredClone handles circular references in the clone itself
+const parent = { id: 1, children: [] };
+const child  = { id: 2, parent };
+parent.children.push(child);
+
+// Deep-clone — the clone also has the circular structure
+const cloned = structuredClone(parent); // does NOT throw
+
+// To make it JSON-safe, remove back-references before cloning
+const safeParent = {
+  id: parent.id,
+  children: parent.children.map(c => ({ id: c.id })), // drop .parent ref
+};
+console.log(JSON.stringify(safeParent));
+// {"id":1,"children":[{"id":2}]}</code></pre>
+
+  <h3>Fix C — flatted library for full round-trip circular JSON</h3>
+  <pre><code>// npm install flatted
+const { stringify, parse } = require('flatted'); // CJS
+// import { stringify, parse } from 'flatted';    // ESM
+
+const obj = { name: 'root' };
+obj.self = obj;
+
+const encoded = stringify(obj);
+// '[{"name":"1","self":"0"},"root"]'  — a flat representation
+
+const decoded = parse(encoded);
+console.log(decoded.self === decoded); // true — circular ref restored</code></pre>
+
+  <h2>Cause 3 – Array.prototype.push.apply / Spread with a Huge Array</h2>
+  <p>
+    <code>Function.prototype.apply</code> passes the second argument array as individual
+    arguments on the call stack. Each element occupies one stack slot. For arrays larger than
+    roughly 125,000–150,000 elements, the arguments list overflows the stack.
+    The same limit applies to the spread operator when used inside <code>push</code>.
+  </p>
+  <pre><code>const target = [];
+const huge   = new Array(200_000).fill(0);
+
+// Wrong — passes 200,000 arguments onto the stack
+target.push.apply(target, huge);
+// RangeError: Maximum call stack size exceeded
+//     at Array.push.apply (&lt;anonymous&gt;)
+
+// Also wrong for large arrays
+target.push(...huge);
+// RangeError: Maximum call stack size exceeded</code></pre>
+
+  <h3>Fix A — for...of loop (simplest, no limit)</h3>
+  <pre><code>// Safe for any array size — uses heap, not stack
+for (const item of huge) {
+  target.push(item);
+}</code></pre>
+
+  <h3>Fix B — Array.prototype.concat (returns new array)</h3>
+  <pre><code>// concat does not use apply internally — safe for large arrays
+// Note: creates a new array rather than mutating target
+const result = target.concat(huge);</code></pre>
+
+  <h3>Fix C — chunked push for in-place mutation</h3>
+  <pre><code>// Chunked push — applies in batches of 10,000 to stay under the stack limit
+const CHUNK = 10_000;
+for (let i = 0; i &lt; huge.length; i += CHUNK) {
+  target.push(...huge.slice(i, i + CHUNK));
+}</code></pre>
+
+  <div class="callout">
+    <strong>Rule of thumb:</strong> Only use <code>push(...arr)</code> or
+    <code>push.apply(target, arr)</code> when <code>arr.length</code> is known to be small
+    (under ~10,000 elements). For arrays of unknown or unbounded size, always use a loop or
+    <code>concat</code>.
+  </div>
+
+  <h2>Cause 4 – Mutual / Indirect Recursion Across Modules</h2>
+  <p>
+    Mutual recursion occurs when function A calls function B, which calls function A again,
+    forming a cycle with no exit. This is particularly sneaky across module boundaries because
+    no single file reveals the loop on its own.
+  </p>
+  <pre><code>// parser.js (CJS)
+const { handleExpression } = require('./evaluator');
+
+function parseStatement(node) {
+  if (node.type === 'ExpressionStatement') {
+    return handleExpression(node.expression); // calls evaluator
+  }
+  return parseStatement(node); // bug: never delegates, recurses directly
+}
+
+module.exports = { parseStatement };
+
+// evaluator.js (CJS)
+const { parseStatement } = require('./parser');
+
+function handleExpression(expr) {
+  if (expr.type === 'BlockStatement') {
+    return parseStatement(expr); // calls parser — mutual recursion formed
+  }
+  // missing base case for other node types — recurses through parser forever
+  return handleExpression(expr);
+}
+
+module.exports = { handleExpression };</code></pre>
+
+  <pre><code>// Stack trace reveals the alternating cycle:
+// RangeError: Maximum call stack size exceeded
+//     at handleExpression (/project/evaluator.js:4:12)
+//     at parseStatement (/project/parser.js:3:12)
+//     at handleExpression (/project/evaluator.js:4:12)
+//     at parseStatement (/project/parser.js:3:12)
+//     ...
+
+// Fix — add base cases that cover all node types in both functions
+// evaluator.js
+function handleExpression(expr) {
+  if (expr.type === 'Literal')         return expr.value;
+  if (expr.type === 'Identifier')      return lookupVariable(expr.name);
+  if (expr.type === 'BlockStatement')  return parseStatement(expr);
+  throw new TypeError(`Unhandled expression type: ${expr.type}`);
+}
+
+// parser.js
+function parseStatement(node) {
+  if (node.type === 'ExpressionStatement') return handleExpression(node.expression);
+  if (node.type === 'ReturnStatement')     return handleExpression(node.argument);
+  throw new TypeError(`Unhandled statement type: ${node.type}`);
+}</code></pre>
+
+  <h3>ESM mutual recursion — same pattern</h3>
+  <pre><code>// a.mjs
+import { b } from './b.mjs';
+export function a(n) {
+  if (n &lt;= 0) return 'done'; // base case must exist in at least one branch
+  return b(n - 1);
+}
+
+// b.mjs
+import { a } from './a.mjs';
+export function b(n) {
+  if (n &lt;= 0) return 'done'; // both sides need terminating conditions
+  return a(n - 1);
+}</code></pre>
+
+  <h2>Cause 5 – Recursive Event / Callback Loop</h2>
+  <p>
+    Synchronous event emitters (EventEmitter with <code>emit</code> called inside a listener)
+    or recursive callback patterns can build up the stack just like direct recursion.
+  </p>
+  <pre><code>const { EventEmitter } = require('events');
+const ee = new EventEmitter();
+
+// Wrong — listener immediately re-emits the same event synchronously
+ee.on('data', (value) => {
+  console.log(value);
+  ee.emit('data', value + 1); // synchronous, instant stack growth
+});
+
+ee.emit('data', 0);
+// RangeError: Maximum call stack size exceeded
+
+// Fix — schedule the next emission asynchronously with setImmediate
+ee.on('data', (value) => {
+  console.log(value);
+  if (value &lt; 10) {
+    setImmediate(() => ee.emit('data', value + 1)); // yields to event loop
+  }
+});</code></pre>
+
+  <h2>Safe Recursion Patterns</h2>
+
+  <h3>Pattern A — Explicit iterative stack (replace recursion with a loop)</h3>
+  <p>
+    The most reliable fix for any recursive algorithm is to convert it to an explicit stack.
+    Heap memory is orders of magnitude larger than the call stack, so depth is limited only
+    by available RAM.
+  </p>
+  <pre><code>// Recursive tree walk — breaks on deep trees
+function sumTree(node) {
+  if (!node) return 0;
+  return node.value + sumTree(node.left) + sumTree(node.right);
+}
+
+// Iterative equivalent — safe for arbitrary depth
+function sumTreeIterative(root) {
+  if (!root) return 0;
+  let total = 0;
+  const stack = [root];
+  while (stack.length &gt; 0) {
+    const node = stack.pop();
+    total += node.value;
+    if (node.right) stack.push(node.right);
+    if (node.left)  stack.push(node.left);
+  }
+  return total;
+}
+
+// Works on trees thousands of levels deep
+const deepRoot = Array.from({ length: 50_000 }, (_, i) => ({ value: i }))
+  .reduce((child, parent) => { parent.left = child; return parent; });
+
+console.log(sumTreeIterative(deepRoot)); // no RangeError</code></pre>
+
+  <h3>Pattern B — Trampoline (constant call-stack depth)</h3>
+  <p>
+    A trampoline lets you write code in a tail-recursive style without growing the stack.
+    Instead of calling itself, the function returns a <em>thunk</em> (a zero-argument function
+    wrapping the next step). The trampoline driver loops, calling each thunk until the result
+    is a plain value.
+  </p>
+  <pre><code>// Generic trampoline driver
+function trampoline(fn) {
+  return function trampolined(...args) {
+    let result = fn(...args);
+    while (typeof result === 'function') {
+      result = result(); // call the thunk — stays at depth 2, never grows
+    }
+    return result;
+  };
+}
+
+// Tail-recursive factorial using a thunk
+function factTail(n, acc = 1) {
+  if (n &lt;= 1) return acc;
+  return () => factTail(n - 1, n * acc); // return thunk instead of calling
+}
+
+const factorial = trampoline(factTail);
+
+console.log(factorial(100_000)); // Infinity (too large for Number, but no RangeError!)
+// For BigInt precision:
+function factTailBig(n, acc = 1n) {
+  if (n &lt;= 1n) return acc;
+  return () => factTailBig(n - 1n, n * acc);
+}
+const factorialBig = trampoline(factTailBig);
+console.log(factorialBig(10_000n)); // exact large integer, no RangeError</code></pre>
+
+  <h3>Pattern C — Promise-based recursion (async trampolining)</h3>
+  <p>
+    Wrapping each recursive step in a <code>Promise</code> forces it through the microtask
+    queue, breaking the synchronous stack chain. Useful for async recursive algorithms.
+  </p>
+  <pre><code">// Each recursive step resolves asynchronously — stack never grows beyond 2 frames
+async function processChain(items, index = 0) {
+  if (index &gt;= items.length) return [];
+  const result = await processItem(items[index]);
+  const rest   = await processChain(items, index + 1); // async, not sync recursion
+  return [result, ...rest];
+}
+
+// Better for very long chains — avoid array spread growth
+async function processChainIterative(items) {
+  const results = [];
+  for (const item of items) {
+    results.push(await processItem(item));
+  }
+  return results;
+}</code></pre>
+
+  <h2 id="debugging">Debugging Checklist</h2>
+  <ol>
+    <li>
+      <strong>Expand the stack trace.</strong> Node.js shows only 10 frames by default. Run with
+      <code>node --stack-trace-limit=100 app.js</code> to see the full recursion chain. Identify
+      the repeating function name — that is your entry point into the cycle.
+    </li>
+    <li>
+      <strong>Set Error.stackTraceLimit at startup</strong> (programmatic alternative):
+      <code>Error.stackTraceLimit = 50;</code> at the top of your entry file so stack traces are
+      always richer in development.
+    </li>
+    <li>
+      <strong>Look for the alternating pattern.</strong> If two different function names alternate
+      in the stack, you have mutual recursion. Check cross-module call chains.
+    </li>
+    <li>
+      <strong>Use the V8 inspector.</strong> Run <code>node --inspect app.js</code> and open
+      <code>chrome://inspect</code>. Set a breakpoint inside the suspected recursive function.
+      The Call Stack panel in Chrome DevTools shows the current depth in real time.
+    </li>
+    <li>
+      <strong>Add a depth counter.</strong> Temporarily instrument the function:
+      <code>function recurse(n, _d=0) { if (_d&gt;500) { console.trace('depth 500 reached'); process.exit(1); } ... }</code>
+      to get a stack trace at an earlier depth before the crash.
+    </li>
+    <li>
+      <strong>Check JSON.stringify calls.</strong> If the stack trace shows
+      <code>JSON.stringify</code> near the top, inspect the object being serialized for circular
+      references: <code>console.log(Object.keys(suspect))</code> and check for back-references to
+      parent objects.
+    </li>
+    <li>
+      <strong>Check array sizes before push.apply / spread.</strong> Add
+      <code>console.log(hugeArr.length)</code> before the failing push. If it exceeds ~100k,
+      switch to a loop.
+    </li>
+    <li>
+      <strong>Use --stack-size to confirm the cause.</strong> If bumping
+      <code>node --stack-size=65536 app.js</code> (64 MB stack) merely delays the crash by a
+      fixed proportion, you have genuine infinite recursion and must fix the logic. If it
+      eliminates the crash entirely, your recursion is bounded but deeper than the default stack —
+      consider converting to iteration anyway.
+    </li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Do not catch RangeError as a control-flow mechanism.</strong>
+    <code>try { recursiveFn(); } catch (e) { if (e instanceof RangeError) ... }</code> is
+    unreliable — by the time V8 throws, the stack is full and even the catch block may not
+    execute cleanly. Fix the recursion instead of catching the crash.
+  </div>
+
+  <h2>Node.js-Specific: --stack-size Flag</h2>
+  <p>
+    V8 exposes a <code>--stack-size</code> flag that sets the maximum stack size <em>per thread</em>
+    in kilobytes. The default in Node.js is typically 984 KB on 64-bit systems.
+  </p>
+  <pre><code># Increase stack size to 64 MB — useful for diagnosing, not for production
+node --stack-size=65536 app.js
+
+# Or set via NODE_OPTIONS for all node processes in a shell session
+export NODE_OPTIONS="--stack-size=65536"
+node app.js
+
+# Docker/container environments — pass via CMD or ENTRYPOINT
+CMD ["node", "--stack-size=65536", "dist/server.js"]</code></pre>
+
+  <div class="callout warn">
+    <strong>--stack-size is not a fix.</strong> Increasing the stack only buys more room before
+    the same crash occurs. Infinite recursion will still crash — just after more frames. Bounded
+    but deep recursion (e.g., a 50,000-node linked list traversed recursively) is the one
+    legitimate use case for <code>--stack-size</code> while you schedule a proper conversion to
+    iteration.
+  </div>
+
+  <h3>--stack-size in Worker Threads</h3>
+  <pre><code">const { Worker } = require('worker_threads');
+
+// Each worker gets its own stack — configure independently
+const worker = new Worker('./heavy-task.js', {
+  resourceLimits: {
+    stackSizeMb: 64, // Node.js 12.16+ — per-worker stack limit in MB
+  },
+});</code></pre>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is RangeError: Maximum call stack size exceeded in Node.js?</summary>
+    <div class="faq-answer">
+      <p>It is thrown by the V8 engine when the call stack — the data structure tracking active function calls — runs out of space. Each function call pushes a frame; when a recursive chain never terminates the frames accumulate until V8 hits its limit (~10,000–15,000 frames by default) and throws this error. The process then terminates unless caught very high up the chain.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does JSON.stringify throw Maximum call stack size exceeded?</summary>
+    <div class="faq-answer">
+      <p><code>JSON.stringify</code> walks the object graph recursively. If any object in the graph references one of its ancestors (a circular reference), the traversal loops forever and the call stack overflows. Fix with a WeakSet replacer:
+      <code>const seen = new WeakSet(); JSON.stringify(obj, (k, v) =&gt; { if (typeof v === 'object' &amp;&amp; v !== null) { if (seen.has(v)) return '[Circular]'; seen.add(v); } return v; });</code></p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does Array.prototype.push.apply throw Maximum call stack size exceeded?</summary>
+    <div class="faq-answer">
+      <p><code>Function.prototype.apply</code> spreads the source array as individual arguments onto the call stack. Each element uses one stack slot. For arrays larger than ~125,000–150,000 elements the stack overflows. The same applies to <code>push(...hugeArr)</code>. Fix: use a <code>for...of</code> loop — <code>for (const item of huge) target.push(item);</code> — or <code>target = target.concat(huge);</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I convert a recursive function to avoid this error?</summary>
+    <div class="faq-answer">
+      <p>Two main strategies: (1) <strong>Explicit iterative stack</strong> — replace the recursive function with a <code>while</code> loop and a manual array as the stack. Uses heap memory, so depth is limited only by RAM. (2) <strong>Trampoline</strong> — the function returns a thunk (zero-arg function) instead of calling itself. A driver loop calls thunks until a plain value is returned, keeping the call stack at constant depth.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Does the Node.js --stack-size flag fix Maximum call stack size exceeded?</summary>
+    <div class="faq-answer">
+      <p><code>node --stack-size=65536 app.js</code> increases the V8 stack size (in KB) and delays the error. It is not a real fix — infinite recursion still crashes, just after more frames. Use <code>--stack-size</code> only as a temporary diagnostic workaround while you fix the root cause in code.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I debug Maximum call stack size exceeded in Node.js?</summary>
+    <div class="faq-answer">
+      <p>Run <code>node --stack-trace-limit=100 app.js</code> to see 100 stack frames instead of the default 10. The repeating function name identifies the recursion loop. Use <code>node --inspect app.js</code> and Chrome DevTools (<code>chrome://inspect</code>) to set a breakpoint inside the recursive function — the Call Stack panel shows depth in real time. Add <code>Error.stackTraceLimit = 50;</code> at the top of your entry file for richer traces in development.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is mutual recursion and how does it cause this error?</summary>
+    <div class="faq-answer">
+      <p>Mutual (indirect) recursion is when function A calls function B which calls function A again, with no exit. In the stack trace, two (or more) different function names alternate rather than one repeating. This is common across module boundaries. The fix is identical to direct recursion: ensure at least one branch in each function reaches a base case that stops the chain.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does Maximum call stack size exceeded happen in production but not locally?</summary>
+    <div class="faq-answer">
+      <p>The error depends on input depth. Local tests use small datasets that stay within the default stack limit; production processes larger trees, longer linked lists, or bigger arrays that exceed it. Docker and cloud runtimes may also allocate smaller per-thread stack sizes than a developer workstation. The fix is to make the algorithm's stack usage independent of input size by converting to iteration.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix Maximum call stack size exceeded in Next.js / React?</summary>
+    <div class="faq-answer">
+      <p>In React, the most common cause is a <code>useEffect</code> or state-update loop. A state change triggers a re-render, which triggers another state update, which triggers another re-render, recursively. Fix by ensuring <code>useEffect</code> has the correct dependency array and does not unconditionally set state that it also depends on. Another cause is calling a recursive utility on deeply nested component props — convert that utility to iteration.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/JavaScript-heap-out-of-memory/"><code>JavaScript heap out of memory</code></a> — V8 runs out of heap RAM; related to recursive algorithms that also build up large in-memory data structures</li>
+    <li><a href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/"><code>TypeError: Cannot read properties of undefined</code></a> — often co-occurs when a recursive function hits its depth limit and a partially-constructed object is returned</li>
+    <li><a href="https://nodejs-errors.dev/UnhandledPromiseRejection/"><code>UnhandledPromiseRejection</code></a> — a RangeError thrown inside an async function with no catch becomes an unhandled rejection</li>
+    <li><a href="https://nodejs-errors.dev/ERR_INVALID_ARG_TYPE/"><code>ERR_INVALID_ARG_TYPE</code></a> — thrown by Node.js core APIs when a recursive function passes a wrong type through successive calls</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-10 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#class-rangeerror">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client – Node.js Fix</title>
+  <meta name="description" content="Fix Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client. Covers missing return before res.send, double next() calls, async callbacks after response, res.headersSent guard, Express, Fastify, and raw http.createServer examples." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ERR_HTTP_HEADERS_SENT/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client – Node.js Fix" />
+  <meta property="og:description" content="Fix Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client. Covers missing return before res.send, double next() calls, async callbacks after response, res.headersSent guard, Express, Fastify, and raw http.createServer examples." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ERR_HTTP_HEADERS_SENT/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client – Node.js Fix",
+    "description": "ERR_HTTP_HEADERS_SENT is thrown by Node.js when code attempts to set HTTP headers or send a second response after the HTTP response has already been flushed to the client. The most common cause is a missing return statement before res.send(), res.json(), res.redirect(), or res.end() in an Express route handler. Other causes include double next() calls in middleware, calling next(err) after already sending a response, async callbacks or setTimeout firing after the response was sent, and res.setHeader() called after res.end(). Fix by adding return before every response call, using the res.headersSent guard, and ensuring each request code path sends exactly one response.",
+    "url": "https://nodejs-errors.dev/ERR_HTTP_HEADERS_SENT/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-10",
+    "dateModified": "2026-05-10"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ERR_HTTP_HEADERS_SENT?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_HTTP_HEADERS_SENT is a Node.js error thrown when code tries to send HTTP headers or a response body after the HTTP response has already been sent to the client. Once res.send(), res.json(), res.end(), or res.redirect() is called in Express (or the equivalent in Fastify or raw http.createServer), Node.js flushes the headers and body to the TCP socket. Any subsequent attempt to write headers or send another response triggers this error. The full error message is: Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What causes ERR_HTTP_HEADERS_SENT?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The most common causes are: (1) a missing return statement before res.send(), res.json(), or res.redirect() — execution continues and a second response call is reached; (2) calling next() more than once in the same middleware function; (3) calling next(err) after already sending a response in a catch block; (4) an async callback (setTimeout, a Promise .then(), or an event listener) fires and tries to send a response after one was already sent synchronously; (5) res.setHeader() or res.writeHead() called after res.end() in raw Node.js http module code."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_HTTP_HEADERS_SENT in Express?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Add a return statement before every response call in your route handlers: return res.json({ error: 'not found' }). This ensures function execution stops as soon as a response is sent. Also check that middleware functions call next() exactly once and that catch blocks use next(err) without also calling res.send(). Use the res.headersSent boolean property to guard defensive code paths."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I use res.headersSent to prevent ERR_HTTP_HEADERS_SENT?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "res.headersSent is a boolean property on the Express/Node.js response object that is true if the response headers have already been sent. You can use it as a guard in any code that might run after a response was sent: if (!res.headersSent) { res.status(500).json({ error: 'something went wrong' }); }. This is especially useful in async callbacks, error handlers, and middleware that may execute out of order."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_HTTP_HEADERS_SENT happen in production but not locally?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Race conditions caused by timing-sensitive async operations often surface only under load. Locally, requests are processed one at a time so a setTimeout or slow database query resolves before the next request triggers a handler. Under production load, a slow async operation from request A can complete and try to send a response after the request handler has already returned a timeout or error response. The fix is to always guard async callbacks with if (!res.headersSent) or to use proper async/await with a single return point."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_HTTP_HEADERS_SENT caused by double next() calls?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Every Express middleware function must call next() exactly once — or not at all if it sends a response. A double next() call causes two route handlers to process the same request, and one of them will try to send a second response. Fix by adding a return statement after every next() call: return next(); or return next(err);. This is the same pattern as adding return before res.send()."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_HTTP_HEADERS_SENT in Fastify?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "In Fastify, the equivalent is calling reply.send() more than once. Fastify's reply object also exposes reply.sent (a boolean) which you can check before sending. Always return the reply.send() call from your handler: return reply.send({ data }). In async handlers, simply returning a value causes Fastify to send it — do not also call reply.send() manually, or you will get a double-send error."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ERR_HTTP_HEADERS_SENT", "item": "https://nodejs-errors.dev/ERR_HTTP_HEADERS_SENT/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix ERR_HTTP_HEADERS_SENT: Cannot set headers after they are sent to the client",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Read the stack trace", "text": "The stack trace shows the exact file and line where the second response call was made. Identify both the first response call (which succeeded) and the second one (which threw). The error always originates from the second call." },
+      { "@type": "HowToStep", "position": 2, "name": "Add return before every response call", "text": "Change res.json({...}) to return res.json({...}) everywhere in the route handler. This stops function execution immediately after the response is sent, preventing any subsequent code from reaching another response call." },
+      { "@type": "HowToStep", "position": 3, "name": "Add return after every next() call in middleware", "text": "Change next() to return next() and next(err) to return next(err) in every middleware function. A missing return after next() means the rest of the middleware function continues executing and may call next() or send a response a second time." },
+      { "@type": "HowToStep", "position": 4, "name": "Fix catch blocks that call both res.send and next(err)", "text": "In a catch block, choose either res.status(500).json({error}) or next(err) — never both. Using both sends a response and then passes the error to the error middleware which tries to send another response." },
+      { "@type": "HowToStep", "position": 5, "name": "Guard async callbacks with res.headersSent", "text": "Any callback that runs asynchronously (setTimeout, Promise.then, event emitter) after the response might have already been sent. Wrap the callback body with: if (res.headersSent) return; before sending any response." },
+      { "@type": "HowToStep", "position": 6, "name": "Verify each code path sends exactly one response", "text": "Trace every branch (if/else, switch, early return, try/catch) in the route handler. Each branch must end with exactly one response call. Use a linter rule or TypeScript return types to enforce this structurally." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ERR_HTTP_HEADERS_SENT</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>ERR_HTTP_HEADERS_SENT</h1>
+  <span class="error-code">error code: <code>ERR_HTTP_HEADERS_SENT</code></span>
+  <p>Complete reference for <code>Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client</code> — every cause, the <code>res.headersSent</code> guard pattern, and full code examples for Express, Fastify, and raw <code>http.createServer</code>.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js throws <code>ERR_HTTP_HEADERS_SENT</code> when your code calls <code>res.send()</code>, <code>res.json()</code>, <code>res.redirect()</code>, <code>res.setHeader()</code>, or <code>res.end()</code> a second time on the same request. The most common fix is adding <code>return</code> before every response call (<code>return res.json({...})</code>) so execution stops immediately. Also check for double <code>next()</code> calls in middleware and async callbacks that fire after the response was already sent.
+  </div>
+
+  <h2>What is ERR_HTTP_HEADERS_SENT?</h2>
+  <p>
+    <code>ERR_HTTP_HEADERS_SENT</code> is thrown by Node.js's HTTP internals when a response has
+    already been written to the TCP socket and code subsequently tries to modify headers or write
+    more data. HTTP responses are strictly one-way and one-time: once the status line and headers
+    are flushed, the response is sealed. Any call to <code>res.setHeader()</code>,
+    <code>res.writeHead()</code>, <code>res.write()</code>, or <code>res.end()</code> on an
+    already-finished response triggers this error.
+  </p>
+  <p>
+    In Express, <code>res.send()</code>, <code>res.json()</code>, <code>res.render()</code>, and
+    <code>res.redirect()</code> all call <code>res.end()</code> internally, sealing the response.
+    In Fastify, <code>reply.send()</code> does the same. In raw <code>http.createServer</code>,
+    <code>res.end()</code> or <code>res.write()</code> after a prior <code>res.end()</code> will
+    trigger it.
+  </p>
+  <p>
+    See the
+    <a href="https://nodejs.org/api/errors.html#err_http_headers_sent" rel="noopener noreferrer">official Node.js error documentation</a>
+    for the internal definition.
+  </p>
+
+  <h2>Full Error Example</h2>
+  <pre><code>Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client
+    at new NodeError (node:internal/errors:405:5)
+    at ServerResponse.setHeader (node:_http_outgoing:644:11)
+    at ServerResponse.header (/app/node_modules/express/lib/response.js:794:10)
+    at ServerResponse.json (/app/node_modules/express/lib/response.js:278:10)
+    at /app/src/routes/users.js:24:9       &lt;-- second res.json() call
+    at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
+    at next (/app/node_modules/express/lib/router/route.js:137:13)
+    at Route.dispatch (/app/node_modules/express/lib/router/route.js:112:3)
+    at /app/src/routes/users.js:18:5       &lt;-- first res.json() call succeeded here
+  code: 'ERR_HTTP_HEADERS_SENT'</code></pre>
+
+  <p>
+    The stack trace always shows two lines in your own code: the line where the <strong>second</strong>
+    response call was made (the one that threw) and the line where the first succeeded. Start
+    debugging at your own file lines, not the Express or Node.js internals.
+  </p>
+
+  <h2>Error Object Properties</h2>
+  <table>
+    <thead>
+      <tr><th>Property</th><th>Value</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>error.code</code></td><td><code>'ERR_HTTP_HEADERS_SENT'</code></td><td>Always this exact string</td></tr>
+      <tr><td><code>error.message</code></td><td><code>'Cannot set headers after they are sent to the client'</code></td><td>Consistent across Node.js versions</td></tr>
+      <tr><td><code>error.name</code></td><td><code>'Error'</code></td><td>Base <code>Error</code> class, not <code>TypeError</code></td></tr>
+      <tr><td><code>res.headersSent</code></td><td><code>true</code></td><td>Check this before any response call in defensive code</td></tr>
+    </tbody>
+  </table>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Cause</th>
+        <th>Symptom</th>
+        <th>Fix</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Missing <code>return</code> before response call</td>
+        <td>Two <code>res.json()</code> / <code>res.send()</code> calls in one handler</td>
+        <td><code>return res.json({...})</code></td>
+      </tr>
+      <tr>
+        <td>Missing <code>return</code> after <code>next()</code></td>
+        <td>Middleware continues executing after calling <code>next()</code></td>
+        <td><code>return next()</code></td>
+      </tr>
+      <tr>
+        <td><code>next(err)</code> after already responding</td>
+        <td><code>catch</code> block calls both <code>res.send()</code> and <code>next(err)</code></td>
+        <td>Use only <code>next(err)</code> in catch; never send and forward</td>
+      </tr>
+      <tr>
+        <td>Async callback fires after response</td>
+        <td><code>setTimeout</code>, <code>Promise.then</code>, DB callback, event fires late</td>
+        <td>Guard with <code>if (res.headersSent) return;</code></td>
+      </tr>
+      <tr>
+        <td>Double <code>next()</code> call in middleware</td>
+        <td><code>next()</code> called twice in same middleware function</td>
+        <td><code>return next()</code> on every call path</td>
+      </tr>
+      <tr>
+        <td><code>res.setHeader()</code> after <code>res.end()</code></td>
+        <td>Raw <code>http</code> module header set too late</td>
+        <td>Set all headers before writing any body data</td>
+      </tr>
+      <tr>
+        <td>Fastify <code>reply.send()</code> called twice</td>
+        <td>Async handler returns a value AND calls <code>reply.send()</code></td>
+        <td>Return value only; do not also call <code>reply.send()</code></td>
+      </tr>
+      <tr>
+        <td>Express error middleware sends then calls <code>next()</code></td>
+        <td>Error handler sends a response and also calls <code>next(err)</code></td>
+        <td>Error middleware must send a response OR call <code>next()</code>, never both</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Missing <code>return</code> Before <code>res.send()</code> (Most Common)</h2>
+  <p>
+    <code>res.send()</code>, <code>res.json()</code>, and <code>res.redirect()</code> do
+    <strong>not</strong> stop the execution of your route handler function. They are regular
+    JavaScript function calls. Without a <code>return</code> statement, code after the response
+    call continues running and hits another response call.
+  </p>
+  <pre><code>// BROKEN – missing return; execution falls through to the second res.json()
+app.post('/users', async (req, res) => {
+  if (!req.body.email) {
+    res.status(400).json({ error: 'Email is required' }); // sends response
+    // No return here — code continues!
+  }
+  // This line runs even when the 400 was already sent:
+  const user = await createUser(req.body);
+  res.status(201).json(user); // Error [ERR_HTTP_HEADERS_SENT]
+});
+
+// FIXED – return before every response call
+app.post('/users', async (req, res) => {
+  if (!req.body.email) {
+    return res.status(400).json({ error: 'Email is required' }); // stops here
+  }
+  const user = await createUser(req.body);
+  return res.status(201).json(user);
+});</code></pre>
+
+  <div class="callout">
+    <strong>Rule of thumb:</strong> prefix every <code>res.*</code> call with <code>return</code>.
+    It costs nothing and prevents the entire class of "double response" bugs. ESLint's
+    <code>consistent-return</code> rule and TypeScript's return-type inference can enforce this
+    automatically.
+  </div>
+
+  <h2>Cause 2 – Double <code>next()</code> Calls in Middleware</h2>
+  <p>
+    Express middleware must call <code>next()</code> exactly once, or send a response —
+    never both, and never <code>next()</code> twice. Without a <code>return</code> after
+    <code>next()</code>, the middleware continues executing and may call <code>next()</code>
+    again, passing the same request to two subsequent route handlers.
+  </p>
+  <pre><code>// BROKEN – double next() call
+function authMiddleware(req, res, next) {
+  if (!req.headers.authorization) {
+    next(new Error('Unauthorized')); // passes to error handler
+    // No return — code continues!
+  }
+  // Called again for authenticated requests AND for unauthorized ones:
+  next(); // Error [ERR_HTTP_HEADERS_SENT] when the error handler also responds
+}
+
+// FIXED – return after every next() call
+function authMiddleware(req, res, next) {
+  if (!req.headers.authorization) {
+    return next(new Error('Unauthorized')); // stops here
+  }
+  return next(); // only reached for authorized requests
+}
+
+// ALSO BROKEN – calling next() and then responding
+function loggingMiddleware(req, res, next) {
+  next(); // passes control to next handler which sends a response
+  res.setHeader('X-Request-Id', generateId()); // response already sent!
+
+  // FIXED – set headers BEFORE calling next()
+  // res.setHeader('X-Request-Id', generateId());
+  // next();
+}</code></pre>
+
+  <h2>Cause 3 – Calling <code>next(err)</code> After Already Responding</h2>
+  <p>
+    A common pattern is to wrap an async handler in a try/catch. The catch block should
+    either send an error response <em>or</em> call <code>next(err)</code> to delegate to
+    Express's error middleware — never both. Doing both sends one response in the catch block
+    and then the error middleware tries to send another.
+  </p>
+  <pre><code>// BROKEN – sends a response AND forwards to error middleware
+app.get('/data', async (req, res, next) => {
+  try {
+    const result = await fetchData();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message }); // sends response
+    next(err); // error middleware tries to send ANOTHER response
+  }
+});
+
+// FIXED – use only next(err) in catch; let error middleware handle the response
+app.get('/data', async (req, res, next) => {
+  try {
+    const result = await fetchData();
+    res.json(result);
+  } catch (err) {
+    next(err); // delegate completely to error middleware
+  }
+});
+
+// Error middleware (registered last):
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err); // safety guard
+  res.status(err.status || 500).json({ error: err.message });
+});</code></pre>
+
+  <h2>Cause 4 – Async Callback Fires After Response is Finished</h2>
+  <p>
+    Any code that runs asynchronously — a <code>setTimeout</code>, a database callback, a
+    <code>Promise.then()</code>, or an event emitter listener — may execute after the response
+    was already sent by a different code path (a timeout, an error handler, or an earlier
+    branch). The fix is to guard every async callback with <code>if (res.headersSent) return;</code>.
+  </p>
+  <pre><code>// BROKEN – setTimeout fires after the response was already sent
+app.get('/slow', (req, res) => {
+  // Request-level timeout sends a response after 5 seconds
+  setTimeout(() => {
+    res.status(503).json({ error: 'Timeout' });
+  }, 5000);
+
+  // If fetchData() resolves in 3 seconds, this sends first:
+  fetchData().then(data => {
+    res.json(data); // sends after 3s
+    // 2 seconds later, the setTimeout fires and tries to send again — ERROR
+  });
+});
+
+// FIXED – guard the async callback with res.headersSent
+app.get('/slow', (req, res) => {
+  const timer = setTimeout(() => {
+    if (res.headersSent) return; // data already came back — do nothing
+    res.status(503).json({ error: 'Request timed out' });
+  }, 5000);
+
+  fetchData()
+    .then(data => {
+      clearTimeout(timer); // cancel the timeout since we have a result
+      if (res.headersSent) return;
+      res.json(data);
+    })
+    .catch(err => {
+      clearTimeout(timer);
+      if (res.headersSent) return;
+      res.status(500).json({ error: err.message });
+    });
+});
+
+// BEST – use async/await with AbortController for clean timeout handling
+app.get('/slow', async (req, res) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const data = await fetchData({ signal: controller.signal });
+    clearTimeout(timer);
+    res.json(data);
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') {
+      return res.status(503).json({ error: 'Request timed out' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});</code></pre>
+
+  <h2>Cause 5 – Async Middleware Calling <code>next()</code> After Response</h2>
+  <p>
+    When async middleware <code>await</code>s something and then calls <code>next()</code>, the
+    subsequent route handler may already have sent a response (e.g. if another middleware
+    errored). Always check <code>res.headersSent</code> before calling <code>next()</code> in
+    async middleware.
+  </p>
+  <pre><code>// BROKEN – async middleware calls next() after awaiting; response may already be sent
+async function rateLimitMiddleware(req, res, next) {
+  const allowed = await checkRateLimit(req.ip); // slow DB check
+  if (!allowed) {
+    return res.status(429).json({ error: 'Too Many Requests' });
+  }
+  next(); // by the time this runs, another middleware may have sent a 500
+}
+
+// FIXED – guard next() with headersSent check
+async function rateLimitMiddleware(req, res, next) {
+  try {
+    const allowed = await checkRateLimit(req.ip);
+    if (res.headersSent) return; // another middleware already responded
+    if (!allowed) {
+      return res.status(429).json({ error: 'Too Many Requests' });
+    }
+    next();
+  } catch (err) {
+    if (!res.headersSent) next(err);
+  }
+}</code></pre>
+
+  <h2>Cause 6 – Fastify: <code>reply.send()</code> Called Twice</h2>
+  <p>
+    Fastify's async handlers automatically send the return value as the response body. If you
+    also call <code>reply.send()</code> manually inside an async handler that returns a value,
+    Fastify throws the equivalent of <code>ERR_HTTP_HEADERS_SENT</code>. Fastify exposes
+    <code>reply.sent</code> as the guard property.
+  </p>
+  <pre><code>// BROKEN in Fastify – returns a value AND calls reply.send()
+fastify.get('/user/:id', async (request, reply) => {
+  const user = await getUser(request.params.id);
+  reply.send(user); // sends the response
+  return user;      // Fastify tries to send again — Error: Reply already sent
+});
+
+// FIXED – choose one: return the value OR call reply.send(), not both
+fastify.get('/user/:id', async (request, reply) => {
+  const user = await getUser(request.params.id);
+  return user; // Fastify sends this automatically
+});
+
+// Alternative – use reply.send() and return nothing (or return reply)
+fastify.get('/user/:id', async (request, reply) => {
+  const user = await getUser(request.params.id);
+  reply.send(user);
+  // return nothing — Fastify sees reply.sent = true and skips auto-send
+});
+
+// Guard pattern in Fastify for defensive async code:
+fastify.get('/stream', async (request, reply) => {
+  try {
+    const data = await slowOperation();
+    if (reply.sent) return; // already responded (e.g. request was aborted)
+    return data;
+  } catch (err) {
+    if (!reply.sent) reply.status(500).send({ error: err.message });
+  }
+});</code></pre>
+
+  <h2>Cause 7 – Raw <code>http.createServer</code>: Headers Set After <code>res.end()</code></h2>
+  <p>
+    In raw Node.js HTTP handlers (no Express), headers must be set before any call to
+    <code>res.write()</code> or <code>res.end()</code>. Calling <code>res.setHeader()</code>
+    or <code>res.writeHead()</code> after the response body has been written triggers the error.
+  </p>
+  <pre><code>const http = require('http');
+
+// BROKEN – setHeader after end
+const server = http.createServer((req, res) => {
+  res.end('Hello World'); // flushes headers + body
+  res.setHeader('X-Custom', 'value'); // Error [ERR_HTTP_HEADERS_SENT]
+});
+
+// FIXED – set all headers before write/end
+const server2 = http.createServer((req, res) => {
+  res.setHeader('Content-Type', 'text/plain');
+  res.setHeader('X-Custom', 'value');
+  res.writeHead(200); // optional; writeHead must come before write/end too
+  res.end('Hello World');
+});
+
+// BROKEN – writeHead after implicit header flush via res.write()
+const server3 = http.createServer((req, res) => {
+  res.write('chunk one'); // this implicitly sends headers with status 200
+  res.writeHead(404);     // Error [ERR_HTTP_HEADERS_SENT] — too late
+  res.end();
+});
+
+// FIXED – write status in writeHead or statusCode before any write()
+const server4 = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.write('chunk one');
+  res.write('chunk two');
+  res.end();
+});</code></pre>
+
+  <h2>The <code>res.headersSent</code> Guard Pattern</h2>
+  <p>
+    <code>res.headersSent</code> is a built-in boolean property on Node.js's
+    <code>ServerResponse</code> object (and on Express's <code>Response</code> wrapper). It is
+    <code>false</code> before any response data is sent and <code>true</code> immediately after.
+    Use it as the primary defensive guard anywhere code might try to respond twice.
+  </p>
+  <pre><code>// Universal guard — works in Express, raw http, and any framework built on Node.js http
+function safeRespond(res, statusCode, body) {
+  if (res.headersSent) {
+    console.warn('safeRespond: response already sent, skipping', body);
+    return;
+  }
+  res.status(statusCode).json(body);
+}
+
+// Express error middleware with headersSent guard (required pattern)
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    // Response already started — just close the connection
+    return next(err);
+  }
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error'
+  });
+});
+
+// Async route with multiple failure points
+app.get('/report', async (req, res, next) => {
+  try {
+    const [users, orders] = await Promise.all([
+      getUsers(),
+      getOrders()
+    ]);
+    if (res.headersSent) return;
+    res.json({ users, orders });
+  } catch (err) {
+    if (!res.headersSent) next(err);
+  }
+});</code></pre>
+
+  <h2>Safe Express Patterns</h2>
+  <h3>Pattern A – return on every branch</h3>
+  <pre><code>app.put('/item/:id', async (req, res, next) => {
+  const { id } = req.params;
+
+  if (!id || isNaN(Number(id))) {
+    return res.status(400).json({ error: 'Invalid id' });
+  }
+
+  let item;
+  try {
+    item = await db.findById(id);
+  } catch (err) {
+    return next(err); // delegate to error middleware
+  }
+
+  if (!item) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  try {
+    const updated = await db.update(id, req.body);
+    return res.json(updated);
+  } catch (err) {
+    return next(err);
+  }
+});</code></pre>
+
+  <h3>Pattern B – single return point via async/await + centralized error handling</h3>
+  <pre><code>// Wrap all routes with an async error-catching wrapper
+const asyncHandler = fn => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
+
+app.put('/item/:id', asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid id' });
+
+  const item = await db.findById(id);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+
+  const updated = await db.update(id, req.body);
+  res.json(updated);
+}));
+// Any thrown error is caught by .catch(next) and forwarded to error middleware</code></pre>
+
+  <h3>Pattern C – express-async-errors package (zero boilerplate)</h3>
+  <pre><code>// Install: npm install express-async-errors
+// Add this import once at the top of your app entry point:
+require('express-async-errors');
+
+// After this, async errors are automatically forwarded to next() — no try/catch needed
+app.get('/data', async (req, res) => {
+  const data = await fetchData(); // if this throws, Express catches it automatically
+  res.json(data);
+});</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read the stack trace — find the two lines in your own code: the first response call (which succeeded) and the second (which threw). Start there.</li>
+    <li>Add <code>return</code> before every <code>res.send()</code>, <code>res.json()</code>, <code>res.redirect()</code>, and <code>res.render()</code> call in the affected route handler.</li>
+    <li>Add <code>return</code> after every <code>next()</code> and <code>next(err)</code> call in middleware functions.</li>
+    <li>Audit every <code>catch</code> block — confirm it either calls <code>next(err)</code> <em>or</em> sends a response, never both.</li>
+    <li>Search for <code>setTimeout</code>, <code>.then(</code>, event listeners, and database callbacks inside route handlers — each one must start with <code>if (res.headersSent) return;</code>.</li>
+    <li>Check error middleware — it must guard with <code>if (res.headersSent) return next(err);</code> as the very first line.</li>
+    <li>Temporarily add <code>console.trace('response sent')</code> inside each response call to capture the full call stack in the logs and identify which code path fires first.</li>
+    <li>For Fastify: confirm async route handlers either <code>return</code> the value or call <code>reply.send()</code> — not both.</li>
+    <li>For raw <code>http.createServer</code>: confirm all <code>res.setHeader()</code> and <code>res.writeHead()</code> calls appear before any <code>res.write()</code> or <code>res.end()</code>.</li>
+    <li>Run the route under load (e.g. with <code>autocannon</code> or <code>k6</code>) to expose timing-dependent bugs that only appear under concurrent requests.</li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Common mistake — swallowing the error:</strong> Wrapping the entire handler in
+    a try/catch that silently ignores the <code>ERR_HTTP_HEADERS_SENT</code> error hides the
+    bug. The underlying double-send still happened — one of the two responses was silently
+    dropped. Fix the root cause (missing <code>return</code> or a race condition) rather than
+    swallowing the error.
+  </div>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ERR_HTTP_HEADERS_SENT?</summary>
+    <div class="faq-answer">
+      <p><code>ERR_HTTP_HEADERS_SENT</code> is a Node.js error thrown when code attempts to send HTTP headers or a response body after the HTTP response has already been sent to the client. Once <code>res.end()</code> is called (directly or via <code>res.send()</code>, <code>res.json()</code>, <code>res.redirect()</code>, or <code>res.render()</code> in Express), the response is sealed. Any further attempt to write to it triggers this error.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What causes ERR_HTTP_HEADERS_SENT?</summary>
+    <div class="faq-answer">
+      <p>The most common causes are:</p>
+      <ul>
+        <li>Missing <code>return</code> before <code>res.send()</code> / <code>res.json()</code> in an Express route handler</li>
+        <li>Calling <code>next()</code> more than once in the same middleware function</li>
+        <li>A <code>catch</code> block calling both <code>res.send()</code> and <code>next(err)</code></li>
+        <li>An async callback (<code>setTimeout</code>, Promise, DB query) resolving after the response was already sent</li>
+        <li>Calling <code>res.setHeader()</code> after <code>res.end()</code> in raw Node.js http code</li>
+        <li>Fastify async handler both returning a value and calling <code>reply.send()</code></li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_HTTP_HEADERS_SENT in Express?</summary>
+    <div class="faq-answer">
+      <p>Add <code>return</code> before every response call in your route handlers: <code>return res.json({ error: 'not found' })</code>. This ensures function execution stops when a response is sent. Also add <code>return</code> after every <code>next()</code> call in middleware, and fix any <code>catch</code> blocks that call both <code>res.send()</code> and <code>next(err)</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I use res.headersSent to prevent ERR_HTTP_HEADERS_SENT?</summary>
+    <div class="faq-answer">
+      <p><code>res.headersSent</code> is <code>true</code> once any response data has been sent. Use it as a guard in async callbacks and error handlers:</p>
+      <pre><code>setTimeout(() => {
+  if (res.headersSent) return; // already responded
+  res.status(503).json({ error: 'Timeout' });
+}, 5000);
+
+// In error middleware:
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: err.message });
+});</code></pre>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_HTTP_HEADERS_SENT happen in production but not locally?</summary>
+    <div class="faq-answer">
+      <p>Race conditions caused by timing-sensitive async operations usually only appear under load. Locally, requests are processed sequentially so a slow database query always resolves before a timeout fires. In production, under concurrent load, a slow async operation from one request path can complete after another code path has already sent a timeout or error response. The fix is to always guard async callbacks with <code>if (res.headersSent) return;</code> and use <code>clearTimeout()</code> to cancel timers when a result arrives.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_HTTP_HEADERS_SENT caused by double next() calls?</summary>
+    <div class="faq-answer">
+      <p>Add <code>return</code> after every <code>next()</code> call in your middleware:</p>
+      <pre><code>// Before (broken):
+function auth(req, res, next) {
+  if (!req.user) {
+    next(new Error('Unauthorized'));
+    // code continues here!
+  }
+  next(); // called a second time for unauthorized requests
+}
+
+// After (fixed):
+function auth(req, res, next) {
+  if (!req.user) {
+    return next(new Error('Unauthorized'));
+  }
+  return next();
+}</code></pre>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_HTTP_HEADERS_SENT in Fastify?</summary>
+    <div class="faq-answer">
+      <p>In Fastify, async route handlers automatically send the return value as the response. If you also call <code>reply.send()</code> in the same handler, Fastify tries to send twice. Fix: either <code>return</code> the value (and never call <code>reply.send()</code>), or call <code>reply.send()</code> and return nothing. Check <code>reply.sent</code> before sending in defensive code.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_HTTP_HEADERS_SENT in Next.js API routes?</summary>
+    <div class="faq-answer">
+      <p>In Next.js API routes, the same rules apply as Express. Add <code>return</code> before every <code>res.json()</code>, <code>res.send()</code>, and <code>res.redirect()</code> call:</p>
+      <pre><code>// pages/api/user.js
+export default async function handler(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+  const user = await getUser(req.query.id);
+  if (!user) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  return res.json(user);
+}</code></pre>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/EPIPE/"><code>EPIPE: broken pipe</code></a> — the client disconnected before the response was fully sent; often occurs alongside double-send bugs</li>
+    <li><a href="https://nodejs-errors.dev/EADDRINUSE/"><code>EADDRINUSE: address already in use</code></a> — server startup error; separate from response errors but common in the same Express/HTTP server context</li>
+    <li><a href="https://nodejs-errors.dev/UnhandledPromiseRejection/"><code>UnhandledPromiseRejection</code></a> — if an async route handler throws after a response was sent and the error is not caught, it surfaces as an unhandled promise rejection</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-10 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#err_http_headers_sent">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

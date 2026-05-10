@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close – Node.js Fix</title>
+  <meta name="description" content="Node.js throws 'Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close' when stream.pipeline() or a piped stream is destroyed before all data is read or written. Fix HTTP client disconnects, OpenAI/Anthropic LLM stream aborts, AbortController patterns, and file stream errors." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ERR_STREAM_PREMATURE_CLOSE/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws 'Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close' when stream.pipeline() or a piped stream is destroyed before all data is read or written. Fix HTTP client disconnects, OpenAI/Anthropic LLM stream aborts, AbortController patterns, and file stream errors." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ERR_STREAM_PREMATURE_CLOSE/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close – Node.js Fix",
+    "description": "Node.js throws ERR_STREAM_PREMATURE_CLOSE when a stream inside stream.pipeline() or a pipe chain is destroyed before it naturally ends. Causes include HTTP client disconnects mid-download, AbortController aborting a fetch response body, OpenAI and Anthropic SDK streaming responses aborted by the browser, file write streams destroyed early, and unzipper closing before all entries are read. Fix by catching the error and distinguishing intentional aborts from real failures, using AbortSignal-aware consumption, and handling the stream close, end, finish, and aborted events correctly.",
+    "url": "https://nodejs-errors.dev/ERR_STREAM_PREMATURE_CLOSE/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-10",
+    "dateModified": "2026-05-10"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ERR_STREAM_PREMATURE_CLOSE in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_STREAM_PREMATURE_CLOSE is a Node.js stream error thrown when a stream is destroyed or closed before it emits its 'end' or 'finish' event. stream.pipeline() always propagates this error when any stream in the chain closes early — intentionally or not. Common triggers: an HTTP client disconnects mid-download, AbortController aborts a fetch response body, an OpenAI or Anthropic streaming response is interrupted, or a writable file stream is destroyed before all data is flushed."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_STREAM_PREMATURE_CLOSE in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Catch the error in the pipeline() callback or try/catch and check whether it is intentional: if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') { /* client disconnected — not a bug */ return; }. For HTTP servers, listen for the request 'close' event and stop producing data. For LLM streaming APIs (OpenAI, Anthropic), pass an AbortSignal and catch AbortError. For AbortController-aborted fetch response bodies, check signal.aborted before treating the error as fatal."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does stream.pipeline() throw ERR_STREAM_PREMATURE_CLOSE instead of my original error?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "When you call stream.destroy(myError) inside a pipeline, Node.js may propagate ERR_STREAM_PREMATURE_CLOSE from a downstream stream that detected the unexpected closure rather than forwarding your original error. This is a known pipeline behavior: downstream streams close when an upstream is destroyed, and they report premature close as the cause. To capture your original error, attach a direct 'error' listener to the source stream before handing it to pipeline()."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_STREAM_PREMATURE_CLOSE happen with OpenAI or Anthropic streaming?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The OpenAI and Anthropic Node.js SDKs consume the SSE/streaming response body via Node.js streams internally. When the browser tab closes, the user cancels, or a proxy times out before the full response arrives, the underlying HTTP response stream is destroyed — generating ERR_STREAM_PREMATURE_CLOSE. Catch it in your async iterator or pipeline catch block and treat it as a client abort rather than a server error."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I handle ERR_STREAM_PREMATURE_CLOSE in an HTTP server when a client disconnects?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Listen for req.on('close') or res.on('close') to detect client disconnection. Set a flag and check it before writing more data. When using pipeline() to stream a file or database result to res, catch ERR_STREAM_PREMATURE_CLOSE in the callback and skip logging or re-throwing — the client is simply gone."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does ERR_STREAM_PREMATURE_CLOSE always mean something went wrong?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. ERR_STREAM_PREMATURE_CLOSE is expected whenever a consumer intentionally stops reading before the stream ends — for example, a browser tab closing, a user cancelling a download, AbortController aborting an in-flight request, or a zip parser reading only the first entry then stopping. In these cases the error is informational: clean up resources and move on. It is only a true bug when the closure is unexpected and data was lost."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between ERR_STREAM_PREMATURE_CLOSE and EPIPE in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "EPIPE is an OS-level error thrown when a process writes to a pipe or socket whose read end is already closed. ERR_STREAM_PREMATURE_CLOSE is a Node.js stream-layer error thrown when a stream is destroyed before the 'end' or 'finish' event. Both can occur when a client disconnects mid-stream, but EPIPE surfaces on the write syscall while ERR_STREAM_PREMATURE_CLOSE is generated by the stream machinery during cleanup."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I suppress ERR_STREAM_PREMATURE_CLOSE when intentionally destroying a stream?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "When you call stream.destroy() intentionally (e.g. after reading enough data), pipeline() will still emit ERR_STREAM_PREMATURE_CLOSE. The cleanest suppression is to pass your own error to destroy(): stream.destroy(new MyAbortError()). Then in the pipeline callback check for your error type first, falling back to the premature close check. Alternatively, use the stream's 'close' event rather than pipeline() for partial consumption patterns."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ERR_STREAM_PREMATURE_CLOSE", "item": "https://nodejs-errors.dev/ERR_STREAM_PREMATURE_CLOSE/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Determine whether the close was intentional", "text": "Check err.code === 'ERR_STREAM_PREMATURE_CLOSE'. If the stream was destroyed because a client disconnected (browser tab closed, AbortController fired, user cancelled), this is expected. If data was expected to arrive but did not, it is a real error." },
+      { "@type": "HowToStep", "position": 2, "name": "Handle client disconnects in HTTP servers", "text": "Listen for req.on('close') to detect early client disconnection. Set a boolean flag, stop writing, and in the pipeline() catch block skip ERR_STREAM_PREMATURE_CLOSE silently. Do not log it as an application error." },
+      { "@type": "HowToStep", "position": 3, "name": "Use AbortSignal with LLM streaming APIs", "text": "Pass an AbortSignal tied to the request lifecycle when calling OpenAI or Anthropic streaming endpoints. Catch AbortError separately from ERR_STREAM_PREMATURE_CLOSE — the signal provides intent; the stream error is the symptom." },
+      { "@type": "HowToStep", "position": 4, "name": "Catch and classify in stream.pipeline()", "text": "Wrap pipeline() in async/await with try/catch, or use the callback form. Classify the error: if it is ERR_STREAM_PREMATURE_CLOSE caused by an intentional abort, return early. Otherwise log and propagate." },
+      { "@type": "HowToStep", "position": 5, "name": "Attach direct error listeners for original error context", "text": "pipeline() may mask your original error with ERR_STREAM_PREMATURE_CLOSE. Attach stream.on('error', handler) directly to the source stream to capture the real cause before handing it to pipeline()." },
+      { "@type": "HowToStep", "position": 6, "name": "Use stream lifecycle events for debugging", "text": "Attach listeners for 'close', 'end', 'finish', and 'error' events on each stream in the chain. Log which event fires and in what order to pinpoint which stream closed prematurely and why." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code, td code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ERR_STREAM_PREMATURE_CLOSE</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close</h1>
+  <span class="error-code">error code: <code>ERR_STREAM_PREMATURE_CLOSE</code></span>
+  <p>Complete reference — what it means, why <code>stream.pipeline()</code> throws it when a client disconnects, how it surfaces in OpenAI and Anthropic LLM streaming, AbortController patterns, and how to distinguish intentional aborts from real failures.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> <code>Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close</code> means a stream inside <code>stream.pipeline()</code> (or a pipe chain) was destroyed before it emitted <code>'end'</code> or <code>'finish'</code>. This is <em>expected</em> when an HTTP client disconnects, AbortController fires, or a user cancels an LLM stream — catch the error and check <code>err.code === 'ERR_STREAM_PREMATURE_CLOSE'</code> to decide whether to suppress it or treat it as fatal. It is a real bug only when data was expected but the stream closed unexpectedly.
+  </div>
+
+  <h2>What is ERR_STREAM_PREMATURE_CLOSE?</h2>
+  <p>
+    <strong>ERR_STREAM_PREMATURE_CLOSE</strong> is a Node.js stream-layer error defined in the
+    <a href="https://nodejs.org/api/errors.html#err_stream_premature_close" rel="noopener noreferrer">official Node.js errors documentation</a>.
+    It is thrown by the stream machinery whenever a readable or writable stream is destroyed or
+    closed <em>before</em> it naturally emits its terminal event (<code>'end'</code> for readables,
+    <code>'finish'</code> for writables).
+  </p>
+  <p>
+    <code>stream.pipeline()</code> — introduced in Node.js 10 — always propagates
+    <code>ERR_STREAM_PREMATURE_CLOSE</code> when any stream in the chain is closed early,
+    regardless of whether the closure was intentional. This means client disconnects, AbortController
+    aborts, zip parsers stopping after the first entry, and genuine mid-stream failures all produce
+    the same error code. Distinguishing intent from accident is your code's responsibility.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error strings you will see in the terminal:</strong><br>
+    <code>Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close</code><br>
+    <code>Error: Premature close</code> (older Node.js or some wrapper libraries)<br>
+    <code>FetchError: invalid response body while trying to fetch ...: Premature close</code> (node-fetch v2/v3)<br>
+    <code>APIConnectionError: Premature close</code> (some OpenAI SDK versions)<br>
+    <code>Error: Premature close&nbsp;&nbsp;code: 'ERR_STREAM_PREMATURE_CLOSE'</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close
+    at new NodeError (node:internal/errors:405:5)
+    at ClientRequest.&lt;anonymous&gt; (node:_http_client:799:21)
+    at Object.onceWrapper (node:events:629:26)
+    at ClientRequest.emit (node:events:526:35)
+    at Socket.socketCloseListener (node:_http_client:381:11)
+    at Socket.emit (node:events:526:35)
+    at TCP.&lt;anonymous&gt; (node:net:313:12) {
+  code: 'ERR_STREAM_PREMATURE_CLOSE'
+}</code></pre>
+
+  <p>
+    Notice the error object has only <code>code: 'ERR_STREAM_PREMATURE_CLOSE'</code> — there is no
+    <code>syscall</code>, <code>errno</code>, or <code>path</code> property. This is a pure
+    Node.js stream error, not an OS-level error like <a href="https://nodejs-errors.dev/EPIPE/">EPIPE</a>
+    or <a href="https://nodejs-errors.dev/ECONNRESET/">ECONNRESET</a>.
+  </p>
+
+  <h3>node-fetch / undici variant</h3>
+  <pre><code>FetchError: invalid response body while trying to fetch https://api.example.com/stream:
+  Premature close
+    at /project/node_modules/node-fetch/src/index.js:98:13
+    at processTicksAndRejections (node:internal/process/task_queues:96:5) {
+  type: 'system',
+  code: 'ERR_STREAM_PREMATURE_CLOSE',
+  errno: ''
+}</code></pre>
+
+  <h3>OpenAI SDK / Anthropic SDK variant</h3>
+  <pre><code>APIConnectionError: Connection error.
+    at /project/node_modules/openai/src/error.ts:...
+Caused by: Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close
+    at new NodeError (node:internal/errors:405:5)
+    at ClientRequest.&lt;anonymous&gt; (node:_http_client:799:21) {
+  code: 'ERR_STREAM_PREMATURE_CLOSE'
+}</code></pre>
+
+  <h2>Diagnostic Fields</h2>
+  <table>
+    <thead><tr><th>Property</th><th>Value</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>err.code</code></td>
+        <td><code>'ERR_STREAM_PREMATURE_CLOSE'</code></td>
+        <td>Always present. Use this to identify the error.</td>
+      </tr>
+      <tr>
+        <td><code>err.message</code></td>
+        <td><code>'Premature close'</code></td>
+        <td>Fixed string. Older Node.js versions may omit the <code>[ERR_STREAM_PREMATURE_CLOSE]</code> prefix.</td>
+      </tr>
+      <tr>
+        <td><code>err.syscall</code></td>
+        <td>Not present</td>
+        <td>Unlike EPIPE or ECONNRESET, this is a stream-layer error with no OS syscall component.</td>
+      </tr>
+      <tr>
+        <td><code>err.errno</code></td>
+        <td>Not present (or <code>''</code> in node-fetch)</td>
+        <td>No OS errno. Absence of errno distinguishes this from system errors.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Context</th><th>Intentional?</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>HTTP client closes browser tab / cancels request</td>
+        <td>HTTP server streaming response via <code>pipeline()</code></td>
+        <td>Yes</td>
+        <td>Catch <code>ERR_STREAM_PREMATURE_CLOSE</code> and return; listen for <code>req.on('close')</code></td>
+      </tr>
+      <tr>
+        <td>AbortController aborts a fetch response body</td>
+        <td>Client-side fetch with <code>AbortSignal</code></td>
+        <td>Yes</td>
+        <td>Check <code>signal.aborted</code> before treating as fatal; expect <code>AbortError</code> first</td>
+      </tr>
+      <tr>
+        <td>LLM API stream aborted (OpenAI, Anthropic)</td>
+        <td>Streaming chat completion, user navigates away</td>
+        <td>Yes</td>
+        <td>Pass <code>abortSignal: req.signal</code>; catch <code>ERR_STREAM_PREMATURE_CLOSE</code> as normal abort</td>
+      </tr>
+      <tr>
+        <td>Proxy / load balancer timeout mid-stream</td>
+        <td>Long-running SSE or download through nginx / AWS ALB</td>
+        <td>No — bug</td>
+        <td>Tune proxy idle/read timeouts; add heartbeat pings to keep connection alive</td>
+      </tr>
+      <tr>
+        <td>File write stream destroyed before flush</td>
+        <td><code>fs.createWriteStream()</code> in a pipeline</td>
+        <td>Sometimes</td>
+        <td>Ensure <code>stream.destroy()</code> is not called before <code>pipeline()</code> finishes; listen for <code>'finish'</code></td>
+      </tr>
+      <tr>
+        <td>Zip / archive parser stops early</td>
+        <td><code>node-unzipper</code>, <code>unzip-stream</code> in pipeline</td>
+        <td>Sometimes</td>
+        <td>Use the library's dedicated pipeline adapter or catch <code>ERR_STREAM_PREMATURE_CLOSE</code> when reading fewer entries than exist</td>
+      </tr>
+      <tr>
+        <td><code>stream.destroy(err)</code> inside pipeline</td>
+        <td>Manual stream cancellation</td>
+        <td>Yes</td>
+        <td>Pipeline masks original error; attach direct <code>'error'</code> listener on source stream to capture real cause</td>
+      </tr>
+      <tr>
+        <td>node-fetch v2 streaming response body</td>
+        <td>Calling <code>.text()</code> / <code>.json()</code> on a response that was aborted</td>
+        <td>Sometimes</td>
+        <td>Migrate to native <code>fetch</code> (Node.js 18+) or <code>undici</code>; catch and check <code>err.code</code></td>
+      </tr>
+      <tr>
+        <td>Long-running OpenAI stream exceeds 10 minutes</td>
+        <td>Chat completion with <code>stream: true</code> and a slow model</td>
+        <td>No — bug</td>
+        <td>Set explicit request timeout; split into smaller requests; use SDK retry with timeout handling</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – HTTP Client Disconnects Mid-Stream (Browser Tab Closes)</h2>
+  <p>
+    When a Node.js server streams data (file download, SSE, chunked JSON) and the client closes
+    the browser tab or the network drops, the HTTP socket is destroyed. If the server is using
+    <code>stream.pipeline()</code> to write to <code>res</code>, the pipeline fires
+    <code>ERR_STREAM_PREMATURE_CLOSE</code>. This is expected and should not be logged as an error.
+  </p>
+  <pre><code>// CJS — HTTP server streaming a file with pipeline()
+const http = require('http');
+const fs = require('fs');
+const { pipeline } = require('stream');
+
+const server = http.createServer((req, res) => {
+  const src = fs.createReadStream('/var/data/large-dataset.csv');
+
+  pipeline(src, res, (err) => {
+    if (!err) return; // success
+
+    if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+      // Client disconnected — expected, not a bug
+      // src is already destroyed by pipeline; no cleanup needed
+      return;
+    }
+
+    // Unexpected error (disk read error, etc.)
+    console.error('Stream error:', err);
+  });
+});
+
+server.listen(3000);</code></pre>
+
+  <pre><code>// ESM — same pattern with async/await
+import { createServer } from 'node:http';
+import { createReadStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+
+const server = createServer(async (req, res) => {
+  try {
+    await pipeline(createReadStream('/var/data/large-dataset.csv'), res);
+  } catch (err) {
+    if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+      return; // client disconnected — not an error
+    }
+    console.error('Unexpected streaming error:', err);
+  }
+});
+
+server.listen(3000);</code></pre>
+
+  <div class="callout">
+    <strong>Detecting disconnect before writing:</strong> Listen for <code>req.on('close')</code>
+    or <code>res.on('close')</code> to set a flag and stop any background work (database queries,
+    expensive computation) as soon as the client leaves. <code>pipeline()</code> handles stream
+    cleanup automatically, but your application-level resources need manual cancellation.
+  </div>
+
+  <pre><code>const server = http.createServer(async (req, res) => {
+  let clientConnected = true;
+
+  req.on('close', () => {
+    clientConnected = false;
+    // Cancel expensive work (e.g. abort a DB cursor) here
+  });
+
+  // Only start the expensive operation if the client is still there
+  if (!clientConnected) { res.end(); return; }
+
+  const dbStream = await db.query('SELECT * FROM large_table').stream();
+
+  try {
+    await pipeline(dbStream, res);
+  } catch (err) {
+    if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') return;
+    console.error('DB stream error:', err);
+  }
+});</code></pre>
+
+  <h2>Cause 2 – LLM Streaming APIs: OpenAI and Anthropic SDK Aborts</h2>
+  <p>
+    This is the most underserved area in competitor documentation. When you stream a chat completion
+    from the OpenAI or Anthropic Node.js SDKs and the client disconnects — browser tab closed,
+    user navigated away, frontend <code>AbortController</code> fired — the underlying HTTP response
+    stream is destroyed mid-read. The SDK surfaces this as <code>ERR_STREAM_PREMATURE_CLOSE</code>
+    (sometimes wrapped as <code>APIConnectionError</code>).
+  </p>
+
+  <h3>OpenAI SDK (v4+) — streaming with AbortSignal</h3>
+  <pre><code>// CJS — Express route streaming OpenAI chat completion
+const express = require('express');
+const OpenAI = require('openai');
+
+const app = express();
+const openai = new OpenAI();
+
+app.post('/chat', async (req, res) => {
+  // Forward the request's AbortSignal to OpenAI
+  // When the browser tab closes, req.signal fires and cancels the API call
+  const controller = new AbortController();
+
+  req.on('close', () => {
+    if (!res.writableEnded) {
+      controller.abort(); // stop the OpenAI stream
+    }
+  });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  try {
+    const stream = openai.beta.chat.completions.stream(
+      {
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: req.body.message }],
+      },
+      { signal: controller.signal }
+    );
+
+    for await (const chunk of stream) {
+      if (res.writableEnded) break;
+      const text = chunk.choices[0]?.delta?.content ?? '';
+      if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`);
+    }
+
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (err) {
+    // AbortError: user navigated away — not a bug
+    if (err.name === 'AbortError' || err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+      return;
+    }
+    // Real API error
+    console.error('OpenAI stream error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Stream failed' });
+    }
+  }
+});
+
+app.listen(3000);</code></pre>
+
+  <h3>Anthropic SDK (TypeScript/JS) — streaming with AbortSignal</h3>
+  <pre><code>// ESM — Next.js / Hono route streaming Anthropic Claude
+import Anthropic from '@anthropic-ai/sdk';
+
+const anthropic = new Anthropic();
+
+export async function POST(request) {
+  const body = await request.json();
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        const anthropicStream = anthropic.messages.stream(
+          {
+            model: 'claude-opus-4-5',
+            max_tokens: 1024,
+            messages: [{ role: 'user', content: body.message }],
+          },
+          { signal: request.signal } // forward the HTTP request's abort signal
+        );
+
+        for await (const event of anthropicStream) {
+          if (event.type === 'content_block_delta') {
+            const text = event.delta?.text ?? '';
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
+          }
+        }
+
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      } catch (err) {
+        // Client aborted — request.signal was fired
+        if (err.name === 'AbortError' || err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+          controller.close();
+          return;
+        }
+        controller.error(err);
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+  });
+}</code></pre>
+
+  <div class="callout warn">
+    <strong>LangChain / LangChain.js note:</strong> When the <code>ChatOpenAI</code> or
+    <code>ChatAnthropic</code> class throws <code>ERR_STREAM_PREMATURE_CLOSE</code>, the LangChain
+    retry mechanism (<code>p-retry</code>) may <em>not</em> catch it, causing the error to propagate
+    to your agent or chain instead of being retried. Wrap the chain invocation in your own
+    try/catch and handle <code>ERR_STREAM_PREMATURE_CLOSE</code> explicitly at the top level.
+  </div>
+
+  <h2>Cause 3 – AbortController / AbortSignal Aborting a Fetch Response Body</h2>
+  <p>
+    When you use <code>AbortController</code> to cancel a <code>fetch()</code> request mid-stream
+    — for example, a user-initiated cancel, a timeout, or switching to a different query —
+    the response body stream is destroyed. Node.js (using <code>undici</code> internally for
+    native <code>fetch</code>) will produce <code>ERR_STREAM_PREMATURE_CLOSE</code> as you
+    consume the body.
+  </p>
+  <pre><code>// CJS — aborting a streaming fetch response safely
+const controller = new AbortController();
+const { signal } = controller;
+
+// Cancel after 5 seconds (or on user action)
+setTimeout(() => controller.abort(), 5000);
+
+try {
+  const res = await fetch('https://api.example.com/large-data', { signal });
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  // Consume the body as a stream
+  for await (const chunk of res.body) {
+    process.stdout.write(chunk);
+  }
+} catch (err) {
+  if (err.name === 'AbortError') {
+    // Normal timeout/cancel — not an error
+    console.log('Request aborted by user or timeout.');
+    return;
+  }
+  if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+    // The abort closed the body stream before it ended
+    // Also expected when aborting — check signal.aborted
+    if (signal.aborted) {
+      console.log('Stream closed due to abort signal.');
+      return;
+    }
+  }
+  // Real error
+  throw err;
+}</code></pre>
+
+  <div class="callout">
+    <strong>Node.js 17.3+ tip:</strong> Prefer <code>AbortSignal.timeout(ms)</code> over a
+    manual <code>setTimeout(() =&gt; controller.abort(), ms)</code>. It is composable via
+    <code>AbortSignal.any([signal1, signal2])</code> (Node.js 20.3+) and avoids leaked timers.
+    <br><br>
+    <code>const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });</code>
+  </div>
+
+  <h3>node-fetch v2 / v3 specific behaviour</h3>
+  <p>
+    <code>node-fetch</code> wraps <code>ERR_STREAM_PREMATURE_CLOSE</code> in a
+    <code>FetchError</code> with <code>type: 'system'</code>. The underlying <code>code</code>
+    is still accessible via <code>err.code</code>:
+  </p>
+  <pre><code>const fetch = require('node-fetch'); // v2 or v3
+
+const controller = new AbortController();
+const timeout = setTimeout(() => controller.abort(), 8000);
+
+try {
+  const res = await fetch('https://api.example.com/stream', {
+    signal: controller.signal,
+  });
+  const text = await res.text();
+  console.log(text);
+} catch (err) {
+  if (err.name === 'AbortError') {
+    console.log('Fetch aborted (timeout or user cancel).');
+  } else if (err.type === 'system' && err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+    // node-fetch wraps premature close as FetchError with type: 'system'
+    if (controller.signal.aborted) {
+      console.log('Body stream closed by abort.');
+    } else {
+      console.error('Unexpected premature close:', err);
+    }
+  } else {
+    throw err;
+  }
+} finally {
+  clearTimeout(timeout);
+}</code></pre>
+
+  <div class="callout">
+    <strong>Migration recommendation:</strong> <code>node-fetch</code> is no longer maintained as
+    actively. For Node.js 18+ projects, use the built-in <code>fetch</code> (powered by
+    <code>undici</code>) or install <code>undici</code> directly. Both handle abort signals
+    natively and emit <code>AbortError</code> reliably before the stream error.
+  </div>
+
+  <h2>Cause 4 – File Stream Destroyed Before Write Finishes</h2>
+  <p>
+    If a writable <code>fs.createWriteStream</code> is passed to <code>pipeline()</code> and
+    something calls <code>.destroy()</code> on it before all data is flushed to disk, pipeline
+    throws <code>ERR_STREAM_PREMATURE_CLOSE</code>. Common causes: process signal handlers,
+    incomplete error handling in transform streams, or concurrent operations on the same file.
+  </p>
+  <pre><code>// CJS — safe file write pipeline with cleanup
+const { pipeline } = require('stream/promises');
+const { createReadStream, createWriteStream } = require('fs');
+const { unlink } = require('fs/promises');
+const path = require('path');
+
+async function downloadToFile(readableStream, destPath) {
+  const writer = createWriteStream(destPath);
+
+  try {
+    await pipeline(readableStream, writer);
+    // 'finish' fired — file is completely written
+    console.log('File written successfully:', destPath);
+  } catch (err) {
+    // Ensure the partial file is removed on any failure
+    try { await unlink(destPath); } catch {}
+
+    if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+      throw new Error(`Stream closed before file was fully written: ${path.basename(destPath)}`);
+    }
+    throw err;
+  }
+}
+
+// Usage
+const https = require('https');
+https.get('https://example.com/data.zip', async (res) => {
+  await downloadToFile(res, '/tmp/data.zip');
+});</code></pre>
+
+  <h2>Cause 5 – pipeline() Semantics: When It Throws vs. Swallows</h2>
+  <p>
+    Understanding when <code>pipeline()</code> propagates <code>ERR_STREAM_PREMATURE_CLOSE</code>
+    versus your original error is critical for correct error handling.
+  </p>
+  <table>
+    <thead><tr><th>Scenario</th><th>What pipeline() reports</th><th>How to get the real error</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Source stream emits <code>'error'</code> event</td>
+        <td>Forwards the original error</td>
+        <td>Normal — <code>err.code</code> is the source error code</td>
+      </tr>
+      <tr>
+        <td>Source stream is destroyed with no argument: <code>src.destroy()</code></td>
+        <td><code>ERR_STREAM_PREMATURE_CLOSE</code> from the downstream stream</td>
+        <td>Attach <code>src.on('error', ...)</code> before calling pipeline()</td>
+      </tr>
+      <tr>
+        <td>Source stream is destroyed with an error: <code>src.destroy(err)</code></td>
+        <td>May report <code>ERR_STREAM_PREMATURE_CLOSE</code> from downstream, not <code>err</code></td>
+        <td>Attach <code>src.on('error', ...)</code> directly to capture the original <code>err</code></td>
+      </tr>
+      <tr>
+        <td>Writable (destination) stream destroyed early</td>
+        <td><code>ERR_STREAM_PREMATURE_CLOSE</code></td>
+        <td>Check <code>res.destroyed</code> / <code>req.aborted</code> to determine cause</td>
+      </tr>
+      <tr>
+        <td>Transform stream throws inside <code>_transform()</code></td>
+        <td>Forwards the transform error</td>
+        <td>Normal — <code>err</code> is whatever you threw in <code>_transform</code></td>
+      </tr>
+      <tr>
+        <td>Client disconnects during pipeline to HTTP <code>res</code></td>
+        <td><code>ERR_STREAM_PREMATURE_CLOSE</code></td>
+        <td>Expected — check <code>req.socket.destroyed</code> to confirm client left</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <pre><code>// Capturing the real error when pipeline masks it
+const { pipeline } = require('stream/promises');
+
+async function safeStream(source, destination) {
+  let realError = null;
+
+  // Capture the actual source error before pipeline sees it
+  source.on('error', (err) => {
+    realError = err;
+  });
+
+  try {
+    await pipeline(source, destination);
+  } catch (err) {
+    if (err.code === 'ERR_STREAM_PREMATURE_CLOSE' && realError) {
+      // Pipeline masked the real error — use the original
+      throw realError;
+    }
+    throw err;
+  }
+}</code></pre>
+
+  <h2>Cause 6 – Zip / Archive Parsers (node-unzipper)</h2>
+  <p>
+    Zip parsers like <code>node-unzipper</code> internally call <code>stream.destroy()</code>
+    when they have finished reading entries, which triggers <code>ERR_STREAM_PREMATURE_CLOSE</code>
+    in pipeline even though extraction completed successfully. Verify success by checking whether
+    all expected entries were processed before checking the error.
+  </p>
+  <pre><code>// CJS — unzipper with pipeline (handle premature close)
+const unzipper = require('unzipper');
+const { pipeline } = require('stream/promises');
+const { createReadStream, createWriteStream } = require('fs');
+
+async function extractZip(zipPath, outputDir) {
+  const zip = createReadStream(zipPath).pipe(unzipper.Parse({ forceStream: true }));
+
+  for await (const entry of zip) {
+    const { path: entryPath, type } = entry;
+    if (type === 'File') {
+      // Use pipeline per entry — catch premature close per entry
+      try {
+        await pipeline(entry, createWriteStream(`${outputDir}/${entryPath}`));
+      } catch (err) {
+        if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+          // unzipper closes the entry stream after it's consumed — expected
+          continue;
+        }
+        throw err;
+      }
+    } else {
+      entry.autodrain(); // skip directories
+    }
+  }
+}
+
+extractZip('/tmp/archive.zip', '/tmp/output').catch(console.error);</code></pre>
+
+  <h2>Safe AbortSignal-Aware Stream Consumption Pattern</h2>
+  <p>
+    The following pattern is reusable for any scenario where you consume a readable stream and
+    want clean cancellation via <code>AbortSignal</code>:
+  </p>
+  <pre><code>// ESM — AbortSignal-aware stream consumer
+import { pipeline } from 'node:stream/promises';
+import { Writable } from 'node:stream';
+
+/**
+ * Consume a ReadableStream (Node.js or web) with abort support.
+ * Returns the concatenated Buffer, or throws if an unexpected error occurs.
+ * Resolves to null if aborted intentionally.
+ */
+async function consumeStreamSafely(readable, signal) {
+  const chunks = [];
+
+  const writer = new Writable({
+    write(chunk, _enc, cb) {
+      chunks.push(chunk);
+      cb();
+    },
+  });
+
+  try {
+    await pipeline(readable, writer, { signal });
+    return Buffer.concat(chunks);
+  } catch (err) {
+    // AbortError is thrown by pipeline when the signal fires (Node.js 16+)
+    if (err.name === 'AbortError') {
+      return null; // intentional cancel
+    }
+    // ERR_STREAM_PREMATURE_CLOSE can appear when aborting in some Node.js versions
+    if (err.code === 'ERR_STREAM_PREMATURE_CLOSE' && signal?.aborted) {
+      return null; // intentional cancel
+    }
+    throw err; // unexpected error
+  }
+}
+
+// Usage
+const controller = new AbortController();
+const result = await consumeStreamSafely(responseBodyStream, controller.signal);</code></pre>
+
+  <div class="callout">
+    <strong>Node.js 16+ pipeline AbortSignal support:</strong> Passing a <code>signal</code> option
+    to <code>pipeline()</code> (callback form) or <code>stream/promises pipeline()</code> causes it
+    to throw <code>AbortError</code> when the signal fires and cleanly destroys all streams.
+    This is the preferred cancellation mechanism — it avoids the ambiguity of
+    <code>ERR_STREAM_PREMATURE_CLOSE</code> in most cases.
+    <br><br>
+    <code>await pipeline(src, dest, { signal: controller.signal });</code>
+  </div>
+
+  <h2>Stream Lifecycle Event Debugging</h2>
+  <p>
+    To pinpoint which stream in a chain closed prematurely, attach listeners for all lifecycle
+    events and log them in order. The sequence tells you exactly where things went wrong.
+  </p>
+  <pre><code>// CJS — debug stream lifecycle to diagnose premature close
+function debugStream(stream, label) {
+  for (const event of ['close', 'end', 'finish', 'error', 'aborted']) {
+    stream.on(event, (...args) => {
+      console.log(`[${label}] event: ${event}`, args.length ? args[0] : '');
+    });
+  }
+  return stream;
+}
+
+const http = require('http');
+const { pipeline } = require('stream/promises');
+
+const server = http.createServer(async (req, res) => {
+  const readStream = debugStream(getSomeReadableStream(), 'source');
+  const writeStream = debugStream(res, 'response');
+
+  try {
+    await pipeline(readStream, writeStream);
+  } catch (err) {
+    console.error('Pipeline error:', err.code, err.message);
+    // The debug log above will show which stream fired 'close' first
+  }
+});
+
+server.listen(3000);</code></pre>
+
+  <p>
+    Expected output when a client disconnects mid-stream:
+  </p>
+  <pre><code>[response]  event: close         &lt;-- client disconnected; socket closed
+[source]    event: close         &lt;-- pipeline destroyed source as cleanup
+Pipeline error: ERR_STREAM_PREMATURE_CLOSE Premature close</code></pre>
+
+  <p>
+    Expected output when the stream completes normally:
+  </p>
+  <pre><code>[source]    event: end           &lt;-- source finished emitting data
+[response]  event: finish        &lt;-- all data flushed to client
+[response]  event: close         &lt;-- TCP connection closed cleanly</code></pre>
+
+  <h2>got / undici Specific Patterns</h2>
+
+  <h3>got</h3>
+  <pre><code>// CJS — got streaming with abort and premature close handling
+const got = require('got');
+const { pipeline } = require('stream/promises');
+const { createWriteStream } = require('fs');
+
+async function downloadWithGot(url, destPath, signal) {
+  const downloadStream = got.stream(url, { signal });
+
+  try {
+    await pipeline(downloadStream, createWriteStream(destPath));
+  } catch (err) {
+    if (err.name === 'AbortError' || err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+      if (signal?.aborted) {
+        console.log('Download cancelled.');
+        return;
+      }
+    }
+    // got wraps network errors — check err.response and err.code
+    throw err;
+  }
+}</code></pre>
+
+  <h3>undici (Node.js built-in fetch engine)</h3>
+  <pre><code>// ESM — undici stream() with abort
+import { stream } from 'undici';
+import { createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+
+const controller = new AbortController();
+
+try {
+  const { body } = await stream(
+    'https://api.example.com/large-file',
+    { method: 'GET', signal: controller.signal },
+    ({ body }) => body  // return the body stream
+  );
+
+  await pipeline(body, createWriteStream('/tmp/output'));
+} catch (err) {
+  if (err.name === 'AbortError' || err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+    if (controller.signal.aborted) {
+      console.log('Download aborted intentionally.');
+      return;
+    }
+  }
+  throw err;
+}</code></pre>
+
+  <h2>Docker and CI Behavior</h2>
+  <p>
+    <code>ERR_STREAM_PREMATURE_CLOSE</code> appears more frequently in Docker and CI environments
+    due to:
+  </p>
+  <ul>
+    <li><strong>Container shutdown signals:</strong> Docker sends <code>SIGTERM</code> then <code>SIGKILL</code> during <code>docker stop</code>. If your process does not handle <code>SIGTERM</code> gracefully, active streams are destroyed mid-transfer, producing premature close errors in logs.</li>
+    <li><strong>CI job cancellation:</strong> GitHub Actions, GitLab CI, and Jenkins cancel jobs by sending signals to the process group. Long-running downloads or stream-based test fixtures will receive premature close.</li>
+    <li><strong>Proxy timeouts:</strong> Many CI environments route outbound traffic through proxies with short idle timeouts (30–60 s). Long-running SSE or streaming API calls stall and the proxy kills the connection.</li>
+  </ul>
+  <pre><code>// Graceful SIGTERM handling — finish in-flight streams before exit
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received — shutting down gracefully');
+  server.close(async () => {
+    // Give in-flight pipeline() calls time to finish or catch premature close
+    await new Promise((r) => setTimeout(r, 1000));
+    process.exit(0);
+  });
+});</code></pre>
+
+  <h2>Windows-Specific Behavior</h2>
+  <p>
+    On Windows, <code>ERR_STREAM_PREMATURE_CLOSE</code> behaves identically to Linux and macOS
+    at the Node.js stream layer — it is a pure JavaScript error with no OS-level difference.
+    However, Windows pipe semantics differ for named pipes and child process stdio:
+  </p>
+  <ul>
+    <li>Windows named pipes close differently from POSIX pipes; scripts using <code>pipeline()</code> across child process stdio may see premature close when the child exits before the parent finishes writing.</li>
+    <li>If you see <code>ERR_STREAM_PREMATURE_CLOSE</code> on <code>child.stdin</code> on Windows but not Linux, add a <code>child.on('exit', ...)</code> handler and stop writing when the child exits.</li>
+  </ul>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Check <code>err.code === 'ERR_STREAM_PREMATURE_CLOSE'</code> — if this is the only error property (no <code>syscall</code>, no <code>errno</code>), it is a stream-layer close, not an OS error.</li>
+    <li>Check whether the close was intentional: was <code>AbortController.abort()</code> called? Did the client disconnect (<code>req.socket.destroyed</code>)? Did your code call <code>stream.destroy()</code> manually?</li>
+    <li>If using <code>pipeline()</code>, attach a direct <code>stream.on('error', ...)</code> listener to the source stream before calling pipeline to capture the real error if pipeline masks it.</li>
+    <li>Add lifecycle event logging (<code>'close'</code>, <code>'end'</code>, <code>'finish'</code>) to each stream to identify which one closed first and in what order.</li>
+    <li>For LLM streaming (OpenAI, Anthropic), pass <code>signal: req.signal</code> or a controller's signal so aborts are clean <code>AbortError</code> events rather than stream errors.</li>
+    <li>For proxy/load-balancer environments, verify the proxy idle timeout is longer than your maximum stream duration or add periodic keep-alive writes (e.g., SSE comment lines: <code>: heartbeat\n\n</code>).</li>
+    <li>Enable <code>NODE_DEBUG=stream</code> for verbose stream lifecycle output: <code>NODE_DEBUG=stream node app.js 2&gt;&amp;1 | grep premature</code></li>
+    <li>For Docker/CI, ensure your process handles <code>SIGTERM</code> gracefully and waits for in-flight pipeline calls before exiting.</li>
+  </ol>
+
+  <pre><code># Verbose stream debug output
+NODE_DEBUG=stream node app.js 2&gt;&amp;1 | grep -i "premature\|close\|destroy"</code></pre>
+
+  <div class="callout warn">
+    <strong>Do not suppress ERR_STREAM_PREMATURE_CLOSE globally:</strong> Wrapping all pipeline
+    errors with a catch-all that silently ignores <code>ERR_STREAM_PREMATURE_CLOSE</code> will
+    hide genuine failures — dropped downloads, truncated file writes, incomplete LLM responses
+    caused by server-side bugs. Always classify first: was the close intentional
+    (<code>signal.aborted</code>, <code>req.socket.destroyed</code>) or unexpected?
+    Log unexpected occurrences with enough context (URL, user ID, stream size written so far)
+    to diagnose in production.
+  </div>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ERR_STREAM_PREMATURE_CLOSE in Node.js?</summary>
+    <div class="faq-answer">
+      <p><code>ERR_STREAM_PREMATURE_CLOSE</code> is thrown by Node.js when a stream is destroyed or closed before it emits its natural terminal event (<code>'end'</code> for readables, <code>'finish'</code> for writables). <code>stream.pipeline()</code> always propagates this error when any stream in the chain closes early. It appears as <code>Error [ERR_STREAM_PREMATURE_CLOSE]: Premature close</code> in the stack trace. The error has only <code>code</code> and <code>message</code> — no <code>syscall</code> or <code>errno</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_STREAM_PREMATURE_CLOSE in Node.js?</summary>
+    <div class="faq-answer">
+      <p>Catch the error and classify intent: <code>if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') { if (signal?.aborted || req.socket?.destroyed) return; /* real error: */ throw err; }</code>. For HTTP servers, listen for <code>req.on('close')</code> and stop producing data when the client leaves. For LLM streaming (OpenAI, Anthropic), pass an <code>AbortSignal</code> and catch <code>AbortError</code> first. For AbortController-aborted fetch bodies, check <code>signal.aborted</code> before treating the error as fatal.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does stream.pipeline() throw ERR_STREAM_PREMATURE_CLOSE instead of my original error?</summary>
+    <div class="faq-answer">
+      <p>When you call <code>stream.destroy(myError)</code> inside a pipeline, a downstream stream may close before it reads the original error, reporting <code>ERR_STREAM_PREMATURE_CLOSE</code> instead. To capture your original error, attach a direct <code>source.on('error', (err) => { realError = err; })</code> listener before passing the stream to <code>pipeline()</code>. Then in the pipeline catch block, if <code>err.code === 'ERR_STREAM_PREMATURE_CLOSE'</code> and <code>realError</code> is set, throw <code>realError</code> instead.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_STREAM_PREMATURE_CLOSE happen with OpenAI or Anthropic streaming?</summary>
+    <div class="faq-answer">
+      <p>When the browser tab closes, the user cancels, or a proxy times out before the LLM response finishes, the HTTP response body stream is destroyed mid-read. The OpenAI and Anthropic SDKs surface this as <code>ERR_STREAM_PREMATURE_CLOSE</code> (sometimes wrapped as <code>APIConnectionError</code>). Fix by passing an <code>AbortSignal</code> tied to the request lifecycle to the SDK call. When the signal fires on client disconnect, the SDK aborts cleanly and throws <code>AbortError</code>, which is easier to classify as intentional.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I handle ERR_STREAM_PREMATURE_CLOSE in an Express or Fastify HTTP server?</summary>
+    <div class="faq-answer">
+      <p>Listen for <code>req.on('close')</code> to detect client disconnection. Set a flag (<code>let aborted = false; req.on('close', () => { aborted = true; });</code>). When using <code>pipeline()</code> to stream a response, catch the error and check the flag: if <code>aborted</code> is true when <code>ERR_STREAM_PREMATURE_CLOSE</code> fires, return silently. If <code>aborted</code> is false, it is an unexpected error worth logging.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Does ERR_STREAM_PREMATURE_CLOSE always mean something went wrong?</summary>
+    <div class="faq-answer">
+      <p>No. It is expected whenever a consumer intentionally stops reading before the stream ends — browser tab closed, AbortController fired, user cancelled a download, or a zip parser stopped after reading only some entries. In these cases the error is informational: clean up resources and move on. It is a real bug only when the stream closed unexpectedly and data may be lost or corrupted.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between ERR_STREAM_PREMATURE_CLOSE and EPIPE?</summary>
+    <div class="faq-answer">
+      <p><a href="https://nodejs-errors.dev/EPIPE/"><code>EPIPE</code></a> is an OS-level error (errno 32) thrown when a process writes to a pipe or socket whose read end is already closed. <code>ERR_STREAM_PREMATURE_CLOSE</code> is a Node.js stream-layer error thrown when a stream is destroyed before emitting <code>'end'</code> or <code>'finish'</code>. Both can appear when a client disconnects mid-stream, but EPIPE surfaces on the write syscall while ERR_STREAM_PREMATURE_CLOSE is generated by the stream machinery during cleanup after the socket is gone.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_STREAM_PREMATURE_CLOSE happen in production but not locally?</summary>
+    <div class="faq-answer">
+      <p>In production, real users close tabs and cancel requests, proxy/load balancers impose read timeouts (AWS ALB default: 60 s), and long-running LLM streams exceed proxy idle timeouts. Locally, requests complete before any timeout kicks in and there are no proxy hops. To reproduce locally: use <code>AbortController</code> with a short timeout, or test with <code>nginx</code> as a reverse proxy configured with a low <code>proxy_read_timeout</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I suppress ERR_STREAM_PREMATURE_CLOSE when intentionally destroying a stream?</summary>
+    <div class="faq-answer">
+      <p>Pass your own error to <code>stream.destroy(new MyIntentionalError())</code>. Then in the <code>pipeline()</code> catch block, check for your error type first before falling back to the premature close check. Alternatively, use the <code>signal</code> option added in Node.js 16+: <code>await pipeline(src, dest, { signal })</code>. When the signal fires, <code>pipeline()</code> throws <code>AbortError</code> rather than <code>ERR_STREAM_PREMATURE_CLOSE</code>, making intent unambiguous.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/EPIPE/"><code>EPIPE: write EPIPE</code></a> — OS-level broken pipe error; write to a pipe/socket whose read end has closed; often accompanies premature close on the write path</li>
+    <li><a href="https://nodejs-errors.dev/ECONNRESET/"><code>ECONNRESET: connection reset by peer</code></a> — TCP RST from remote peer; the underlying cause of premature close when a network connection drops mid-stream</li>
+    <li><a href="https://nodejs-errors.dev/ETIMEDOUT/"><code>ETIMEDOUT: connection timed out</code></a> — no response within timeout window; can precede premature close in proxy-heavy environments</li>
+    <li><a href="https://nodejs-errors.dev/ECONNREFUSED/"><code>ECONNREFUSED: connection refused</code></a> — target port not listening; connection never established (precedes any stream activity)</li>
+    <li><a href="https://nodejs-errors.dev/UnhandledPromiseRejection/"><code>UnhandledPromiseRejection</code></a> — if ERR_STREAM_PREMATURE_CLOSE propagates from an async pipeline call without a catch, it becomes an unhandled rejection</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-10 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#err_stream_premature_close">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

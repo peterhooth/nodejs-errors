@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Error [ERR_STREAM_WRITE_AFTER_END]: write after end – Node.js Fix</title>
+  <meta name="description" content="Node.js throws Error [ERR_STREAM_WRITE_AFTER_END]: write after end when stream.write() or res.write() is called after stream.end(). Covers missing return after res.end(), async callbacks, pipeline failures, http-proxy, and writable guards." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ERR_STREAM_WRITE_AFTER_END/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Error [ERR_STREAM_WRITE_AFTER_END]: write after end – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws Error [ERR_STREAM_WRITE_AFTER_END]: write after end when stream.write() or res.write() is called after stream.end(). Covers missing return after res.end(), async callbacks, pipeline failures, http-proxy, and writable guards." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ERR_STREAM_WRITE_AFTER_END/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Error [ERR_STREAM_WRITE_AFTER_END]: write after end – Node.js Fix",
+    "description": "Node.js throws ERR_STREAM_WRITE_AFTER_END when stream.write() or res.write() is called after stream.end() or res.end() has already been called on the writable side. Common causes: missing return after res.end() lets async handlers keep writing; pipeline failure where an upstream error handler writes to an already-destroyed sink; http-proxy and googleapis/pubsub calling write on a finished response. Fix with writable.writableEnded guards, return after res.end(), and stream.pipeline() instead of manual pipe().",
+    "url": "https://nodejs-errors.dev/ERR_STREAM_WRITE_AFTER_END/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-10",
+    "dateModified": "2026-05-10"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ERR_STREAM_WRITE_AFTER_END in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_STREAM_WRITE_AFTER_END is thrown when stream.write() or res.write() is called on a Writable stream after stream.end() or res.end() has already been called. Calling end() signals that no more data will be written; any subsequent write() call is rejected with this error. The full message is: Error [ERR_STREAM_WRITE_AFTER_END]: write after end."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between ERR_STREAM_WRITE_AFTER_END and ERR_HTTP_HEADERS_SENT?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_STREAM_WRITE_AFTER_END is a stream-level error: the writable side of the stream has been closed by calling end(), and another write() was attempted on the same stream object. ERR_HTTP_HEADERS_SENT is an HTTP-level error: res.writeHead() or res.setHeader() was called after the HTTP headers were already flushed to the client. ERR_HTTP_HEADERS_SENT fires before any body data is sent; ERR_STREAM_WRITE_AFTER_END fires after the entire response body is closed. Both can appear in the same Express handler when multiple code paths try to send a response."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix 'write after end' in an Express route?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Add return before every res.json(), res.send(), or res.end() call so the function exits immediately after sending. Without return, the function continues executing and subsequent res.write() or res.end() calls trigger ERR_STREAM_WRITE_AFTER_END. Example: if (error) { return res.status(500).json({ error }); } — the return prevents code below from running."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_STREAM_WRITE_AFTER_END only happen in production and not locally?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Timing differences expose the bug under load. In production, database queries and external API calls are slower, so an async callback is far more likely to fire after a timeout or early res.end() call has already closed the response. Locally with fast responses the timing race is rarely triggered. The underlying bug — writing after end — exists in both environments but only manifests when the async operation is slow enough to lose the race."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does http-proxy throw ERR_STREAM_WRITE_AFTER_END?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "node-http-proxy and http-proxy-middleware write to the ServerResponse stream to forward the proxied reply. If the client disconnects (browser navigates away, Cypress resets a connection, timeout fires) the response stream is destroyed before the proxied data arrives. The proxy's onError or data callback then calls res.write() on the destroyed stream, producing ERR_STREAM_WRITE_AFTER_END. Fix by checking res.writableEnded before the proxy writes, or by listening to res.on('close') to abort the proxied request early."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_STREAM_WRITE_AFTER_END in a stream pipeline?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Replace manual pipe() chains with stream.pipeline() (Node.js 10+) or stream/promises pipeline (Node.js 15+). pipeline() automatically destroys all streams in the chain when any stream errors or closes, preventing the pattern where an upstream error handler tries to write to an already-destroyed downstream sink. Also guard every manual write with if (!writable.writableEnded && !writable.destroyed) before calling write()."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What are writable.writableEnded and writable.destroyed?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "writable.writableEnded is true after writable.end() has been called — it means no more writes will be accepted, even if data is still being flushed to the underlying resource. writable.destroyed is true after writable.destroy() has been called or a fatal error has occurred — the stream is fully torn down. Check both before calling write(): if (writable.writableEnded || writable.destroyed) return; This is the correct guard against ERR_STREAM_WRITE_AFTER_END."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ERR_STREAM_WRITE_AFTER_END", "item": "https://nodejs-errors.dev/ERR_STREAM_WRITE_AFTER_END/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix Error [ERR_STREAM_WRITE_AFTER_END]: write after end in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Find the write() call that fires after end()", "text": "Read the stack trace. The top frame names the exact stream type and file. Common culprits: res.write() inside an async callback, a pipeline error handler that calls res.end() on an already-ended response, or an http-proxy write to a client that disconnected." },
+      { "@type": "HowToStep", "position": 2, "name": "Add return after every res.end() / res.send() call", "text": "In Express and raw http handlers, ensure every response-terminating call is followed by return so the function stops executing. Pattern: if (err) { return res.status(500).json({ error: err.message }); }" },
+      { "@type": "HowToStep", "position": 3, "name": "Guard writes with writable.writableEnded", "text": "Before every write() call in async code, check: if (res.writableEnded || res.destroyed) return; This is a defensive guard that prevents ERR_STREAM_WRITE_AFTER_END when an async callback fires after the response has already been closed." },
+      { "@type": "HowToStep", "position": 4, "name": "Replace stream.pipe() with stream.pipeline()", "text": "Use the pipeline() function from the 'stream' module (or 'stream/promises' in Node.js 15+). pipeline() destroys all streams in the chain automatically when any one errors or closes, preventing write-after-end in multi-stream compositions." },
+      { "@type": "HowToStep", "position": 5, "name": "Listen for the close event to cancel async work", "text": "Attach res.on('close', () => { cancelled = true; }) at the top of the request handler. In every async callback, check cancelled before writing. This handles client disconnects and prevents the callback-fires-too-late pattern." },
+      { "@type": "HowToStep", "position": 6, "name": "Use AbortController to cancel in-flight requests", "text": "Pass an AbortSignal to fetch(), database queries, or any async operation that should stop when the HTTP response closes. On the close event, call controller.abort(). This prevents async callbacks from ever reaching the write() call." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ERR_STREAM_WRITE_AFTER_END</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>Error [ERR_STREAM_WRITE_AFTER_END]: write after end</h1>
+  <span class="error-code">error code: <code>ERR_STREAM_WRITE_AFTER_END</code></span>
+  <p>Complete reference — what it means, every cause including async callbacks, pipeline failures, and http-proxy scenarios, and how to fix it with guards, <code>return</code> statements, and <code>stream.pipeline()</code>.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> <code>Error [ERR_STREAM_WRITE_AFTER_END]: write after end</code> means <code>stream.write()</code> or <code>res.write()</code> was called after <code>stream.end()</code> or <code>res.end()</code> already closed the writable. The most common fix is adding <code>return</code> before every <code>res.end()</code> / <code>res.send()</code> so the handler exits. For async callbacks, guard with <code>if (res.writableEnded || res.destroyed) return;</code> before every write. For pipeline failures, replace <code>stream.pipe()</code> with <code>stream.pipeline()</code>.
+  </div>
+
+  <h2>What is ERR_STREAM_WRITE_AFTER_END?</h2>
+  <p>
+    <code>ERR_STREAM_WRITE_AFTER_END</code> is a Node.js
+    <a href="https://nodejs.org/api/errors.html#err_stream_write_after_end" rel="noopener noreferrer">stream error</a>
+    thrown when <code>writable.write()</code> is called on a
+    <a href="https://nodejs.org/api/stream.html#class-streamwritable" rel="noopener noreferrer">Writable stream</a>
+    after <code>writable.end()</code> has already been called. <code>end()</code> signals to the
+    stream that no more data will follow — calling <code>write()</code> afterward violates that
+    contract, so Node.js throws immediately.
+  </p>
+  <p>
+    In HTTP servers this surfaces most often as <code>res.write()</code> or <code>res.end()</code>
+    being called a second time after the response has already been sent — frequently from an async
+    callback (database query, <code>setTimeout</code>, upstream proxy response) that fires after
+    the response was already closed.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error strings you will see:</strong><br>
+    <code>Error [ERR_STREAM_WRITE_AFTER_END]: write after end</code><br>
+    <code>Error: write after end</code> (older Node.js without the code prefix)<br>
+    <code>events.js:292 throw er; // Unhandled 'error' event ... Error [ERR_STREAM_WRITE_AFTER_END]: write after end</code><br>
+    <code>node:internal/streams/writable ... Error [ERR_STREAM_WRITE_AFTER_END]: write after end</code>
+  </div>
+
+  <h2>ERR_STREAM_WRITE_AFTER_END vs ERR_HTTP_HEADERS_SENT</h2>
+  <p>
+    These two errors are often confused because they both arise from "responding twice" in an HTTP
+    handler. They operate at different layers:
+  </p>
+  <table>
+    <thead><tr><th>Error</th><th>Layer</th><th>When it fires</th><th>Property checked</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>ERR_HTTP_HEADERS_SENT</code></td>
+        <td>HTTP layer</td>
+        <td><code>res.writeHead()</code> or <code>res.setHeader()</code> called after headers were already flushed</td>
+        <td><code>res.headersSent</code></td>
+      </tr>
+      <tr>
+        <td><code>ERR_STREAM_WRITE_AFTER_END</code></td>
+        <td>Stream layer</td>
+        <td><code>res.write()</code> or <code>res.end()</code> called after <code>res.end()</code> already closed the writable</td>
+        <td><code>res.writableEnded</code></td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    In practice: <code>ERR_HTTP_HEADERS_SENT</code> fires first if you try to change headers after
+    sending; <code>ERR_STREAM_WRITE_AFTER_END</code> fires if you try to write body data after the
+    stream is fully closed. Both require the same root fix — ensure only one code path sends a
+    response per request.
+  </p>
+
+  <h2>Full Error Example</h2>
+  <pre><code>Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+    at new NodeError (node:internal/errors:405:5)
+    at validChunk (node:internal/streams/writable:224:13)
+    at ServerResponse.write (node:_http_outgoing:842:3)
+    at /project/src/routes/users.js:42:9
+    at processTicksAndMicrotasks (node:internal/process/task_queues:95:5) {
+  code: 'ERR_STREAM_WRITE_AFTER_END'
+}</code></pre>
+
+  <h3>Unhandled — crashes the process</h3>
+  <pre><code>events.js:292
+    throw er; // Unhandled 'error' event
+    ^
+
+Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+    at new NodeError (node:internal/errors:405:5)
+    at validChunk (node:internal/streams/writable:224:13)
+    at ServerResponse.write (node:_http_outgoing:842:3)
+    at Timeout._onTimeout (/project/app.js:18:7) {
+  code: 'ERR_STREAM_WRITE_AFTER_END'
+}
+Emitted 'error' event on ServerResponse instance at:
+    at emitErrorNT (node:internal/streams/destroy:164:8)</code></pre>
+
+  <h2>Error Object Properties</h2>
+  <table>
+    <thead><tr><th>Property</th><th>Value</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>err.code</code></td><td><code>'ERR_STREAM_WRITE_AFTER_END'</code></td><td>Node.js error code — use this to identify the error programmatically</td></tr>
+      <tr><td><code>err.message</code></td><td><code>'write after end'</code></td><td>Human-readable message; same across all Node.js versions that carry the code</td></tr>
+      <tr><td><code>err.name</code></td><td><code>'Error [ERR_STREAM_WRITE_AFTER_END]'</code></td><td>The full name as it appears in the terminal</td></tr>
+    </tbody>
+  </table>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Description</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Missing <code>return</code> after <code>res.end()</code></td>
+        <td>Handler continues executing after sending the response; subsequent write/end calls fire on a closed stream</td>
+        <td>Add <code>return</code> before every response-terminating call</td>
+      </tr>
+      <tr>
+        <td>Async callback fires after response was closed</td>
+        <td>Database query, <code>fetch()</code>, or <code>setTimeout()</code> resolves after an earlier code path already called <code>res.end()</code></td>
+        <td>Guard with <code>if (res.writableEnded || res.destroyed) return;</code></td>
+      </tr>
+      <tr>
+        <td>Multiple <code>res.send()</code> / <code>res.json()</code> calls in Express</td>
+        <td>Each of these methods calls <code>res.end()</code> internally; calling them twice in one handler triggers the error</td>
+        <td>Ensure only one response path executes per request; use <code>return</code></td>
+      </tr>
+      <tr>
+        <td>Middleware chain — next() after res.end()</td>
+        <td>A middleware calls <code>next()</code> after sending a response; a downstream middleware or error handler writes to the already-closed stream</td>
+        <td>Do not call <code>next()</code> after sending a response; or guard in downstream handlers</td>
+      </tr>
+      <tr>
+        <td>Pipeline failure — error handler writes to destroyed sink</td>
+        <td>Upstream stream errors; the error handler calls <code>res.end('error')</code> but the sink was already destroyed by the failing pipeline</td>
+        <td>Use <code>stream.pipeline()</code>; check <code>res.writableEnded</code> in the error handler</td>
+      </tr>
+      <tr>
+        <td>http-proxy / http-proxy-middleware — client disconnects mid-proxy</td>
+        <td>Proxy writes the upstream response to the client <code>ServerResponse</code> after the client has already disconnected and the response was destroyed</td>
+        <td>Attach <code>res.on('close')</code> to abort the proxied request; check <code>res.writableEnded</code> in the proxy error handler</td>
+      </tr>
+      <tr>
+        <td>Streaming aggregator / pub-sub (googleapis pubsub, kafkajs)</td>
+        <td>A message delivery callback writes to a stream that was already ended by a timeout or cancellation handler</td>
+        <td>Use cancellation tokens / AbortController; guard writes with <code>writableEnded</code></td>
+      </tr>
+      <tr>
+        <td>Double <code>stream.end()</code> call</td>
+        <td><code>end()</code> is called twice — e.g., once explicitly and once by a <code>pipe()</code> chain completing</td>
+        <td>Call <code>end()</code> exactly once; <code>stream.pipeline()</code> manages this automatically</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Missing return after res.end()</h2>
+  <p>
+    The most frequent cause in Express and raw HTTP handlers. When you call <code>res.end()</code>,
+    <code>res.send()</code>, or <code>res.json()</code>, execution continues to the next line unless
+    you also <code>return</code>. If any subsequent line calls <code>res.write()</code> or
+    <code>res.end()</code> again — directly or through a helper — you get
+    <code>ERR_STREAM_WRITE_AFTER_END</code>.
+  </p>
+
+  <h3>Broken — no return</h3>
+  <pre><code>// Express route — BROKEN
+app.get('/user/:id', async (req, res) => {
+  const user = await db.findUser(req.params.id);
+
+  if (!user) {
+    res.status(404).json({ error: 'Not found' }); // ends the response
+    // ↑ no return — code continues executing below
+  }
+
+  // This fires even when user is null — stream already ended!
+  res.json(user); // Error [ERR_STREAM_WRITE_AFTER_END]: write after end
+});</code></pre>
+
+  <h3>Fixed — return on every exit path</h3>
+  <pre><code>// Express route — FIXED
+app.get('/user/:id', async (req, res) => {
+  const user = await db.findUser(req.params.id);
+
+  if (!user) {
+    return res.status(404).json({ error: 'Not found' }); // return exits here
+  }
+
+  return res.json(user); // only reached when user exists
+});</code></pre>
+
+  <h3>ESM version (same fix applies)</h3>
+  <pre><code>// ESM Express — same pattern
+export const getUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'Not found' });
+    return res.json(user);
+  } catch (err) {
+    // Without return, both this and the above can fire
+    return res.status(500).json({ error: err.message });
+  }
+};</code></pre>
+
+  <h2>Cause 2 – Async callback fires after response was closed</h2>
+  <p>
+    An async operation (database query, external <code>fetch()</code>, <code>setTimeout()</code>)
+    takes longer than expected. Meanwhile, a different code path (an error handler, a timeout, an
+    early return) already called <code>res.end()</code>. When the slow async operation finally
+    resolves, its callback tries to write to the now-closed stream.
+  </p>
+  <p>
+    This is the "works locally, breaks in production" pattern: locally everything is fast so the
+    race never happens; in production with real database latency the timing gap opens up.
+  </p>
+
+  <h3>Broken — async callback writes after timeout already ended response</h3>
+  <pre><code>// Raw Node.js HTTP — BROKEN
+const http = require('http');
+
+http.createServer(async (req, res) => {
+  // Timeout guard — ends the response after 2 s
+  const timeout = setTimeout(() => {
+    res.writeHead(504);
+    res.end('Gateway timeout');
+  }, 2000);
+
+  // Slow DB query — takes 3 s in production
+  const data = await db.slowQuery();
+  clearTimeout(timeout);
+
+  // By the time this runs, the timeout already called res.end()!
+  res.writeHead(200);
+  res.end(JSON.stringify(data)); // Error [ERR_STREAM_WRITE_AFTER_END]
+}).listen(3000);</code></pre>
+
+  <h3>Fixed — guard with writableEnded</h3>
+  <pre><code>// Raw Node.js HTTP — FIXED
+const http = require('http');
+
+http.createServer(async (req, res) => {
+  const timeout = setTimeout(() => {
+    if (res.writableEnded) return; // already responded — skip
+    res.writeHead(504);
+    res.end('Gateway timeout');
+  }, 2000);
+
+  try {
+    const data = await db.slowQuery();
+    clearTimeout(timeout);
+
+    if (res.writableEnded || res.destroyed) return; // timeout already fired — skip
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(data));
+  } catch (err) {
+    clearTimeout(timeout);
+    if (res.writableEnded || res.destroyed) return;
+    res.writeHead(500);
+    res.end('Internal Server Error');
+  }
+}).listen(3000);</code></pre>
+
+  <h3>Fixed — AbortController cancels the async work</h3>
+  <pre><code>// Cancel in-flight async work when the client disconnects
+const http = require('http');
+
+http.createServer(async (req, res) => {
+  const controller = new AbortController();
+  const { signal } = controller;
+
+  // Cancel the query if the client disconnects early
+  res.on('close', () => controller.abort());
+
+  try {
+    // Pass signal to fetch, db drivers, etc. — they throw AbortError on cancel
+    const response = await fetch('https://api.example.com/data', { signal });
+    const data = await response.json();
+
+    if (res.writableEnded) return; // closed between fetch and this line
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(data));
+  } catch (err) {
+    if (err.name === 'AbortError') return; // client disconnected — ignore
+    if (res.writableEnded) return;
+    res.writeHead(500);
+    res.end('Error');
+  }
+}).listen(3000);</code></pre>
+
+  <h2>Cause 3 – Multiple res.send() / res.json() in Express</h2>
+  <p>
+    Express's <code>res.send()</code>, <code>res.json()</code>, <code>res.redirect()</code>, and
+    <code>res.render()</code> all call <code>res.end()</code> internally. Calling any two of them
+    in one request handler triggers <code>ERR_STREAM_WRITE_AFTER_END</code>.
+  </p>
+
+  <pre><code>// Express — BROKEN: two res.json() calls
+app.post('/process', async (req, res) => {
+  try {
+    const result = await process(req.body);
+    res.json({ success: true, result }); // ends the response
+
+    // Audit log call — triggers a second response accidentally
+    await auditLog(req.body);
+    res.json({ success: true }); // Error [ERR_STREAM_WRITE_AFTER_END]
+  } catch (err) {
+    res.status(500).json({ error: err.message }); // may also fire after first json()
+  }
+});
+
+// FIXED: return on every path, await audit log before responding
+app.post('/process', async (req, res) => {
+  try {
+    const result = await process(req.body);
+    await auditLog(req.body); // do work before responding
+    return res.json({ success: true, result });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});</code></pre>
+
+  <h2>Cause 4 – Middleware chain: next() after res.end()</h2>
+  <p>
+    In Express middleware, calling <code>next()</code> after a <code>res.end()</code>-equivalent
+    passes control to the next middleware. If that middleware also writes to <code>res</code>,
+    you get <code>ERR_STREAM_WRITE_AFTER_END</code>.
+  </p>
+
+  <pre><code>// Middleware — BROKEN
+function authMiddleware(req, res, next) {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Unauthorized' }); // ends response
+    next(); // ← BUG: passes control to next middleware on closed stream
+    return;
+  }
+  next();
+}
+
+// Middleware — FIXED: return without calling next() after sending
+function authMiddleware(req, res, next) {
+  if (!req.headers.authorization) {
+    return res.status(401).json({ error: 'Unauthorized' }); // return prevents next()
+  }
+  next();
+}</code></pre>
+
+  <div class="callout">
+    <strong>Express error handlers:</strong> If you define an error-handling middleware
+    <code>(err, req, res, next)</code>, make sure it does not call <code>next(err)</code> after
+    <code>res.json()</code> — the default Express error handler will then also try to end the response.
+    Always <code>return</code> after sending in error handlers.
+  </div>
+
+  <h2>Cause 5 – Pipeline failure: upstream error writes to destroyed sink</h2>
+  <p>
+    A common pattern in file-serving and streaming APIs: <code>readStream.pipe(res)</code>. If the
+    read stream errors (file not found, permission denied, network hiccup), you catch the error and
+    try to send a <code>500</code> response. But <code>pipe()</code> may have already ended
+    <code>res</code>, so the error-response write fails.
+  </p>
+
+  <h3>Broken — manual pipe with error handler writing after pipe ended res</h3>
+  <pre><code>// BROKEN — manual pipe()
+const fs = require('fs');
+const http = require('http');
+
+http.createServer((req, res) => {
+  const stream = fs.createReadStream('/path/to/file');
+
+  stream.on('error', (err) => {
+    // By the time this fires, pipe() may have already written headers + partial
+    // body and called res.end(). Writing here throws ERR_STREAM_WRITE_AFTER_END.
+    res.writeHead(500);
+    res.end('Error reading file'); // Error [ERR_STREAM_WRITE_AFTER_END]
+  });
+
+  stream.pipe(res); // pipe auto-calls res.end() when stream finishes
+}).listen(3000);</code></pre>
+
+  <h3>Fixed — stream.pipeline() handles cleanup automatically</h3>
+  <pre><code>// FIXED — stream.pipeline() (Node.js 10+)
+const { pipeline } = require('stream');
+const fs = require('fs');
+const http = require('http');
+
+http.createServer((req, res) => {
+  const stream = fs.createReadStream('/path/to/file');
+
+  pipeline(stream, res, (err) => {
+    if (!err) return; // success — res was ended cleanly by pipeline
+    if (res.writableEnded || res.destroyed) return; // already handled
+    // Headers not yet sent — we can still send an error response
+    if (!res.headersSent) {
+      res.writeHead(500);
+    }
+    res.end('Error reading file');
+  });
+}).listen(3000);</code></pre>
+
+  <h3>Fixed — stream/promises pipeline (Node.js 15+)</h3>
+  <pre><code>// FIXED — async/await with stream/promises (Node.js 15+)
+import { pipeline } from 'stream/promises';
+import { createReadStream } from 'fs';
+import { createServer } from 'http';
+
+createServer(async (req, res) => {
+  try {
+    await pipeline(createReadStream('/path/to/file'), res);
+  } catch (err) {
+    // pipeline() destroys all streams on error — res is destroyed here
+    if (res.writableEnded || res.destroyed) return;
+    if (!res.headersSent) res.writeHead(500);
+    res.end('Error');
+  }
+}).listen(3000);</code></pre>
+
+  <div class="callout">
+    <strong>Why pipeline() over pipe():</strong> <code>stream.pipe()</code> does not propagate
+    backpressure errors and does not destroy upstream streams when downstream closes.
+    <code>stream.pipeline()</code> destroys all streams in the chain if any one errors or closes,
+    preventing the write-to-destroyed-stream race entirely.
+  </div>
+
+  <h2>Cause 6 – http-proxy / http-proxy-middleware: client disconnects mid-proxy</h2>
+  <p>
+    <code>node-http-proxy</code> and its Express wrapper <code>http-proxy-middleware</code> pipe
+    the upstream server's response to the client's <code>ServerResponse</code>. If the client
+    disconnects (browser tab closed, Cypress test reset, network timeout) before the upstream
+    reply arrives, the client's <code>res</code> is destroyed. The proxy's data and <code>end</code>
+    callbacks then attempt to write to the destroyed stream.
+  </p>
+  <p>
+    The same pattern appears in <code>next-http-proxy-middleware</code>,
+    <code>create-react-app</code>'s dev proxy, and any custom proxy built on the
+    <code>request</code> or <code>got</code> libraries.
+  </p>
+
+  <pre><code>// http-proxy-middleware — BROKEN proxy error handler
+const { createProxyMiddleware } = require('http-proxy-middleware');
+
+app.use('/api', createProxyMiddleware({
+  target: 'http://backend:4000',
+  on: {
+    error: (err, req, res) => {
+      // If the client already disconnected, res is destroyed.
+      // Writing here throws ERR_STREAM_WRITE_AFTER_END.
+      res.writeHead(502);
+      res.end('Bad Gateway'); // Error [ERR_STREAM_WRITE_AFTER_END]
+    }
+  }
+}));</code></pre>
+
+  <pre><code>// http-proxy-middleware — FIXED proxy error handler
+const { createProxyMiddleware } = require('http-proxy-middleware');
+
+app.use('/api', createProxyMiddleware({
+  target: 'http://backend:4000',
+  on: {
+    error: (err, req, res) => {
+      // Guard before writing — client may have already disconnected
+      if (res.writableEnded || res.destroyed || res.headersSent) return;
+      res.writeHead(502, { 'Content-Type': 'text/plain' });
+      res.end('Bad Gateway');
+    }
+  }
+}));</code></pre>
+
+  <pre><code>// Raw node-http-proxy — guard and abort on client disconnect
+const httpProxy = require('http-proxy');
+const http = require('http');
+
+const proxy = httpProxy.createProxyServer({});
+
+proxy.on('error', (err, req, res) => {
+  if (res.writableEnded || res.destroyed) return;
+  if (!res.headersSent) res.writeHead(502);
+  res.end('Proxy error');
+});
+
+http.createServer((req, res) => {
+  // Cancel the proxy request if the client disconnects early
+  res.on('close', () => {
+    if (!res.writableEnded) {
+      req.destroy();
+    }
+  });
+
+  proxy.web(req, res, { target: 'http://backend:4000' });
+}).listen(3000);</code></pre>
+
+  <h2>Cause 7 – Streaming aggregator / pub-sub (googleapis pubsub, kafkajs)</h2>
+  <p>
+    Libraries like <code>@google-cloud/pubsub</code>, <code>kafkajs</code>, and similar streaming
+    aggregators deliver messages through callbacks or async iterators. If your code routes those
+    messages to an HTTP response stream or a file write stream, and the stream is closed by a
+    timeout or cancellation before all messages are delivered, subsequent message callbacks will
+    try to write to the closed stream.
+  </p>
+
+  <pre><code>// googleapis pubsub — BROKEN: message arrives after res was ended
+const { PubSub } = require('@google-cloud/pubsub');
+
+app.get('/stream', (req, res) => {
+  const pubsub = new PubSub();
+  const subscription = pubsub.subscription('my-sub');
+
+  res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+
+  subscription.on('message', (message) => {
+    // If the client disconnected and res was destroyed, this throws
+    res.write(`data: ${message.data}\n\n`); // Error [ERR_STREAM_WRITE_AFTER_END]
+    message.ack();
+  });
+
+  // No cleanup when client disconnects!
+});</code></pre>
+
+  <pre><code>// googleapis pubsub — FIXED: cancel subscription on client disconnect
+const { PubSub } = require('@google-cloud/pubsub');
+
+app.get('/stream', (req, res) => {
+  const pubsub = new PubSub();
+  const subscription = pubsub.subscription('my-sub');
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
+  function onMessage(message) {
+    if (res.writableEnded || res.destroyed) {
+      // Stream closed — remove listener and ack/nack
+      subscription.removeListener('message', onMessage);
+      message.nack();
+      return;
+    }
+    res.write(`data: ${message.data}\n\n`);
+    message.ack();
+  }
+
+  subscription.on('message', onMessage);
+
+  // Clean up when client disconnects
+  res.on('close', () => {
+    subscription.removeListener('message', onMessage);
+    subscription.close().catch(() => {});
+  });
+});</code></pre>
+
+  <h2>Safe Writable Guard Patterns</h2>
+  <p>Reusable patterns to prevent <code>ERR_STREAM_WRITE_AFTER_END</code> in any context.</p>
+
+  <h3>Universal write guard</h3>
+  <pre><code>/**
+ * Safely write to a Writable without throwing ERR_STREAM_WRITE_AFTER_END.
+ * Returns true if the write was performed, false if the stream was already ended.
+ */
+function safeWrite(writable, chunk) {
+  if (writable.writableEnded || writable.destroyed) return false;
+  writable.write(chunk);
+  return true;
+}
+
+/**
+ * Safely end a Writable — only if it hasn't been ended already.
+ */
+function safeEnd(writable, chunk) {
+  if (writable.writableEnded || writable.destroyed) return;
+  writable.end(chunk);
+}</code></pre>
+
+  <h3>Close-event cancellation token (CJS)</h3>
+  <pre><code>const http = require('http');
+
+http.createServer(async (req, res) => {
+  let cancelled = false;
+  res.on('close', () => { cancelled = true; });
+
+  async function respond(fn) {
+    if (cancelled || res.writableEnded) return;
+    fn();
+  }
+
+  // Simulate slow async work
+  const data = await slowFetch();
+
+  await respond(() => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(data));
+  });
+}).listen(3000);</code></pre>
+
+  <h3>Close-event cancellation token (ESM)</h3>
+  <pre><code>// ESM — identical logic with import syntax
+import { createServer } from 'http';
+
+createServer(async (req, res) => {
+  let cancelled = false;
+  res.on('close', () => { cancelled = true; });
+
+  const data = await slowFetch();
+  if (cancelled || res.writableEnded) return;
+
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}).listen(3000);</code></pre>
+
+  <h3>Checking writable state — property reference</h3>
+  <pre><code>const writable = getWritableSomehow();
+
+// writable.writableEnded — true after .end() has been called
+// Does NOT mean all data has been flushed. Use this to prevent write-after-end.
+console.log(writable.writableEnded); // false initially; true after end()
+
+// writable.writableFinished — true after 'finish' event (all data flushed)
+console.log(writable.writableFinished);
+
+// writable.destroyed — true after .destroy() or a fatal error
+console.log(writable.destroyed);
+
+// Correct guard: check both
+if (writable.writableEnded || writable.destroyed) {
+  return; // do not attempt to write
+}
+writable.write(data);</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read the stack trace — the frame after <code>ServerResponse.write</code> or <code>Writable.write</code> names the exact file and line where <code>write()</code> was called after <code>end()</code>.</li>
+    <li>Search that file for all <code>res.end()</code>, <code>res.send()</code>, <code>res.json()</code>, and <code>res.redirect()</code> calls — confirm each one is preceded by <code>return</code>.</li>
+    <li>Check every async callback in the handler (Promise <code>.then()</code>, <code>async/await</code>, <code>setTimeout</code>, event listener) for a write after an earlier synchronous end.</li>
+    <li>Check <code>res.writableEnded</code> at the top of every async callback that writes to <code>res</code>.</li>
+    <li>Look for middleware that calls <code>next()</code> after a <code>res.end()</code>-equivalent and remove the <code>next()</code> call.</li>
+    <li>Replace any <code>readStream.pipe(res)</code> with <code>stream.pipeline(readStream, res, callback)</code>.</li>
+    <li>For http-proxy, ensure the <code>onError</code> handler checks <code>res.writableEnded</code> before writing.</li>
+    <li>For streaming / pub-sub, attach a <code>res.on('close')</code> handler that removes all message listeners and cancels any subscriptions.</li>
+    <li>Run with <code>NODE_DEBUG=stream</code> to trace stream lifecycle events and find the exact sequence of <code>end()</code> and <code>write()</code> calls.</li>
+  </ol>
+
+  <pre><code># Trace stream events to find the sequence of end() and write() calls
+NODE_DEBUG=stream node app.js 2&gt;&amp;1 | grep -i "write\|end\|destroy"</code></pre>
+
+  <div class="callout warn">
+    <strong>Do not catch and silently ignore ERR_STREAM_WRITE_AFTER_END in production:</strong>
+    Swallowing the error with a catch-all <code>stream.on('error', () => {})</code> hides the
+    underlying logic bug. The correct fix is to eliminate the write-after-end condition. A silent
+    handler means your users get incomplete responses or no response at all, with no log evidence
+    of what went wrong. Fix the cause; do not mute the symptom.
+  </div>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ERR_STREAM_WRITE_AFTER_END in Node.js?</summary>
+    <div class="faq-answer">
+      <p><code>ERR_STREAM_WRITE_AFTER_END</code> is thrown when <code>stream.write()</code> or <code>res.write()</code> is called on a Writable stream after <code>stream.end()</code> or <code>res.end()</code> has already been called. Calling <code>end()</code> permanently closes the writable side; any subsequent write is rejected. The full error message is: <code>Error [ERR_STREAM_WRITE_AFTER_END]: write after end</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between ERR_STREAM_WRITE_AFTER_END and ERR_HTTP_HEADERS_SENT?</summary>
+    <div class="faq-answer">
+      <p><code>ERR_HTTP_HEADERS_SENT</code> fires at the HTTP layer when <code>res.writeHead()</code> or <code>res.setHeader()</code> is called after HTTP headers were already flushed. <code>ERR_STREAM_WRITE_AFTER_END</code> fires at the stream layer when <code>res.write()</code> or <code>res.end()</code> is called after the writable stream was fully closed. Both arise from "double-responding" in a handler. Check <code>res.headersSent</code> to guard against the first; check <code>res.writableEnded</code> to guard against the second.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix write after end in an Express route?</summary>
+    <div class="faq-answer">
+      <p>Add <code>return</code> before every <code>res.json()</code>, <code>res.send()</code>, or <code>res.end()</code> call so the handler function exits immediately. Example: <code>if (!user) return res.status(404).json({ error: 'Not found' });</code>. Without <code>return</code>, Express continues executing the rest of the function and hits another response call on the already-closed stream.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_STREAM_WRITE_AFTER_END only happen in production and not locally?</summary>
+    <div class="faq-answer">
+      <p>The bug is a timing race: an async callback fires after a previous code path already called <code>res.end()</code>. Locally, database and API responses are fast — the race window is too narrow to hit. In production, real latency widens the window and the bug surfaces under load or when queries are slow. The underlying write-after-end condition exists in both environments; production just exposes it.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does http-proxy throw ERR_STREAM_WRITE_AFTER_END?</summary>
+    <div class="faq-answer">
+      <p><code>node-http-proxy</code> and <code>http-proxy-middleware</code> pipe the upstream response to the client's <code>ServerResponse</code>. If the client disconnects (browser navigates away, test framework resets the socket, timeout fires), the client <code>res</code> is destroyed before the proxied data arrives. The proxy's <code>onError</code> handler then calls <code>res.end()</code> on the already-destroyed stream. Fix by checking <code>if (res.writableEnded || res.destroyed) return;</code> at the top of the proxy error handler.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_STREAM_WRITE_AFTER_END in a stream pipeline?</summary>
+    <div class="faq-answer">
+      <p>Replace <code>readStream.pipe(res)</code> with <code>stream.pipeline(readStream, res, callback)</code>. The <code>pipeline()</code> function automatically destroys all streams when any one errors or closes, preventing the race where a <code>pipe()</code> error handler tries to write to a stream that was already ended by the pipe completing. In Node.js 15+ you can use <code>await pipeline(readStream, res)</code> from <code>'stream/promises'</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What do writable.writableEnded and writable.destroyed mean?</summary>
+    <div class="faq-answer">
+      <p><code>writable.writableEnded</code> becomes <code>true</code> the moment <code>writable.end()</code> is called — before all queued data is flushed. <code>writable.destroyed</code> becomes <code>true</code> after <code>writable.destroy()</code> is called or a fatal error occurs. Always guard with <code>if (writable.writableEnded || writable.destroyed) return;</code> before calling <code>write()</code> in asynchronous code. Checking only one of the two is insufficient — a destroyed stream has <code>writableEnded: false</code> until <code>end()</code> was also called.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/EPIPE/"><code>EPIPE: write EPIPE</code></a> — the OS-level equivalent: the reading end of a pipe or socket was closed; often occurs alongside ERR_STREAM_WRITE_AFTER_END in stream pipelines</li>
+    <li><a href="https://nodejs-errors.dev/ECONNRESET/"><code>ECONNRESET: connection reset by peer</code></a> — the remote TCP peer forcibly closed the connection; triggers similar cleanup issues in proxy and streaming code</li>
+    <li><code>ERR_HTTP_HEADERS_SENT</code> — HTTP-layer complement: headers set after they were already sent; typically co-occurs with write-after-end when a handler sends two responses</li>
+    <li><code>ERR_STREAM_DESTROYED</code> — thrown when <code>write()</code> is called on a stream after <code>destroy()</code>; closely related but fires on <code>destroy()</code> rather than <code>end()</code></li>
+    <li><code>ERR_STREAM_CANNOT_PIPE</code> — thrown when <code>pipe()</code> is called on a writable that has already been ended</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-10 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#err_stream_write_after_end">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

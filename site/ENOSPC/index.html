@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Error: ENOSPC: no space left on device / System limit for number of file watchers reached – Node.js Fix</title>
+  <meta name="description" content="Node.js throws Error: ENOSPC: no space left on device when the Linux inotify file watcher limit is exhausted (webpack/Vite/Jest/nodemon) or when disk space is genuinely full during npm install or a CI build. Fix with fs.inotify.max_user_watches, polling fallback, df -h, and Docker overlay2 cleanup." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ENOSPC/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Error: ENOSPC: no space left on device / System limit for number of file watchers reached – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws Error: ENOSPC: no space left on device when the Linux inotify file watcher limit is exhausted (webpack/Vite/Jest/nodemon) or when disk space is genuinely full during npm install or a CI build. Fix with fs.inotify.max_user_watches, polling fallback, df -h, and Docker overlay2 cleanup." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ENOSPC/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Error: ENOSPC: no space left on device / System limit for number of file watchers reached – Node.js Fix",
+    "description": "Node.js throws ENOSPC in two completely different scenarios: (1) the Linux inotify file watcher limit is exhausted by webpack, Vite, Jest, nodemon, or chokidar watching node_modules; (2) disk space is genuinely full during npm install, a build artifact write, or a Docker overlay2 write. Covers fs.inotify.max_user_watches sysctl bump, /etc/sysctl.conf persistence, chokidar polling fallback, Vite/webpack/Jest ignored patterns, df -h disk diagnosis, npm cache clean, Docker overlay2 and image cache cleanup, GitHub Actions and GitLab CI disk quota guidance, macOS FSEvents clarification, and Windows inapplicability.",
+    "url": "https://nodejs-errors.dev/ENOSPC/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-10",
+    "dateModified": "2026-05-10"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ENOSPC in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ENOSPC is a POSIX error code meaning 'Error NO SPaCe'. In Node.js it appears as two distinct messages: 'Error: ENOSPC: no space left on device' (actual disk full, or inotify watcher table full) and 'Error: ENOSPC: System limit for number of file watchers reached' (Linux inotify limit exceeded). Despite sharing the same error code, the causes and fixes are completely different."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix Error: ENOSPC: System limit for number of file watchers reached?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "This is a Linux inotify limit. Fix permanently with: echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf &amp;&amp; sudo sysctl -p. Then restart your dev server. Alternatively, exclude node_modules from watching in webpack (watchOptions.ignored: /node_modules/), Vite (server.watch.ignored), or Jest (watchPathIgnorePatterns), or switch to polling with CHOKIDAR_USEPOLLING=true."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix Error: ENOSPC: no space left on device during npm install?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Run df -h to confirm disk is actually full. Free space by: npm cache clean --force, rm -rf node_modules, docker system prune -a (for Docker hosts), or du -sh */ | sort -hr to find the largest directories. On CI (GitHub Actions, GitLab), the runner disk is typically 14 GB; large node_modules trees, Docker image layers, and build caches can exhaust it quickly."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ENOSPC happen with webpack, Vite, Jest, or nodemon?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "These tools use chokidar or watchpack to watch every file in your project for changes. On Linux, each watched path consumes one inotify watch — a kernel resource separate from disk space. The default Linux inotify limit is 8192 watches. A typical project with node_modules easily exceeds this. Raising fs.inotify.max_user_watches to 524288 permanently fixes the issue."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does ENOSPC: System limit for number of file watchers reached happen on macOS or Windows?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. The inotify watcher variant is Linux-only. macOS uses FSEvents, which has no comparable user-level watch limit, so this specific error does not occur there. Windows uses ReadDirectoryChangesW and also does not have this limit. If you see ENOSPC on macOS or Windows it is always the disk-full variant — check df -h or your disk utility."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ENOSPC in Docker containers?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "For the watcher variant: inotify limits come from the host kernel, not the container. Set fs.inotify.max_user_watches=524288 on the host with sudo sysctl, or use CHOKIDAR_USEPOLLING=true / WATCHPACK_POLLING=true as environment variables in your docker-compose.yml. For the disk variant: run docker system prune -a to remove unused images and layers, and use docker buildx build --no-cache to avoid stale build cache."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ENOSPC on GitHub Actions or GitLab CI?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "For the watcher variant, add a step before your build: 'echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf &amp;&amp; sudo sysctl -p'. For the disk-full variant on GitHub Actions (14 GB free disk), free space by removing pre-installed tools: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost. GitLab runners often have smaller disks; use artifact expiry and cache cleanup policies."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between ENOSPC and EMFILE?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "EMFILE ('too many open files') is a per-process file descriptor limit — fixed with ulimit -n. ENOSPC ('no space left on device') is either a disk capacity/inode limit or a Linux inotify watch limit. Both can appear during webpack or Vite dev server startup, but they have different causes and different fixes. EMFILE is about open file handles; ENOSPC watcher variant is about kernel inotify watch slots."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ENOSPC", "item": "https://nodejs-errors.dev/ENOSPC/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix Error: ENOSPC in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Identify which variant you have", "text": "Read the full error message. 'System limit for number of file watchers reached' = inotify watcher limit (Linux only). 'no space left on device' with a write/mkdir syscall = disk full. Run 'cat /proc/sys/fs/inotify/max_user_watches' and 'df -h' to confirm." },
+      { "@type": "HowToStep", "position": 2, "name": "Fix the inotify watcher limit (temporary)", "text": "Run: sudo sysctl fs.inotify.max_user_watches=524288. This takes effect immediately without a reboot. Restart your dev server after running the command." },
+      { "@type": "HowToStep", "position": 3, "name": "Make the inotify fix permanent", "text": "Run: echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p. This persists across reboots. On Arch Linux, write to /etc/sysctl.d/40-max-user-watches.conf instead." },
+      { "@type": "HowToStep", "position": 4, "name": "Exclude node_modules from file watching", "text": "In webpack.config.js set watchOptions.ignored: /node_modules/. In vite.config.js set server.watch.ignored: ['**/node_modules/**']. In Jest set watchPathIgnorePatterns: ['/node_modules/']. This reduces watch count by thousands and may fix the problem without raising the sysctl limit." },
+      { "@type": "HowToStep", "position": 5, "name": "Switch to polling as a quick workaround", "text": "Set CHOKIDAR_USEPOLLING=true or WATCHPACK_POLLING=true in your environment to bypass inotify completely. Polling has higher CPU cost but eliminates the inotify limit. Use while applying the permanent sysctl fix." },
+      { "@type": "HowToStep", "position": 6, "name": "Diagnose and free disk space", "text": "Run 'df -h' to see which filesystem is full. Run 'df -i' to check inode exhaustion. Run 'npm cache clean --force', 'rm -rf node_modules', and 'du -sh */ | sort -hr | head -20' to find large directories." },
+      { "@type": "HowToStep", "position": 7, "name": "Free Docker disk space", "text": "Run 'docker system prune -a' to remove all unused images, containers, and build cache. Check overlay2 usage with 'docker system df'. Use '--no-cache' in your Docker build command to prevent cache accumulation." },
+      { "@type": "HowToStep", "position": 8, "name": "Configure CI/CD runners", "text": "For GitHub Actions, add a step: 'echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p'. For disk space, remove pre-installed tools with 'sudo rm -rf /usr/share/dotnet /opt/ghc'. For GitLab, configure runner disk cleanup or use a larger runner instance." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ENOSPC</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>Error: ENOSPC: no space left on device</h1>
+  <span class="error-code">error code: <code>ENOSPC</code> &nbsp;·&nbsp; also: <code>System limit for number of file watchers reached</code></span>
+  <p>Complete reference — two distinct root causes, every fix, platform-specific guidance for Linux, macOS, Docker, and CI/CD.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> <code>Error: ENOSPC</code> in Node.js has <strong>two completely different root causes</strong>. (1) <strong>Inotify watcher limit</strong> (Linux only, most common in dev) — the kernel's file-watching slots are exhausted by webpack/Vite/Jest/nodemon watching <code>node_modules</code>. Fix: <code>echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf &amp;&amp; sudo sysctl -p</code>, then exclude <code>node_modules</code> from your watcher config. (2) <strong>Disk space full</strong> — the filesystem is genuinely out of space during <code>npm install</code>, a build write, or a Docker layer push. Fix: <code>df -h</code> to confirm, then <code>npm cache clean --force</code>, <code>docker system prune -a</code>, or expand the volume.
+  </div>
+
+  <h2>What is ENOSPC?</h2>
+  <p>
+    <strong>ENOSPC</strong> stands for <em>Error NO SPaCe</em> — a
+    <a href="https://nodejs.org/api/errors.html#common-system-errors" rel="noopener noreferrer">POSIX system error code</a>
+    that the Linux/macOS kernel emits when a resource quota is exhausted. In Node.js it surfaces as two
+    distinct error messages that share the same <code>code: 'ENOSPC'</code>:
+  </p>
+  <ul>
+    <li><code>Error: ENOSPC: no space left on device, write '...'</code> — emitted by file I/O syscalls (<code>write</code>, <code>mkdir</code>, <code>open</code>) when the filesystem has no free blocks or inodes left.</li>
+    <li><code>Error: ENOSPC: System limit for number of file watchers reached, watch '...'</code> — emitted by <code>fs.watch</code> when the Linux <em>inotify</em> watch table is full. This has nothing to do with disk space.</li>
+  </ul>
+  <p>
+    The naming is misleading: the inotify variant appears to be about disk space but is actually about an in-kernel
+    watch-slot quota. Both variants return <code>errno: -28</code> on Linux because the kernel uses
+    <code>ENOSPC</code> for any exhausted resource, including the inotify table.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error strings you will see in Node.js:</strong><br>
+    <code>Error: ENOSPC: System limit for number of file watchers reached, watch '/project/src'</code><br>
+    <code>Watchpack Error (watcher): Error: ENOSPC: System limit for number of file watchers reached, watch '/project'</code><br>
+    <code>Error: ENOSPC: no space left on device, write '/project/dist/bundle.js'</code><br>
+    <code>npm ERR! code ENOSPC</code><br>
+    <code>npm ERR! errno -28</code><br>
+    <code>npm ERR! syscall write</code><br>
+    <code>Error: ENOSPC: no space left on device, mkdir '/tmp/npm-...'</code>
+  </div>
+
+  <h2>Full Error Examples</h2>
+
+  <h3>Inotify watcher limit variant (most common in development)</h3>
+  <pre><code>Error: ENOSPC: System limit for number of file watchers reached, watch '/home/user/project/node_modules'
+    at FSWatcher.&lt;anonymous&gt; (node:fs:2341:19)
+    at FSWatcher.emit (node:events:513:28)
+    at FSWatcher.start (node:internal/fs/watchers:248:10) {
+  errno: -28,
+  code: 'ENOSPC',
+  syscall: 'watch',
+  filename: '/home/user/project/node_modules'
+}</code></pre>
+
+  <h3>Disk-full variant (common in CI/CD and containers)</h3>
+  <pre><code>npm ERR! code ENOSPC
+npm ERR! syscall write
+npm ERR! errno -28
+npm ERR! Error: ENOSPC: no space left on device, write '/home/runner/.npm/_cacache/tmp/...'
+
+Error: ENOSPC: no space left on device, write '/project/dist/main.js'
+    at Object.writeSync (node:fs:714:3)
+    at writeAllSync (node:fs:413:12) {
+  errno: -28,
+  code: 'ENOSPC',
+  syscall: 'write'
+}</code></pre>
+
+  <p>Key diagnostic fields on the error object:</p>
+  <table>
+    <thead><tr><th>Field</th><th>Watcher variant value</th><th>Disk variant value</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>code</code></td><td><code>'ENOSPC'</code></td><td><code>'ENOSPC'</code></td><td>Always ENOSPC for both variants</td></tr>
+      <tr><td><code>syscall</code></td><td><code>'watch'</code></td><td><code>'write'</code>, <code>'mkdir'</code>, <code>'open'</code></td><td><strong>Key differentiator</strong> — <code>watch</code> = inotify; write/mkdir = disk full</td></tr>
+      <tr><td><code>errno</code></td><td><code>-28</code></td><td><code>-28</code></td><td>Linux ENOSPC constant; both variants use -28</td></tr>
+      <tr><td><code>filename</code></td><td>The watched path</td><td>The file being written</td><td>Exact path that triggered the error</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>How to instantly tell which variant you have:</strong> Check <code>err.syscall</code>. If it is <code>'watch'</code>, you have the inotify limit problem — disk space is irrelevant. If it is <code>'write'</code>, <code>'mkdir'</code>, or <code>'open'</code>, run <code>df -h</code> to confirm disk is full.
+  </div>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Platform</th><th>Typical trigger</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>Linux inotify watch limit exhausted</td><td>Linux only</td><td>webpack/Vite/Jest/nodemon dev server startup watching node_modules</td><td>Raise <code>fs.inotify.max_user_watches</code> via sysctl</td></tr>
+      <tr><td>node_modules included in file watching</td><td>Linux</td><td>Default chokidar/watchpack config watches entire project tree</td><td>Add <code>ignored: /node_modules/</code> to watcher config</td></tr>
+      <tr><td>Multiple dev servers open simultaneously</td><td>Linux</td><td>Several terminal tabs each running a dev server</td><td>Close other projects; raise inotify limit</td></tr>
+      <tr><td>Docker container inherits low host inotify limit</td><td>Linux (Docker)</td><td>Dev server inside container fails to watch files</td><td>Raise limit on Docker host; use <code>CHOKIDAR_USEPOLLING=true</code></td></tr>
+      <tr><td>Disk space genuinely full</td><td>All platforms</td><td><code>npm install</code> or build write fails with <code>syscall: 'write'</code></td><td><code>df -h</code> to confirm, then free space</td></tr>
+      <tr><td>npm cache consuming disk</td><td>All platforms</td><td>CI runner disk fills after many installs</td><td><code>npm cache clean --force</code></td></tr>
+      <tr><td>Docker overlay2 / image cache full</td><td>Linux (Docker host)</td><td>Build produces image layers that fill the disk</td><td><code>docker system prune -a</code></td></tr>
+      <tr><td>Inode exhaustion (disk blocks free but inodes full)</td><td>Linux</td><td>Huge number of tiny files (e.g. nested node_modules)</td><td><code>df -i</code> to check; remove unnecessary small files</td></tr>
+      <tr><td>tmpfs /tmp too small</td><td>Linux</td><td>npm writes temp files to an in-memory /tmp filesystem with a small quota</td><td>Expand <code>/tmp</code> mount or set <code>npm config set tmp /some/other/path</code></td></tr>
+      <tr><td>GitHub Actions / GitLab CI disk quota</td><td>CI/CD</td><td>14 GB runner disk consumed by pre-installed tools + large node_modules + build artifacts</td><td>Remove pre-installed tools before build; use caching</td></tr>
+    </tbody>
+  </table>
+
+  ---
+
+  <h2>Root Cause A – Inotify File Watcher Limit (Linux)</h2>
+
+  <p>
+    This is the most common <code>ENOSPC</code> in Node.js development. On Linux, the kernel's
+    <em>inotify</em> subsystem allows user-space processes to watch files and directories for
+    changes. Each watched path consumes one <em>inotify watch slot</em>. The kernel limits
+    the total number of watch slots per user via the sysctl parameter
+    <code>fs.inotify.max_user_watches</code>, which defaults to <strong>8192</strong> on most
+    Linux distributions (Ubuntu 20.04 raised this to 65535, but it is still easily exhausted).
+  </p>
+  <p>
+    Modern JavaScript tooling — webpack, Vite, Jest, nodemon, Rollup, esbuild, Parcel, and
+    any tool using <code>chokidar</code> or <code>watchpack</code> — watches every file in
+    your project tree for changes. A typical project with <code>node_modules</code> contains
+    50,000 to 200,000 files. Watching even a fraction of those exhausts the default inotify
+    limit instantly.
+  </p>
+
+  <div class="callout">
+    <strong>Platform clarification:</strong> This variant is <strong>Linux-only</strong>. macOS uses
+    <em>FSEvents</em> (a different kernel API with no comparable per-user watch limit) so this
+    error does not occur on macOS regardless of project size. Windows uses
+    <em>ReadDirectoryChangesW</em> and also does not have this limit. If you see ENOSPC on
+    macOS or Windows, it is always the disk-full variant.
+  </div>
+
+  <h3>Diagnose the inotify limit</h3>
+  <pre><code># Check the current inotify watch limit
+cat /proc/sys/fs/inotify/max_user_watches
+
+# Count how many inotify watches are currently active (all processes)
+find /proc/*/fd -lname anon_inode:inotify 2>/dev/null | wc -l
+
+# See which processes are consuming inotify watches
+find /proc/*/fd -lname anon_inode:inotify -printf '%hinfo/inotify\n' 2>/dev/null \
+  | xargs grep -c '^inotify' 2>/dev/null \
+  | awk -F/ '{print $3, $NF}' \
+  | sort -k2 -rn | head -10</code></pre>
+
+  <h3>Fix A-1 – Raise fs.inotify.max_user_watches (permanent)</h3>
+  <p>This is the primary fix. It persists across reboots and takes effect immediately.</p>
+
+  <h4>Debian, Ubuntu, and most Linux distributions</h4>
+  <pre><code># Permanent fix — appends to /etc/sysctl.conf and reloads immediately
+echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# Verify the new value
+cat /proc/sys/fs/inotify/max_user_watches
+# Expected output: 524288</code></pre>
+
+  <h4>Arch Linux and systemd-based distributions</h4>
+  <pre><code># Write to a drop-in file in /etc/sysctl.d/ instead
+echo fs.inotify.max_user_watches=524288 | sudo tee /etc/sysctl.d/40-max-user-watches.conf
+sudo sysctl --system
+
+# Verify
+cat /proc/sys/fs/inotify/max_user_watches</code></pre>
+
+  <h4>Temporary fix (resets after reboot)</h4>
+  <pre><code># Effective immediately, no reboot required, but does not survive reboot
+sudo sysctl fs.inotify.max_user_watches=524288</code></pre>
+
+  <div class="callout">
+    <strong>Why 524288?</strong> That is 512 × 1024 — a round number large enough to cover the
+    largest monorepos. Each inotify watch consumes approximately 1 KB of kernel memory, so
+    524288 watches use roughly 512 MB in the worst case. On a modern Linux system with several
+    GB of RAM this is completely safe.
+  </div>
+
+  <h3>Fix A-2 – Exclude node_modules from file watching</h3>
+  <p>
+    Excluding <code>node_modules</code> from your watcher config can reduce the watch count from
+    100,000+ files down to a few hundred, often eliminating the problem without needing to
+    raise the sysctl limit. This should be done regardless of whether you hit the limit —
+    watching <code>node_modules</code> is wasteful and slows down the watcher.
+  </p>
+
+  <h4>webpack (webpack.config.js)</h4>
+  <pre><code>// CJS — webpack.config.js
+module.exports = {
+  // ...
+  watchOptions: {
+    // Ignore node_modules — saves thousands of inotify watches
+    ignored: /node_modules/,
+    // Alternatively, use a glob array:
+    // ignored: ['**/node_modules/**', '**/dist/**', '**/.git/**'],
+    aggregateTimeout: 300,
+  },
+};</code></pre>
+
+  <h4>Vite (vite.config.js / vite.config.ts)</h4>
+  <pre><code>// ESM — vite.config.ts
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  server: {
+    watch: {
+      // Exclude directories from inotify watching
+      ignored: ['**/node_modules/**', '**/dist/**', '**/.git/**'],
+    },
+  },
+});</code></pre>
+
+  <h4>Jest (jest.config.js)</h4>
+  <pre><code>// jest.config.js
+module.exports = {
+  watchPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '/build/',
+    '/.git/',
+  ],
+};</code></pre>
+
+  <h4>nodemon (nodemon.json or package.json)</h4>
+  <pre><code>// nodemon.json
+{
+  "watch": ["src"],
+  "ignore": ["node_modules", "dist", ".git", "*.test.js"],
+  "ext": "js,ts,json"
+}
+
+// Or inline in package.json:
+// "nodemonConfig": { "watch": ["src"], "ignore": ["node_modules"] }</code></pre>
+
+  <h4>chokidar directly</h4>
+  <pre><code>// CJS
+const chokidar = require('chokidar');
+
+const watcher = chokidar.watch('./src', {
+  // Ignore dotfiles and node_modules
+  ignored: /(^|[/\\])(\.|node_modules)/,
+  persistent: true,
+  depth: 10,
+});
+
+watcher.on('change', (filePath) => console.log(`Changed: ${filePath}`));
+
+// Handle ENOSPC gracefully and fall back to polling
+watcher.on('error', (error) => {
+  if (error.code === 'ENOSPC') {
+    console.error('inotify limit hit — switching to polling mode');
+    watcher.close();
+    const pollingWatcher = chokidar.watch('./src', {
+      ignored: /(^|[/\\])(\.|node_modules)/,
+      usePolling: true,
+      interval: 1000,
+    });
+    pollingWatcher.on('change', (filePath) => console.log(`Changed: ${filePath}`));
+  }
+});</code></pre>
+
+  <h3>Fix A-3 – Switch to polling mode as a quick workaround</h3>
+  <p>
+    Polling periodically checks file modification times instead of using inotify watch slots.
+    It avoids the inotify limit entirely but consumes more CPU. Use it as an immediate workaround
+    while you apply the permanent <code>sysctl</code> fix.
+  </p>
+  <pre><code># For webpack/Create React App via watchpack:
+WATCHPACK_POLLING=true npm start
+WATCHPACK_POLLING=true npm run dev
+
+# For chokidar-based tools (nodemon, Parcel, Storybook):
+CHOKIDAR_USEPOLLING=true npm run dev
+CHOKIDAR_USEPOLLING=true nodemon src/index.js
+
+# For nodemon specifically:
+nodemon --legacy-watch src/index.js
+
+# Combine both for maximum compatibility:
+WATCHPACK_POLLING=true CHOKIDAR_USEPOLLING=true npm run dev</code></pre>
+
+  <h3>Fix A-4 – Docker containers and WSL</h3>
+  <p>
+    Docker containers share the host kernel. The <code>fs.inotify.max_user_watches</code> value
+    is a host-kernel setting — you cannot override it inside a Dockerfile or container. You must
+    set it on the <strong>host machine</strong>.
+  </p>
+  <pre><code># On the Docker host (not inside the container):
+echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# Then restart your containers — they will inherit the new limit
+docker-compose down && docker-compose up</code></pre>
+
+  <p>For development containers where you cannot change the host, use polling via environment variables in <code>docker-compose.yml</code>:</p>
+  <pre><code># docker-compose.yml
+services:
+  app:
+    build: .
+    environment:
+      # Bypass inotify entirely — use polling instead
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_INTERVAL=1000   # polling interval in ms
+    volumes:
+      - .:/app
+      - /app/node_modules        # anonymous volume prevents host node_modules from being watched</code></pre>
+
+  <p>For WSL 2 (Windows Subsystem for Linux):</p>
+  <pre><code># Inside WSL 2 terminal:
+echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# If sysctl -p fails in WSL 2, restart WSL from PowerShell:
+# wsl --shutdown
+# wsl</code></pre>
+
+  <h3>Fix A-5 – GitHub Actions and GitLab CI (inotify variant)</h3>
+  <p>
+    CI runners run on Linux. If your build runs a dev server or a watcher (e.g., Storybook,
+    Cypress with hot reload, or <code>jest --watch</code>), you may hit the inotify limit.
+    Add a step before your build to raise it.
+  </p>
+  <pre><code># .github/workflows/build.yml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Increase inotify watch limit
+        run: |
+          echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
+          sudo sysctl -p
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm run build</code></pre>
+
+  <pre><code># .gitlab-ci.yml
+build:
+  script:
+    - echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
+    - sudo sysctl -p
+    - npm ci
+    - npm run build</code></pre>
+
+  ---
+
+  <h2>Root Cause B – Disk Space Exhausted</h2>
+
+  <p>
+    When the filesystem has no free blocks left, any operation that writes data — file writes,
+    directory creation, pipe writes — throws <code>ENOSPC: no space left on device</code>.
+    This is most common during <code>npm install</code> (which extracts hundreds of packages
+    to disk), build processes that produce large artifacts, and in Docker containers where the
+    overlay2 storage driver accumulates image layers.
+  </p>
+  <p>
+    The key differentiator from the inotify variant is <code>err.syscall</code>: disk-full errors
+    always have <code>syscall: 'write'</code>, <code>'mkdir'</code>, or <code>'open'</code>
+    — never <code>'watch'</code>.
+  </p>
+
+  <h3>Fix B-1 – Diagnose disk usage</h3>
+  <pre><code># Check free space on all mounted filesystems
+df -h
+
+# Sample output when disk is full:
+# Filesystem      Size  Used Avail Use% Mounted on
+# /dev/sda1        20G   20G     0 100% /            &lt;-- FULL
+
+# Check inode usage (can be full even if disk blocks are free)
+df -i
+
+# Find the largest directories in the current tree
+du -sh */ 2>/dev/null | sort -hr | head -20
+
+# Find the largest individual files
+find . -type f -printf '%s %p\n' 2>/dev/null | sort -rn | head -20
+
+# Check npm cache size
+du -sh ~/.npm</code></pre>
+
+  <h3>Fix B-2 – Free npm and package manager cache</h3>
+  <pre><code># Clean npm's download cache (safe to delete — npm re-downloads as needed)
+npm cache clean --force
+
+# Verify the cache is cleared
+npm cache verify
+
+# Remove node_modules and reinstall (also clears old/stale packages)
+rm -rf node_modules
+npm install
+
+# yarn cache
+yarn cache clean
+
+# pnpm store
+pnpm store prune
+
+# Find and remove large or duplicate node_modules across a monorepo
+npx npkill    # interactive UI to select node_modules directories to delete</code></pre>
+
+  <h3>Fix B-3 – Free Docker disk space</h3>
+  <p>
+    Docker's overlay2 storage driver accumulates image layers, build cache, stopped containers,
+    and dangling images on the host filesystem. On CI runners this is a common cause of ENOSPC
+    during a build.
+  </p>
+  <pre><code># See a breakdown of Docker disk usage
+docker system df
+
+# Sample output:
+# TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+# Images          12        3         8.2GB     6.1GB (74%)
+# Containers      2         2         1.5GB     0B (0%)
+# Build Cache     45        0         3.2GB     3.2GB
+
+# Remove all unused images, stopped containers, and build cache
+docker system prune -a
+
+# Remove only dangling (untagged) images
+docker image prune
+
+# Remove build cache only (safe to run during active development)
+docker builder prune -a
+
+# Remove unused volumes
+docker volume prune</code></pre>
+
+  <pre><code># Dockerfile best practices to avoid overlay2 disk bloat
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files first for layer caching
+COPY package*.json ./
+
+# Install production dependencies only; clean in the same layer
+RUN npm ci --omit=dev &amp;&amp; npm cache clean --force
+
+COPY . .
+
+RUN npm run build
+
+# Multi-stage build: copy only the built output to the final image
+FROM node:20-alpine AS final
+WORKDIR /app
+COPY --from=0 /app/dist ./dist
+COPY --from=0 /app/node_modules ./node_modules
+CMD ["node", "dist/index.js"]</code></pre>
+
+  <h3>Fix B-4 – GitHub Actions disk space</h3>
+  <p>
+    GitHub Actions <code>ubuntu-latest</code> runners have approximately 14 GB of free disk space.
+    Pre-installed tools (dotnet, Haskell GHC, Android SDK) can consume several gigabytes. Large
+    <code>node_modules</code> trees (1–3 GB), Docker image caches, and build artifacts can exhaust
+    the remaining space.
+  </p>
+  <pre><code># .github/workflows/build.yml — free disk space before building
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free disk space
+        run: |
+          # Remove pre-installed tools that your project does not need
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df -h   # confirm freed space
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'      # cache node_modules between runs
+      - run: npm ci
+      - run: npm run build</code></pre>
+
+  <h3>Fix B-5 – GitLab CI disk space</h3>
+  <pre><code># .gitlab-ci.yml — clean Docker cache between jobs and set artifact expiry
+variables:
+  DOCKER_DRIVER: overlay2
+
+build:
+  stage: build
+  before_script:
+    - docker system prune -af   # clean stale Docker layers before build
+  script:
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 hour    # prevent artifacts from accumulating on the runner</code></pre>
+
+  <h3>Fix B-6 – Inode exhaustion</h3>
+  <p>
+    A filesystem can run out of inodes (directory entries) even when disk blocks are free.
+    This happens when a huge number of tiny files are created — for example, deeply nested
+    <code>node_modules</code> or a log-generation bug that creates millions of small files.
+    The error message is identical to the disk-full variant.
+  </p>
+  <pre><code># Check inode usage
+df -i
+
+# Sample output showing inode exhaustion:
+# Filesystem     Inodes  IUsed  IFree IUse% Mounted on
+# /dev/sda1      655360 655360      0  100% /         &lt;-- inodes full
+
+# Find directories with the most files (likely culprits)
+find . -xdev -printf '%h\n' 2>/dev/null | sort | uniq -c | sort -rn | head -20
+
+# Clean up log files, temp files, or duplicate node_modules
+find . -name "*.log" -type f -delete
+find . -name ".cache" -type d -exec rm -rf {} + 2>/dev/null || true</code></pre>
+
+  <h3>Fix B-7 – tmpfs /tmp too small</h3>
+  <p>
+    Some Linux systems (and Docker containers) mount <code>/tmp</code> as a <em>tmpfs</em>
+    (in-memory filesystem) with a fixed size quota. npm writes temporary files to <code>/tmp</code>
+    during install. If <code>/tmp</code> is full — even if the main disk has space — you get ENOSPC.
+  </p>
+  <pre><code># Check if /tmp is mounted as tmpfs and how full it is
+df -h /tmp
+mount | grep tmpfs
+
+# Redirect npm's tmp directory to a path with more space
+npm config set tmp /var/tmp
+
+# Or set via environment variable
+export NPM_CONFIG_TMP=/var/tmp
+npm install</code></pre>
+
+  <h2>Platform and Tool Reference</h2>
+  <table>
+    <thead><tr><th>Platform</th><th>Watcher variant possible?</th><th>Disk variant possible?</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Linux (native)</td>
+        <td>Yes — inotify limit is the most common ENOSPC cause in dev</td>
+        <td>Yes</td>
+        <td>Fix watcher: <code>sysctl fs.inotify.max_user_watches=524288</code>. Fix disk: <code>df -h</code> + cleanup.</td>
+      </tr>
+      <tr>
+        <td>macOS</td>
+        <td>No — macOS uses FSEvents, no per-user watch limit exists</td>
+        <td>Yes</td>
+        <td>ENOSPC on macOS is always disk-full. Check Disk Utility or <code>df -h</code>.</td>
+      </tr>
+      <tr>
+        <td>Windows</td>
+        <td>No — uses ReadDirectoryChangesW, no inotify equivalent</td>
+        <td>Yes (rare)</td>
+        <td>ENOSPC on Windows is disk-full. Check disk usage in Explorer.</td>
+      </tr>
+      <tr>
+        <td>Docker (Linux host)</td>
+        <td>Yes — containers inherit host inotify limit</td>
+        <td>Yes — overlay2 layers fill the host disk</td>
+        <td>Set <code>sysctl</code> on host. Use <code>CHOKIDAR_USEPOLLING=true</code> if host is immutable. Run <code>docker system prune -a</code>.</td>
+      </tr>
+      <tr>
+        <td>WSL 2</td>
+        <td>Yes — WSL 2 runs a real Linux kernel with inotify</td>
+        <td>Yes</td>
+        <td>Set <code>sysctl</code> inside WSL. Restart WSL with <code>wsl --shutdown</code> if needed.</td>
+      </tr>
+      <tr>
+        <td>GitHub Actions (ubuntu-latest)</td>
+        <td>Yes — standard Linux runner</td>
+        <td>Yes — 14 GB disk, easily consumed by large builds</td>
+        <td>Add <code>sysctl</code> step for watcher. Remove pre-installed tools for disk space.</td>
+      </tr>
+      <tr>
+        <td>GitLab CI (shared runners)</td>
+        <td>Yes — Linux runners</td>
+        <td>Yes — smaller disk than GitHub Actions on shared runners</td>
+        <td>Use <code>docker system prune</code> before build. Set artifact expiry.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Safe Watcher Patterns in Node.js Code</h2>
+
+  <h3>Detect and handle ENOSPC in fs.watch</h3>
+  <pre><code>// CJS
+const fs = require('fs');
+
+function watchWithFallback(targetPath, onChange) {
+  try {
+    const watcher = fs.watch(targetPath, { recursive: true }, (event, filename) => {
+      onChange(event, filename);
+    });
+
+    watcher.on('error', (err) => {
+      if (err.code === 'ENOSPC') {
+        console.error(
+          'ENOSPC: inotify watch limit reached. ' +
+          'Fix: sudo sysctl fs.inotify.max_user_watches=524288'
+        );
+        // Fall back to polling
+        watchWithPolling(targetPath, onChange);
+      } else {
+        throw err;
+      }
+    });
+
+    return watcher;
+  } catch (err) {
+    if (err.code === 'ENOSPC') {
+      console.error('ENOSPC on watch setup — falling back to polling');
+      return watchWithPolling(targetPath, onChange);
+    }
+    throw err;
+  }
+}
+
+function watchWithPolling(targetPath, onChange) {
+  const chokidar = require('chokidar');
+  return chokidar.watch(targetPath, {
+    usePolling: true,
+    interval: 1000,
+    ignored: /node_modules/,
+  }).on('change', (filePath) => onChange('change', filePath));
+}
+
+const watcher = watchWithFallback('./src', (event, filename) => {
+  console.log(`${event}: ${filename}`);
+});</code></pre>
+
+  <h3>Handle ENOSPC during file writes</h3>
+  <pre><code>// ESM
+import { promises as fs } from 'fs';
+import path from 'path';
+
+async function writeFileSafe(filePath, content) {
+  try {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, content, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOSPC') {
+      // Provide a clear actionable error message
+      throw new Error(
+        `ENOSPC: Disk full — cannot write to ${filePath}. ` +
+        `Run 'df -h' to check disk usage and free space before retrying.`
+      );
+    }
+    throw err;
+  }
+}
+
+await writeFileSafe('./dist/bundle.js', bundleContent);</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read <code>err.syscall</code>: if it is <code>'watch'</code> you have the inotify variant; if it is <code>'write'</code>, <code>'mkdir'</code>, or <code>'open'</code> you have the disk variant.</li>
+    <li>For the inotify variant: run <code>cat /proc/sys/fs/inotify/max_user_watches</code> — if the output is 8192 or 65535, raise it immediately with <code>sudo sysctl fs.inotify.max_user_watches=524288</code>.</li>
+    <li>For the disk variant: run <code>df -h</code> to confirm the filesystem is at 100% usage and identify which mount is full.</li>
+    <li>Run <code>df -i</code> to check inode exhaustion — a filesystem can run out of inodes even when disk blocks are free.</li>
+    <li>Check whether <code>node_modules</code> is being watched — add <code>ignored: /node_modules/</code> to your watcher config to eliminate thousands of unnecessary watch slots.</li>
+    <li>If you are on Docker: remember inotify limits come from the host kernel; set <code>sysctl</code> on the host or use <code>CHOKIDAR_USEPOLLING=true</code> in the container environment.</li>
+    <li>If you are on macOS or Windows and see ENOSPC: it is always disk-full — check disk space in your OS disk utility.</li>
+    <li>In CI (GitHub Actions, GitLab): add the <code>sysctl</code> step for inotify; remove pre-installed tools or add a <code>docker system prune</code> step for disk.</li>
+    <li>Run <code>npm cache clean --force</code> and check <code>du -sh ~/.npm</code> — the npm cache can grow to several gigabytes.</li>
+    <li>As a quick test, try <code>WATCHPACK_POLLING=true CHOKIDAR_USEPOLLING=true npm run dev</code> — if the error disappears, the cause was definitely the inotify limit.</li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Do not use ENOSPC as a catch-all to silently ignore:</strong> The disk-full variant means real data is not being written. Swallowing the error in a catch block will cause silent data loss or corrupted build artifacts. Always surface the error with a clear message pointing to <code>df -h</code>, and let the operator fix the actual underlying resource problem.
+  </div>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ENOSPC in Node.js?</summary>
+    <div class="faq-answer">
+      <p>ENOSPC is a POSIX error code meaning "Error NO SPaCe". In Node.js it appears as two distinct messages: <code>Error: ENOSPC: no space left on device</code> (disk full or inotify table full) and <code>Error: ENOSPC: System limit for number of file watchers reached</code> (Linux inotify limit exceeded). Both share <code>code: 'ENOSPC'</code> and <code>errno: -28</code> but have different causes and fixes. Check <code>err.syscall</code>: <code>'watch'</code> = inotify limit; <code>'write'</code>/<code>'mkdir'</code> = disk full.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix Error: ENOSPC: System limit for number of file watchers reached?</summary>
+    <div class="faq-answer">
+      <p>This is a Linux inotify limit. The permanent fix is: <code>echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf &amp;&amp; sudo sysctl -p</code>. Then restart your dev server. Also exclude <code>node_modules</code> from watching in your tool's config (e.g. <code>watchOptions.ignored: /node_modules/</code> in webpack, <code>server.watch.ignored</code> in Vite). For an immediate workaround without sudo access, set <code>WATCHPACK_POLLING=true</code> or <code>CHOKIDAR_USEPOLLING=true</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix Error: ENOSPC: no space left on device during npm install?</summary>
+    <div class="faq-answer">
+      <p>Run <code>df -h</code> to confirm the disk is actually full. Then free space: <code>npm cache clean --force</code> removes the npm download cache (safe to delete). <code>rm -rf node_modules</code> removes installed packages (reinstall with <code>npm install</code>). On Docker hosts, <code>docker system prune -a</code> removes unused images and build cache. Use <code>du -sh */ | sort -hr | head -20</code> to find the largest directories consuming space.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ENOSPC happen with webpack, Vite, Jest, or nodemon?</summary>
+    <div class="faq-answer">
+      <p>These tools use chokidar or watchpack to monitor every file in your project for changes. On Linux, each watched path consumes one inotify watch slot — a kernel resource tracked separately from disk space. The default limit is 8192 watches on many distros, while a typical project with <code>node_modules</code> has 50,000–200,000 files. Raising <code>fs.inotify.max_user_watches</code> to 524288 and excluding <code>node_modules</code> from the watcher config permanently fixes the issue.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Does ENOSPC: System limit for number of file watchers reached happen on macOS or Windows?</summary>
+    <div class="faq-answer">
+      <p>No. The inotify watcher variant is Linux-only. macOS uses FSEvents (no comparable per-user watch limit) and Windows uses ReadDirectoryChangesW (no inotify equivalent). If you see ENOSPC on macOS or Windows it is always the disk-full variant — check <code>df -h</code> (macOS/Linux terminal) or Disk Utility / Windows Explorer on macOS/Windows.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ENOSPC in a Docker container?</summary>
+    <div class="faq-answer">
+      <p>For the watcher variant: inotify limits are set by the host kernel, not the container. Run <code>echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf &amp;&amp; sudo sysctl -p</code> on the <em>host machine</em>, then restart your containers. If you cannot modify the host, set <code>CHOKIDAR_USEPOLLING=true</code> and <code>WATCHPACK_POLLING=true</code> as environment variables in your <code>docker-compose.yml</code>. For the disk variant: run <code>docker system prune -a</code> on the host to remove unused images and build cache.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ENOSPC on GitHub Actions or GitLab CI?</summary>
+    <div class="faq-answer">
+      <p>For the inotify watcher variant, add a step before your build: <code>echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf &amp;&amp; sudo sysctl -p</code>. For disk-full on GitHub Actions (14 GB runner disk), remove pre-installed tools first: <code>sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost</code>. For GitLab, use <code>docker system prune -af</code> in <code>before_script</code> and set short artifact expiry.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between ENOSPC and EMFILE?</summary>
+    <div class="faq-answer">
+      <p>EMFILE ("too many open files") is a per-process file descriptor limit — raised with <code>ulimit -n 65536</code>. ENOSPC watcher variant is a Linux inotify watch-slot limit — raised with <code>sysctl fs.inotify.max_user_watches</code>. Both can surface during webpack/Vite startup but are separate resources with separate limits and separate fixes. EMFILE is about open file handles; ENOSPC watcher variant is about kernel inotify slots. You can hit both simultaneously if your project is large enough.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ENOSPC happen in production but not locally?</summary>
+    <div class="faq-answer">
+      <p>Several reasons: (1) CI/CD runners have limited disk (GitHub Actions: ~14 GB) while developer laptops have hundreds of GB; (2) production servers or containers run Linux where the inotify watcher limit applies, while local development may be on macOS (FSEvents, no limit); (3) Docker build cache and old image layers accumulate on CI runners; (4) WSL 2 on Windows is a Linux environment where inotify limits do apply even though the host OS is Windows.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/EMFILE/"><code>EMFILE: too many open files</code></a> — per-process file descriptor limit; often appears alongside ENOSPC watcher variant when both inotify and ulimit are exhausted</li>
+    <li><a href="https://nodejs-errors.dev/ENOENT/"><code>ENOENT: no such file or directory</code></a> — the path does not exist; distinct from ENOSPC where the disk or inotify resource is full</li>
+    <li><a href="https://nodejs-errors.dev/EADDRINUSE/"><code>EADDRINUSE: address already in use</code></a> — port binding failure; can appear in the same CI environment when disk and port resource constraints compound</li>
+    <li><a href="https://nodejs-errors.dev/EPIPE/"><code>EPIPE: broken pipe</code></a> — write to a closed pipe; can appear when a disk-full ENOSPC causes a write stream to be destroyed mid-pipe</li>
+    <li><code>ENFILE: file table overflow</code> — system-wide fd table exhausted (all processes combined); rarer than EMFILE; requires <code>sysctl fs.file-max</code> tuning</li>
+    <li><a href="https://nodejs-errors.dev/JavaScript-heap-out-of-memory/"><code>JavaScript heap out of memory</code></a> — another resource exhaustion error that commonly appears in the same large-build scenarios as disk-full ENOSPC</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-10 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#common-system-errors">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

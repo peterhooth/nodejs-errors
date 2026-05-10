@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>TypeError: Cannot set properties of undefined (setting 'x') – Node.js Fix</title>
+  <meta name="description" content="Node.js throws TypeError: Cannot set properties of undefined (setting 'x') when you assign a property on an undefined value. Covers every cause — uninitialized parent object, nested assignment, async forgot await, Map/Set confusion, optional chaining write-side trap, Redux mutation, frozen objects — and how to fix each one." />
+  <link rel="canonical" href="https://nodejs-errors.dev/TypeError-Cannot-set-properties-of-undefined/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="TypeError: Cannot set properties of undefined (setting 'x') – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws TypeError: Cannot set properties of undefined when assigning a property on an undefined value. Covers uninitialized objects, nested assignment, missing await, Map/Set confusion, optional chaining write-side limitation, Redux state mutation, and frozen objects." />
+  <meta property="og:url" content="https://nodejs-errors.dev/TypeError-Cannot-set-properties-of-undefined/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "TypeError: Cannot set properties of undefined (setting 'x') – Node.js Fix",
+    "description": "Node.js throws TypeError: Cannot set properties of undefined (setting 'x') when you attempt to assign a property to a value that is undefined. This is the write-side complement to Cannot read properties of undefined. Causes include an uninitialized parent object, nested path not initialized (obj.a.b = 1 when obj.a is undefined), array index out of bounds assignment, Map/Set type confusion (myMap.x = 1 instead of myMap.set('x', 1)), async function returning undefined due to missing await or missing return, incorrect assumption that optional chaining works for writes, Redux or Zustand state mutation antipatterns, and assigning to a frozen or sealed object in strict mode.",
+    "url": "https://nodejs-errors.dev/TypeError-Cannot-set-properties-of-undefined/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-10",
+    "dateModified": "2026-05-10"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is TypeError: Cannot set properties of undefined?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "TypeError: Cannot set properties of undefined (setting 'x') is a JavaScript runtime error thrown when you attempt to assign a value to a property on something that is undefined. Since undefined is not an object, it has no properties and cannot hold new ones. The property name shown in parentheses tells you exactly what you tried to write. This is the write-side complement to the 'Cannot read properties of undefined' error."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does optional chaining work for property assignment?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Optional chaining (?.) is read-only — it only suppresses errors on the left-hand side of a read. You cannot use it on the left-hand side of an assignment. Writing obj?.x = value is a SyntaxError in strict mode and silently does nothing in sloppy mode. To safely assign, initialize the parent object first: obj = obj ?? {}; obj.x = value."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix TypeError: Cannot set properties of undefined (setting 'x') for nested objects?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "You must ensure every intermediate object in the path exists before assigning to the leaf. Use the logical OR assignment or nullish coalescing assignment operator: obj.a ??= {}; obj.a.b = value. Or use optional chaining to initialize: if (!obj.a) obj.a = {}; obj.a.b = value. For deeply nested paths use a utility like lodash set() which creates intermediates automatically."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does TypeError: Cannot set properties of undefined happen with async/await?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Two common async causes: (1) Missing await — without it the variable holds a Promise object, not the resolved value, and Promises have no user-defined properties, so obj.x = value targets undefined. (2) The async function has no return statement and implicitly returns undefined. Fix by adding await before every async call and adding return in every code path of the async function."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between Cannot set properties of undefined and Cannot set properties of null?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "They are the same error type with a different value. 'Cannot set properties of undefined (setting x)' means the left-hand side evaluated to undefined. 'Cannot set properties of null (setting x)' means it evaluated to null. Both undefined and null are non-objects that cannot hold properties. The fix is the same: initialize the value to an object before assigning."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does myMap.x = 1 not work with a JavaScript Map?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A JavaScript Map is not a plain object. Properties should be stored with myMap.set('x', 1) and retrieved with myMap.get('x'). Writing myMap.x = 1 adds a regular object property to the Map instance, which bypasses the Map's internal key-value store. This does not cause TypeError: Cannot set properties of undefined, but it causes silent data loss. The TypeError version occurs when myMap itself is undefined — use myMap.set() and ensure the Map is initialized first."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix this error in Redux or Zustand?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "In Redux, reducers must never mutate state directly — state is often frozen in development, so obj.x = value throws TypeError: Cannot assign to read only property or Cannot set properties of undefined when a slice of state is undefined. Always return a new object: return { ...state, x: value }. In Zustand, use the set() function: set(state => ({ ...state, x: value })). If a slice is undefined, initialize it in the store's initial state."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the old message for this error in Node.js versions before 16?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "In Node.js versions before 16, the message was 'TypeError: Cannot set property x of undefined'. From Node.js 16 onwards, it changed to 'TypeError: Cannot set properties of undefined (setting x)'. Both messages mean exactly the same thing."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "TypeError: Cannot set properties of undefined", "item": "https://nodejs-errors.dev/TypeError-Cannot-set-properties-of-undefined/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix TypeError: Cannot set properties of undefined in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Read the stack trace", "text": "Find the exact file and line number where the assignment fails. The property name in parentheses — e.g. (setting 'name') — tells you what you tried to write. That combined with the line number is usually enough to find the bug immediately." },
+      { "@type": "HowToStep", "position": 2, "name": "Log the target value before the assignment", "text": "Add console.log() immediately before the failing line to print the value you are assigning to. Determine why it is undefined: is it an uninitialized variable, a missing return, a missing await, or an unexpected API shape?" },
+      { "@type": "HowToStep", "position": 3, "name": "Initialize the parent object", "text": "If the object may be undefined, initialize it before assigning: obj = obj ?? {}; obj.x = value. For nested paths, initialize each intermediate: obj.a ??= {}; obj.a.b = value." },
+      { "@type": "HowToStep", "position": 4, "name": "Add await if the value comes from an async function", "text": "If the variable is populated asynchronously, ensure you await the Promise before assigning to its properties: const user = await fetchUser(); user.role = 'admin'." },
+      { "@type": "HowToStep", "position": 5, "name": "Do not use optional chaining on the left-hand side of an assignment", "text": "Optional chaining (?.) is read-only. obj?.x = value is either a SyntaxError or silently does nothing. Initialize the parent object explicitly instead." },
+      { "@type": "HowToStep", "position": 6, "name": "Use Map.set() for Map objects, not property assignment", "text": "A JavaScript Map stores entries via myMap.set('key', value), not myMap.key = value. Ensure the Map is constructed with new Map() before calling set()." },
+      { "@type": "HowToStep", "position": 7, "name": "Return a new object in Redux reducers instead of mutating", "text": "Redux freezes state in development. Assigning directly to state.x throws. Return a new object: return { ...state, x: newValue }." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">TypeError: Cannot set properties of undefined</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js / JavaScript Error</span>
+  <h1>TypeError: Cannot set properties of undefined (setting 'x')</h1>
+  <span class="error-code">error type: <code>TypeError</code></span>
+  <p>Complete reference — what it means, every cause, and how to fix it in Node.js. The write-side companion to <a href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/">Cannot read properties of undefined</a>.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js throws <code>TypeError: Cannot set properties of undefined (setting 'x')</code> when you assign a property to a value that is <code>undefined</code>. The three most common fixes: (1) initialize the parent object first — <code>obj = obj ?? {}; obj.x = value</code>; (2) add <code>await</code> if the value comes from an async function; (3) for nested paths, use <code>obj.a ??= {}; obj.a.b = value</code>. Note: <strong>optional chaining does not work on the left-hand side of assignment</strong> — that is a separate trap covered below.
+  </div>
+
+  <h2>What is TypeError: Cannot set properties of undefined?</h2>
+  <p>
+    This is a standard JavaScript <code>TypeError</code> thrown whenever you attempt to
+    <em>write</em> a property on a value that is <code>undefined</code>. Because
+    <code>undefined</code> is not an object, it cannot hold properties — any assignment to it
+    fails immediately at runtime.
+  </p>
+  <p>
+    It is the <strong>write-side complement</strong> to
+    <a href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/"><code>TypeError: Cannot read properties of undefined</code></a>.
+    The read variant triggers on <code>obj.x</code> (accessing a property); this variant triggers
+    on <code>obj.x = value</code> (assigning a property). Same root cause — the parent value is
+    <code>undefined</code> — but the direction of the operation differs.
+  </p>
+
+  <div class="callout">
+    <strong>Both message formats mean the same error:</strong><br>
+    Node.js &ge; 16: <code>TypeError: Cannot set properties of undefined (setting 'name')</code><br>
+    Node.js &lt; 16: <code>TypeError: Cannot set property 'name' of undefined</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>// app.js
+const config = undefined;
+config.port = 3000; // throws
+
+TypeError: Cannot set properties of undefined (setting 'port')
+    at Object.&lt;anonymous&gt; (/project/app.js:2:14)
+    at Module._compile (node:internal/modules/cjs/loader:1356:14)
+    at Object.Module._extensions..js (node:internal/modules/cjs/loader:1414:10)
+    at Module.load (node:internal/modules/cjs/loader:1197:32)
+    at Function.Module._load (node:internal/modules/cjs/loader:1013:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/runMain:128:12)
+    at node:internal/main/run_main_module:28:49</code></pre>
+
+  <p>
+    The stack trace points to the exact file and line. The property name in parentheses —
+    here <code>'port'</code> — tells you what you tried to write. Combined with the line number,
+    that is usually enough to identify the bug immediately.
+  </p>
+
+  <h2>Common Error Variants</h2>
+
+  <div class="callout">
+    <strong>Exact error strings you will see in the terminal:</strong><br>
+    <code>TypeError: Cannot set properties of undefined (setting 'name')</code><br>
+    <code>TypeError: Cannot set properties of undefined (setting 'id')</code><br>
+    <code>TypeError: Cannot set properties of undefined (setting 'value')</code><br>
+    <code>TypeError: Cannot set properties of undefined (setting 'current')</code><br>
+    <code>TypeError: Cannot set properties of undefined (setting 'data')</code><br>
+    <code>TypeError: Cannot set properties of undefined (setting 'status')</code><br>
+    <code>TypeError: Cannot set properties of undefined (setting '0')</code><br>
+    <code>TypeError: Cannot set property 'x' of undefined</code> (Node.js &lt; 16)
+  </div>
+
+  <h2>All Causes at a Glance</h2>
+
+  <table>
+    <thead><tr><th>Cause</th><th>Why it happens</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Parent object not initialized</td>
+        <td><code>obj</code> is <code>undefined</code>; you assign <code>obj.x = v</code></td>
+        <td><code>obj = obj ?? {}; obj.x = v</code></td>
+      </tr>
+      <tr>
+        <td>Nested path not initialized</td>
+        <td><code>obj.a</code> is <code>undefined</code> when assigning <code>obj.a.b = v</code></td>
+        <td><code>obj.a ??= {}; obj.a.b = v</code></td>
+      </tr>
+      <tr>
+        <td>Array index out of bounds</td>
+        <td><code>arr[5]</code> is <code>undefined</code> when array has fewer items</td>
+        <td>Push/fill the array to the needed length first</td>
+      </tr>
+      <tr>
+        <td>Map/Set confusion</td>
+        <td><code>myMap</code> is <code>undefined</code>, or wrong API used</td>
+        <td><code>const myMap = new Map(); myMap.set('x', v)</code></td>
+      </tr>
+      <tr>
+        <td>Missing <code>await</code></td>
+        <td>Variable holds a <code>Promise</code>, not the resolved object</td>
+        <td>Add <code>await</code> before the async call</td>
+      </tr>
+      <tr>
+        <td>Async function missing <code>return</code></td>
+        <td>Function implicitly returns <code>undefined</code></td>
+        <td>Add the missing <code>return</code> statement</td>
+      </tr>
+      <tr>
+        <td>Optional chaining on left-hand side</td>
+        <td><code>obj?.x = v</code> is invalid or silent no-op</td>
+        <td>Initialize <code>obj</code> explicitly; <code>??=</code> for the parent</td>
+      </tr>
+      <tr>
+        <td>Redux / Zustand state mutation</td>
+        <td>State slice is <code>undefined</code> or state is frozen</td>
+        <td>Return <code>{ ...state, x: v }</code>; initialize slice in initial state</td>
+      </tr>
+      <tr>
+        <td>Frozen / sealed object (strict mode)</td>
+        <td><code>Object.freeze()</code> prevents writes; throws in strict mode</td>
+        <td>Remove freeze, or create a new object with the updated value</td>
+      </tr>
+      <tr>
+        <td>Missing function argument</td>
+        <td>Caller omits the object parameter; it arrives as <code>undefined</code></td>
+        <td>Add a default parameter: <code>function f(obj = {}) { ... }</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Parent Object Not Initialized</h2>
+  <p>
+    The most common root cause: the variable that should hold an object is still
+    <code>undefined</code> because it was never assigned, because a function did not return a
+    value, or because a conditional branch did not create the object.
+  </p>
+  <pre><code>// Wrong – obj was never assigned
+let obj;
+obj.port = 3000; // TypeError: Cannot set properties of undefined (setting 'port')
+
+// Wrong – function missing return
+function makeConfig() {
+  const cfg = { port: 3000 };
+  // forgot: return cfg;
+}
+const config = makeConfig(); // config is undefined
+config.port = 8080; // TypeError: Cannot set properties of undefined (setting 'port')
+
+// Fix – always return a value
+function makeConfig() {
+  return { port: 3000 };
+}
+const config = makeConfig();
+config.port = 8080; // works
+
+// Fix – initialize with ?? before assigning
+let obj;
+obj = obj ?? {};
+obj.port = 3000; // works
+
+// Fix – provide an inline default
+const config = makeConfig() ?? {};
+config.port = 8080;</code></pre>
+
+  <h2>Cause 2 – Nested Path Not Initialized</h2>
+  <p>
+    Assigning to a deeply nested key — for example <code>obj.a.b = value</code> — requires
+    every intermediate object in the path to already exist. If <code>obj.a</code> is
+    <code>undefined</code>, the assignment to <code>obj.a.b</code> throws.
+  </p>
+  <pre><code>// Wrong – obj.db is undefined
+const config = {};
+config.db.host = 'localhost'; // TypeError: Cannot set properties of undefined (setting 'host')
+
+// Fix 1 – initialize each intermediate level manually
+config.db = config.db ?? {};
+config.db.host = 'localhost';
+
+// Fix 2 – nullish coalescing assignment (??=), Node.js 15+
+config.db ??= {};
+config.db.host = 'localhost';
+
+// Fix 3 – initialize the full nested structure upfront
+const config = {
+  db: {
+    host: 'localhost',
+    port: 5432,
+  },
+};
+
+// Fix 4 – lodash set() creates intermediate objects automatically
+import set from 'lodash/set.js'; // ESM
+// const { set } = require('lodash'); // CJS
+set(config, 'db.host', 'localhost');
+set(config, 'db.port', 5432);</code></pre>
+
+  <div class="callout">
+    <strong>The <code>??=</code> pattern explained:</strong> <code>obj.a ??= {}</code> is shorthand
+    for <code>obj.a = obj.a ?? {}</code>. It assigns an empty object to <code>obj.a</code> only
+    when <code>obj.a</code> is <code>null</code> or <code>undefined</code>. Available since
+    Node.js 15 / V8 9.0.
+  </div>
+
+  <h2>Cause 3 – Array Index Out of Bounds</h2>
+  <p>
+    Reading a non-existent array index returns <code>undefined</code>. Assigning a property
+    to that <code>undefined</code> slot throws immediately.
+  </p>
+  <pre><code>const users = [{ name: 'Alice' }]; // length is 1
+
+// Wrong – index 5 does not exist; users[5] is undefined
+users[5].name = 'Bob'; // TypeError: Cannot set properties of undefined (setting 'name')
+
+// Fix 1 – push to extend the array
+users.push({ name: 'Bob' }); // index 1 now exists
+
+// Fix 2 – check the index before assigning
+if (users[5]) {
+  users[5].name = 'Bob';
+} else {
+  users[5] = { name: 'Bob' }; // create the slot
+}
+
+// Fix 3 – pre-fill with Array.from for known sizes
+const slots = Array.from({ length: 6 }, () => ({}));
+slots[5].name = 'Bob'; // slots[5] is now {} and can receive properties
+
+// Realistic async scenario – modifying a result set by index
+const results = await db.query('SELECT * FROM users LIMIT 3');
+// results[10] is undefined if the query returned fewer rows
+if (results[10]) {
+  results[10].extra = true;
+}</code></pre>
+
+  <h2>Cause 4 – Map / Set Confusion</h2>
+  <p>
+    A JavaScript <code>Map</code> is not a plain object. Properties must be stored with
+    <code>myMap.set('key', value)</code>. If <code>myMap</code> itself is <code>undefined</code>
+    (never constructed with <code>new Map()</code>), calling <code>myMap.set()</code> or assigning
+    <code>myMap.key = value</code> both throw.
+  </p>
+  <pre><code>// Wrong – Map never initialized
+let cache;
+cache.set('user:1', { name: 'Alice' }); // TypeError: Cannot set properties of undefined (setting 'set')
+
+// Also wrong – using object property syntax on a Map
+const myMap = new Map();
+myMap.user = 'Alice'; // does NOT store in the Map; adds a stray property on the Map object
+
+// Correct – initialize with new Map() and use .set()
+const cache = new Map();
+cache.set('user:1', { name: 'Alice' });
+console.log(cache.get('user:1')); // { name: 'Alice' }
+
+// Same for Set – use .add(), not property assignment
+const visited = new Set();
+visited.add('/home');
+console.log(visited.has('/home')); // true
+
+// Module-level singleton pattern (common in Node.js services)
+// cache.js
+let _cache;
+export function getCache() {
+  _cache ??= new Map(); // initialize once on first access
+  return _cache;
+}
+
+// In another file:
+import { getCache } from './cache.js';
+getCache().set('key', 'value'); // always safe</code></pre>
+
+  <h2>Cause 5 – Missing <code>await</code> (Async Resolves to Undefined)</h2>
+  <p>
+    Without <code>await</code>, an async function call returns a <code>Promise</code> object.
+    Assigning a property to something on the <code>Promise</code> — or to a property that
+    itself resolved to <code>undefined</code> — throws.
+  </p>
+  <pre><code>// Wrong – missing await; fetchUser() returns Promise, not a user object
+async function updateUser() {
+  const user = fetchUser(); // Promise&lt;{id: 1, name: 'Alice'}&gt;
+  user.name = 'Bob'; // TypeError: Cannot set properties of undefined (setting 'name')
+                     // (Promise has no .name that is undefined; actually Promise.name exists
+                     //  but it's read-only — you get a different error variant)
+}
+
+// More common variant: async function returns undefined (no return statement)
+async function loadAndModify() {
+  const data = await fetchData();
+  const record = processData(data); // processData forgot to return a value
+  record.status = 'done'; // TypeError: Cannot set properties of undefined (setting 'status')
+}
+
+// Fix – add await and ensure functions return values
+async function updateUser() {
+  const user = await fetchUser(); // now a real user object
+  user.name = 'Bob'; // works
+
+  // Or return a new object (safer, avoids mutation)
+  return { ...user, name: 'Bob' };
+}
+
+// Fix – verify the async result is defined before mutating
+async function loadAndModify() {
+  const data = await fetchData();
+  const record = processData(data);
+  if (record == null) throw new Error('processData must return an object');
+  record.status = 'done';
+}</code></pre>
+
+  <h2>Cause 6 – Optional Chaining Does NOT Work for Writes</h2>
+  <p>
+    This trips up many developers. Optional chaining (<code>?.</code>) is a <strong>read-only</strong>
+    operator. It cannot be placed on the left-hand side of an assignment expression.
+  </p>
+  <pre><code>// WRONG – SyntaxError or silent no-op depending on engine/mode
+obj?.name = 'Alice'; // SyntaxError: Invalid left-hand side in assignment
+
+// Also wrong – optional chaining on an intermediate doesn't help the write
+const obj = undefined;
+// obj?.nested.name = 'Alice'; // still throws when obj is undefined because
+                               // the chain stops at obj? but the write still needs obj.nested
+
+// Correct approach 1 – initialize parent with ??=
+function ensureUser(container) {
+  container.user ??= {};
+  container.user.name = 'Alice'; // safe
+}
+
+// Correct approach 2 – explicit guard
+function setName(obj, name) {
+  if (obj == null) throw new TypeError('obj must be an object');
+  obj.name = name;
+}
+
+// Correct approach 3 – create a new object (immutable-style)
+const updated = { ...obj, name: 'Alice' }; // works even if obj is undefined? No —
+// spread also throws on undefined; ensure obj is defined first:
+const updated = { ...(obj ?? {}), name: 'Alice' };</code></pre>
+
+  <div class="callout warn">
+    <strong>Key rule:</strong> <code>?.</code> only protects reads. For writes, you must
+    ensure the parent object exists <em>before</em> the assignment. Use <code>??=</code>,
+    an explicit <code>if</code> check, or construct a new object with spread.
+  </div>
+
+  <h2>Cause 7 – Redux / Zustand State Mutation Antipattern</h2>
+  <p>
+    Redux and some other state management libraries freeze the state object in development
+    mode using <code>Object.freeze()</code>. Directly assigning to state properties throws
+    <code>TypeError: Cannot assign to read only property</code> (frozen) or
+    <code>TypeError: Cannot set properties of undefined</code> (when a state slice is
+    <code>undefined</code> because it was not initialized).
+  </p>
+  <pre><code>// Wrong – Redux reducer mutating state directly
+function userReducer(state = { name: '' }, action) {
+  if (action.type === 'SET_NAME') {
+    state.name = action.payload; // TypeError in Redux dev mode (state is frozen)
+    return state;
+  }
+  return state;
+}
+
+// Wrong – accessing an undefined slice
+function settingsReducer(state = {}, action) {
+  if (action.type === 'SET_THEME') {
+    state.preferences.theme = action.payload; // TypeError if state.preferences is undefined
+  }
+  return state;
+}
+
+// Correct – always return a NEW object
+function userReducer(state = { name: '' }, action) {
+  if (action.type === 'SET_NAME') {
+    return { ...state, name: action.payload }; // new object, state unchanged
+  }
+  return state;
+}
+
+// Correct – initialize nested slices in the default parameter
+function settingsReducer(state = { preferences: { theme: 'light' } }, action) {
+  if (action.type === 'SET_THEME') {
+    return {
+      ...state,
+      preferences: { ...state.preferences, theme: action.payload },
+    };
+  }
+  return state;
+}
+
+// Zustand – correct usage of set()
+import { create } from 'zustand';
+
+const useStore = create((set) => ({
+  user: { name: '', role: '' },
+  setName: (name) => set((state) => ({
+    user: { ...state.user, name }, // never mutate state directly
+  })),
+}));</code></pre>
+
+  <h2>Cause 8 – Strict Mode and Frozen / Sealed Objects</h2>
+  <p>
+    <code>Object.freeze()</code> prevents any property additions or modifications.
+    In strict mode (which Node.js ES Modules always run in), assigning to a frozen object
+    throws <code>TypeError</code>. In sloppy mode (CommonJS without <code>'use strict'</code>),
+    the assignment silently fails — the value is never written.
+  </p>
+  <pre><code>// Object.freeze — assignment throws in strict mode
+'use strict';
+const CONFIG = Object.freeze({ port: 3000 });
+CONFIG.port = 8080; // TypeError: Cannot assign to read only property 'port' of object
+
+// Object.seal — can update existing properties, but cannot add new ones
+'use strict';
+const obj = Object.seal({ port: 3000 });
+obj.port = 8080;    // OK — existing property
+obj.host = 'localhost'; // TypeError: Cannot add property host, object is not extensible
+
+// Object.preventExtensions — same as seal for new properties
+'use strict';
+const obj2 = Object.preventExtensions({});
+obj2.name = 'Alice'; // TypeError: Cannot add property name, object is not extensible
+
+// ESM files are always in strict mode — the silent failure mode is unavailable
+// In ESM:
+const frozen = Object.freeze({ x: 1 });
+frozen.x = 2; // TypeError (no 'use strict' needed — ESM implies it)
+
+// Fix 1 – don't freeze config objects you need to mutate
+const config = { port: 3000 };
+config.port = 8080; // works
+
+// Fix 2 – create a new object from a frozen one
+const CONFIG = Object.freeze({ port: 3000 });
+const overridden = { ...CONFIG, port: 8080 }; // works — spread creates a new unfrozen copy
+
+// Fix 3 – check before assignment
+function safeSet(obj, key, value) {
+  const desc = Object.getOwnPropertyDescriptor(obj, key);
+  if (desc && !desc.writable) {
+    throw new TypeError(`Property '${key}' is read-only on this object`);
+  }
+  obj[key] = value;
+}
+
+// How to detect if an object is frozen / sealed
+console.log(Object.isFrozen(CONFIG)); // true
+console.log(Object.isSealed(obj));    // true</code></pre>
+
+  <h2>Cause 9 – Missing Function Argument</h2>
+  <p>
+    When a caller omits a required object argument, the parameter arrives as
+    <code>undefined</code>, and any property assignment inside the function throws.
+  </p>
+  <pre><code>// Wrong – caller does not pass the required object
+function setRole(user, role) {
+  user.role = role; // TypeError: Cannot set properties of undefined (setting 'role')
+}
+
+setRole(undefined, 'admin'); // passes undefined explicitly
+setRole('admin');             // also wrong – 'admin' is in the user slot, role is undefined
+
+// Fix 1 – validate at the function boundary
+function setRole(user, role) {
+  if (user == null) throw new TypeError('setRole: user argument is required');
+  if (typeof role !== 'string') throw new TypeError('setRole: role must be a string');
+  user.role = role;
+}
+
+// Fix 2 – provide a default parameter
+function setRole(user = {}, role = 'viewer') {
+  user.role = role;
+  return user;
+}
+
+// Fix 3 – TypeScript (catches at compile time)
+function setRole(user: { role: string }, role: string): void {
+  user.role = role;
+}
+// TypeScript Error: Argument of type 'undefined' is not assignable to parameter of type '{ role: string }'</code></pre>
+
+  <h2>Safe Assignment Patterns</h2>
+
+  <h3>Nullish coalescing assignment (<code>??=</code>) for initialization</h3>
+  <pre><code>// Initialize an object property only if it is null or undefined
+function ensureDefaults(config) {
+  config ??= {};           // ensure config itself exists
+  config.db ??= {};        // ensure nested db object exists
+  config.db.host ??= 'localhost';
+  config.db.port ??= 5432;
+  return config;
+}
+
+// Works safely even when called with undefined
+const c = ensureDefaults(undefined);
+console.log(c.db.host); // 'localhost'</code></pre>
+
+  <h3>Safe deep-set utility (no lodash dependency)</h3>
+  <pre><code>// CJS
+function deepSet(obj, path, value) {
+  const keys = path.split('.');
+  let current = obj;
+  for (let i = 0; i &lt; keys.length - 1; i++) {
+    const key = keys[i];
+    if (current[key] == null || typeof current[key] !== 'object') {
+      current[key] = {};
+    }
+    current = current[key];
+  }
+  current[keys[keys.length - 1]] = value;
+  return obj;
+}
+
+// Usage
+const config = {};
+deepSet(config, 'db.primary.host', 'localhost');
+deepSet(config, 'db.primary.port', 5432);
+console.log(config.db.primary.host); // 'localhost'</code></pre>
+
+  <h3>Immutable update pattern (spread, no mutation)</h3>
+  <pre><code>// Instead of mutating, return a new object
+const original = { user: { name: 'Alice', role: 'viewer' } };
+
+// Wrong – direct mutation (also breaks with frozen objects)
+// original.user.role = 'admin';
+
+// Correct – spread to create a new object at every level you change
+const updated = {
+  ...original,
+  user: {
+    ...original.user,
+    role: 'admin',
+  },
+};
+
+console.log(original.user.role); // 'viewer' — unchanged
+console.log(updated.user.role);  // 'admin'</code></pre>
+
+  <h3>Validate before assign</h3>
+  <pre><code>// General guard pattern — use at function boundaries
+function assignProperty(obj, key, value) {
+  if (obj == null) {
+    throw new TypeError(
+      `Cannot set property '${key}' on ${obj} — object is not initialized`
+    );
+  }
+  obj[key] = value;
+}
+
+// Async version — ensure the resolved value is defined
+async function loadAndPatch(id) {
+  const record = await db.findById(id);
+  if (record == null) {
+    throw new Error(`Record ${id} not found`);
+  }
+  record.updatedAt = new Date().toISOString();
+  await db.save(record);
+}</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read the stack trace — find the exact file and line where the property assignment fails.</li>
+    <li>Note the property name in parentheses: <code>(setting 'x')</code> tells you exactly what you tried to write.</li>
+    <li>Add <code>console.log()</code> immediately before the failing line to inspect the target object.</li>
+    <li>Check whether the function populating the variable has a <code>return</code> statement in every code path.</li>
+    <li>Check whether <code>await</code> is missing before an async call — without it the variable is a <code>Promise</code>.</li>
+    <li>Check that all intermediate objects in a nested path are initialized (<code>obj.a</code> must exist before <code>obj.a.b = v</code>).</li>
+    <li>Confirm you are not using <code>?.</code> on the left-hand side of an assignment — it is read-only.</li>
+    <li>In Redux/Zustand: ensure reducers return new objects and that all state slices are initialized in the default state.</li>
+    <li>Check for <code>Object.freeze()</code>, <code>Object.seal()</code>, or <code>Object.preventExtensions()</code> on the target.</li>
+    <li>For arrays: log <code>arr.length</code> and the index you are using before the assignment.</li>
+    <li>For Map/Set: confirm the collection was constructed with <code>new Map()</code> or <code>new Set()</code> and use <code>.set()</code>/<code>.add()</code>.</li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Common mistake:</strong> Adding <code>??= {}</code> everywhere without understanding
+    why the parent is <code>undefined</code>. If an object should always be initialized,
+    throw an explicit error at the function boundary so the bug surfaces early rather than
+    silently creating empty objects that hide the real data problem.
+  </div>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What does TypeError: Cannot set properties of undefined mean?</summary>
+    <div class="faq-answer">
+      <p>It means you tried to assign a value to a property on something that is <code>undefined</code>. Because <code>undefined</code> is not an object, it cannot hold properties. The property name in parentheses — e.g. <code>(setting 'port')</code> — tells you what you tried to write. The stack trace line number tells you where in your code it happened. This is the write-side counterpart to <a href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/">Cannot read properties of undefined</a>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Does optional chaining (?.) work for property assignment?</summary>
+    <div class="faq-answer">
+      <p>No. Optional chaining is read-only. <code>obj?.x = value</code> is a <code>SyntaxError</code> in strict mode (which includes all ESM files) and silently does nothing in sloppy mode — the value is never written. To safely assign, ensure the parent object exists first: <code>obj = obj ?? {}; obj.x = value</code> or <code>obj ??= {}; obj.x = value</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I safely assign to a deeply nested property?</summary>
+    <div class="faq-answer">
+      <p>Initialize every intermediate object in the path before assigning to the leaf. Use the <code>??=</code> (nullish coalescing assignment) operator for conciseness:<br>
+      <code>config.db ??= {};</code><br>
+      <code>config.db.primary ??= {};</code><br>
+      <code>config.db.primary.host = 'localhost';</code><br>
+      Or use <code>lodash.set(config, 'db.primary.host', 'localhost')</code> which creates all intermediate objects automatically.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does this error happen with async/await?</summary>
+    <div class="faq-answer">
+      <p>Two common async causes: (1) missing <code>await</code> — without it the variable holds a <code>Promise</code> object, not the resolved value; (2) the async function has no <code>return</code> statement and implicitly returns <code>undefined</code>. Fix by adding <code>await</code> and verifying every code path in your async function returns the expected object.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix this error in a Redux reducer?</summary>
+    <div class="faq-answer">
+      <p>Redux freezes state in development mode. Direct mutation (<code>state.x = value</code>) either throws <code>TypeError: Cannot assign to read only property</code> (frozen object) or <code>TypeError: Cannot set properties of undefined</code> (undefined slice). The fix: always return a new object — <code>return { ...state, x: value }</code> — and initialize all nested slices in the default state parameter: <code>function reducer(state = { user: {}, settings: {} }, action) { ... }</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why is this error different from "Cannot read properties of undefined"?</summary>
+    <div class="faq-answer">
+      <p>They share the same root cause — the parent value is <code>undefined</code> — but differ in direction. "Cannot read properties" fires when you <em>access</em> a property (<code>obj.x</code>). "Cannot set properties" fires when you <em>assign</em> a property (<code>obj.x = value</code>). The fixes are largely the same: initialize the parent object. See the companion page: <a href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/">Cannot read properties of undefined</a>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the old message for this error in Node.js before version 16?</summary>
+    <div class="faq-answer">
+      <p>In Node.js versions before 16, the error message was <code>TypeError: Cannot set property 'x' of undefined</code>. From Node.js 16 onwards, it became <code>TypeError: Cannot set properties of undefined (setting 'x')</code>. Both messages mean exactly the same thing and the fix is identical.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does assigning to arr[5].name throw when arr only has 3 elements?</summary>
+    <div class="faq-answer">
+      <p>Accessing an array index beyond its length returns <code>undefined</code> — there is no element there. Assigning a property to that <code>undefined</code> throws immediately. Fix by ensuring the element exists first: <code>arr[5] = arr[5] ?? {}; arr[5].name = 'x';</code>. Or push new elements to extend the array to the required length.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does this error occur in production but not locally?</summary>
+    <div class="faq-answer">
+      <p>Common reasons: (1) An environment variable is missing in production, so a config object is not populated. (2) An API returns a different shape in production (empty response, null nested field). (3) Local data always has the nested object present, but production data sometimes does not. (4) A race condition in async initialization is exposed by different timing in production. Fix: validate all external inputs and required env vars at startup and fail fast when they are absent.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/"><code>TypeError: Cannot read properties of undefined (reading 'x')</code></a> — the read-side companion: accessing a property on <code>undefined</code> instead of assigning one</li>
+    <li><a href="https://nodejs-errors.dev/UnhandledPromiseRejection/"><code>UnhandledPromiseRejection</code></a> — a rejected Promise with no <code>.catch()</code> or try/catch; often caused by the same missing <code>await</code> that leads to this TypeError</li>
+    <li><a href="https://nodejs-errors.dev/ERR_INVALID_ARG_TYPE/"><code>ERR_INVALID_ARG_TYPE</code></a> — Node.js core APIs throw this when you pass <code>undefined</code> where a specific type is required</li>
+    <li><a href="https://nodejs-errors.dev/ReferenceError-document-is-not-defined/"><code>ReferenceError: document is not defined</code></a> — accessing browser globals (including DOM elements) in a Node.js environment; often precedes this TypeError</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-10 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#class-typeerror">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

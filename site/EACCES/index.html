@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Error: EACCES: permission denied – Node.js Fix</title>
+  <meta name="description" content="Node.js throws Error: EACCES: permission denied when binding to ports below 1024, running npm install -g without correct ownership, or accessing files the current user cannot read/write. Fix with setcap, reverse proxy, nvm, npm prefix, chmod/chown, and more." />
+  <link rel="canonical" href="https://nodejs-errors.dev/EACCES/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Error: EACCES: permission denied – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws Error: EACCES: permission denied when binding to ports below 1024, running npm install -g without correct ownership, or accessing files the current user cannot read/write. Fix with setcap, reverse proxy, nvm, npm prefix, chmod/chown, and more." />
+  <meta property="og:url" content="https://nodejs-errors.dev/EACCES/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Error: EACCES: permission denied – Node.js Fix",
+    "description": "Node.js throws EACCES: permission denied in three primary scenarios: (1) app.listen(80) or app.listen(443) fails on Linux/macOS because ports below 1024 require root — fix with setcap, iptables redirect, or a reverse proxy; (2) npm install -g fails because global node_modules is owned by root — fix with nvm, npm prefix change, or chown; (3) any fs operation on a file the current user cannot access — fix with chmod/chown or SELinux/AppArmor policy. Full code examples and shell commands for every fix.",
+    "url": "https://nodejs-errors.dev/EACCES/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-10",
+    "dateModified": "2026-05-10"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is EACCES in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "EACCES stands for 'Error ACCESs' — a POSIX error code meaning the operating system denied the requested operation because the current user lacks the required permission. Node.js surfaces it as 'Error: EACCES: permission denied' on privileged port binds (ports below 1024), on npm global installs when node_modules is owned by root, and on any fs operation (readFile, writeFile, mkdir, unlink, etc.) targeting a path the current user cannot access."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix Error: listen EACCES: permission denied 0.0.0.0:80?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Three production-safe options: (1) Use a reverse proxy — run your Node.js app on port 3000 and let Nginx/Caddy listen on 80 and forward traffic; (2) Use setcap on Linux to grant the node binary the net_bind_service capability: sudo setcap 'cap_net_bind_service=+ep' $(which node); (3) Add an iptables redirect: sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3000. Never run Node.js as root in production."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix npm ERR! Error: EACCES: permission denied when running npm install -g?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The recommended fix is to reinstall Node.js using nvm (Node Version Manager), which installs into your home directory and requires no root. Alternative approaches: (1) change the npm global prefix to a user-owned directory; (2) change ownership of the existing global directory with sudo chown -R $(whoami) $(npm config get prefix)/{lib/node_modules,bin,share}. Never use sudo npm install -g as a long-term fix — it creates root-owned files that break future installs."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix EACCES: permission denied on a file or directory?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Check the file's owner and permissions with ls -la /path/to/file. Then either: (1) change the file's owner to the current user with sudo chown $(whoami) /path/to/file; (2) add read/write permission with chmod u+rw /path/to/file; (3) if running on a system with SELinux or AppArmor, check audit logs (ausearch -m avc or journalctl -xe) for policy denials — fixing requires adjusting the SELinux context or AppArmor profile rather than basic Unix permissions."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between EACCES and EPERM in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Both indicate a permission failure, but the kernel chooses between them based on context. EACCES (permission denied) means the standard Unix DAC (Discretionary Access Control) check failed — the file mode bits or directory ACL denied access. EPERM (operation not permitted) means the operation itself is not allowed for this process regardless of file ownership, typically returned for privileged system calls (e.g., setting process priority, modifying network interfaces) or when a mandatory access control system (SELinux, AppArmor) blocks the operation at the kernel level."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does EACCES happen in Docker or CI but not locally?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Common Docker/CI causes: (1) the container runs as a non-root user (USER directive or --user flag) but files were copied into the image as root, so the runtime user cannot read them — fix by adding RUN chown -R appuser:appuser /app after the COPY instructions; (2) a volume mount overwrites a directory that had correct permissions inside the image with a host directory owned by root; (3) CI clones the repo as a different user than owns the node_modules cache."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is it safe to use sudo node or sudo npm install -g to fix EACCES?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Running sudo npm install -g installs package files owned by root, which breaks subsequent npm commands run as your normal user. Running your Node.js application with sudo exposes the entire system to vulnerabilities in your app and its dependencies. Use nvm to manage Node.js installations per-user, or configure a user-owned npm prefix directory instead."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I grant Node.js permission to bind to port 80 without sudo?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "On Linux, use setcap: sudo setcap 'cap_net_bind_service=+ep' $(which node). This grants only the specific capability needed to bind to privileged ports, without full root access. Note that setcap must be re-applied after every Node.js upgrade. Alternatively, configure an iptables redirect from port 80 to 3000, or use a reverse proxy (Nginx, Caddy, HAProxy)."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "EACCES", "item": "https://nodejs-errors.dev/EACCES/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix Error: EACCES: permission denied in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Identify which EACCES scenario you have", "text": "Read the full error message. 'listen EACCES: permission denied 0.0.0.0:80' means a port binding issue. 'EACCES: permission denied, mkdir /usr/local/lib/node_modules' means an npm global install issue. Any other path means a filesystem permission problem." },
+      { "@type": "HowToStep", "position": 2, "name": "For port 80/443: use a reverse proxy (recommended)", "text": "Run your Node.js app on a high port (3000, 8080) and place Nginx or Caddy in front to listen on port 80/443. This is the correct production architecture and avoids all privilege escalation risks." },
+      { "@type": "HowToStep", "position": 3, "name": "For port 80/443 on Linux: use setcap", "text": "Run: sudo setcap 'cap_net_bind_service=+ep' $(which node). This grants the node binary the minimum capability required to bind to privileged ports. Re-apply after every Node.js version upgrade." },
+      { "@type": "HowToStep", "position": 4, "name": "For npm install -g: switch to nvm", "text": "Install nvm from https://github.com/nvm-sh/nvm and reinstall Node.js through it. nvm installs to ~/.nvm in your home directory so npm global packages never require root." },
+      { "@type": "HowToStep", "position": 5, "name": "For npm install -g: change the global prefix", "text": "Run: mkdir -p ~/.npm-global && npm config set prefix '~/.npm-global' and add export PATH=~/.npm-global/bin:$PATH to your shell profile. Future global installs go into your home directory." },
+      { "@type": "HowToStep", "position": 6, "name": "For filesystem EACCES: check ownership and permissions", "text": "Run ls -la /path/to/file to see the owner and mode. Use sudo chown $(whoami) /path/to/file to take ownership, or chmod u+rw /path/to/file to add read/write permission for your user." },
+      { "@type": "HowToStep", "position": 7, "name": "For filesystem EACCES in Docker: fix file ownership in the image", "text": "After COPY instructions in your Dockerfile, add: RUN chown -R appuser:appuser /app to transfer ownership to the runtime user. This prevents EACCES when the container runs as a non-root user." },
+      { "@type": "HowToStep", "position": 8, "name": "For SELinux/AppArmor denials: check audit logs", "text": "If permissions look correct but EACCES persists, SELinux or AppArmor may be enforcing a MAC policy. On SELinux systems run: ausearch -m avc -ts recent to find the denial. Use audit2allow to generate a policy fix or adjust the file context with chcon/restorecon." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">EACCES</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>Error: EACCES: permission denied</h1>
+  <span class="error-code">error code: <code>EACCES</code></span>
+  <p>Complete reference — privileged port binding, npm global install failures, and filesystem permission errors, with every fix.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js throws <code>Error: EACCES: permission denied</code> in three distinct situations: (1) <strong>Port binding</strong> — <code>app.listen(80)</code> or <code>app.listen(443)</code> fails because ports below 1024 require root; fix with a reverse proxy, <code>setcap</code>, or an <code>iptables</code> redirect. (2) <strong>npm global install</strong> — <code>npm install -g</code> fails because global <code>node_modules</code> is owned by root; fix by switching to <code>nvm</code> or changing the npm prefix. (3) <strong>Filesystem operations</strong> — <code>fs.readFile</code>, <code>fs.writeFile</code>, <code>fs.mkdir</code>, etc. fail because the current user lacks read/write permission; fix with <code>chmod</code> or <code>chown</code>.
+  </div>
+
+  <h2>What is EACCES?</h2>
+  <p>
+    <strong>EACCES</strong> stands for <em>Error ACCESs</em> — a
+    <a href="https://nodejs.org/api/errors.html#common-system-errors" rel="noopener noreferrer">POSIX system error code</a>
+    meaning the operating system denied the operation because the current process does not have
+    the required permission. Node.js surfaces it as <code>Error: EACCES: permission denied</code>
+    whenever the kernel's access control check fails.
+  </p>
+  <p>
+    The error is returned by Linux and macOS. On Windows, the equivalent is typically
+    <code>EPERM</code> (operation not permitted) or <code>EACCES</code> itself for some
+    operations. The integer value is <code>errno: -13</code> on Linux/macOS.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error messages you will see:</strong><br>
+    <code>Error: listen EACCES: permission denied 0.0.0.0:80</code><br>
+    <code>Error: listen EACCES: permission denied 0.0.0.0:443</code><br>
+    <code>npm ERR! Error: EACCES: permission denied, mkdir '/usr/local/lib/node_modules'</code><br>
+    <code>npm ERR! Error: EACCES: permission denied, access '/usr/local/lib/node_modules'</code><br>
+    <code>Error: EACCES: permission denied, open '/etc/app/config.json'</code><br>
+    <code>Error: EACCES: permission denied, mkdir '/var/log/myapp'</code><br>
+    <code>Error: EACCES: permission denied, unlink '/root/.config/app.lock'</code>
+  </div>
+
+  <h2>Full Error Examples</h2>
+
+  <h3>Port binding (listen)</h3>
+  <pre><code>Error: listen EACCES: permission denied 0.0.0.0:80
+    at Server.setupListenHandle [as _listen2] (node:net:1872:16)
+    at listenInCluster (node:net:1920:12)
+    at Server.listen (node:net:2008:7)
+    at Function.listen (/project/node_modules/express/lib/application.js:635:24)
+    at Object.&lt;anonymous&gt; (/project/app.js:5:5) {
+  code: 'EACCES',
+  errno: -13,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 80
+}</code></pre>
+
+  <h3>npm global install</h3>
+  <pre><code>npm ERR! code EACCES
+npm ERR! syscall mkdir
+npm ERR! path /usr/local/lib/node_modules/typescript
+npm ERR! errno -13
+npm ERR! Error: EACCES: permission denied, mkdir '/usr/local/lib/node_modules/typescript'
+npm ERR!
+npm ERR! Please try running this command again as root/Administrator.</code></pre>
+
+  <h3>Filesystem operation</h3>
+  <pre><code>Error: EACCES: permission denied, open '/etc/nginx/nginx.conf'
+    at Object.openSync (node:fs:596:3)
+    at Object.readFileSync (node:fs:464:35)
+    at Object.&lt;anonymous&gt; (/project/deploy.js:12:19) {
+  errno: -13,
+  code: 'EACCES',
+  syscall: 'open',
+  path: '/etc/nginx/nginx.conf'
+}</code></pre>
+
+  <p>The error object diagnostic fields:</p>
+  <table>
+    <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>code</code></td><td>Always <code>'EACCES'</code> — the error type</td></tr>
+      <tr><td><code>syscall</code></td><td>The OS call that failed: <code>'listen'</code>, <code>'open'</code>, <code>'mkdir'</code>, <code>'unlink'</code>, <code>'access'</code>, etc.</td></tr>
+      <tr><td><code>path</code></td><td>The exact filesystem path that was denied (fs errors)</td></tr>
+      <tr><td><code>address</code> / <code>port</code></td><td>The interface and port number (listen errors)</td></tr>
+      <tr><td><code>errno</code></td><td><code>-13</code> on Linux/macOS — the raw POSIX error number</td></tr>
+    </tbody>
+  </table>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Typical error message</th><th>Fix summary</th></tr></thead>
+    <tbody>
+      <tr><td>Binding to port below 1024</td><td><code>listen EACCES: permission denied 0.0.0.0:80</code></td><td>Reverse proxy, <code>setcap</code>, or <code>iptables</code> redirect</td></tr>
+      <tr><td>npm global prefix owned by root</td><td><code>EACCES: permission denied, mkdir '/usr/local/lib/node_modules'</code></td><td><code>nvm</code> reinstall or <code>npm config set prefix</code></td></tr>
+      <tr><td>File/directory owned by another user</td><td><code>EACCES: permission denied, open '/etc/...'</code></td><td><code>sudo chown $(whoami) /path</code></td></tr>
+      <tr><td>File mode bits deny access</td><td><code>EACCES: permission denied, open '/var/log/...'</code></td><td><code>chmod u+rw /path</code> or <code>chmod g+rw /path</code></td></tr>
+      <tr><td>Docker: files owned by root inside container</td><td><code>EACCES: permission denied, mkdir '/app/data'</code></td><td><code>RUN chown -R appuser:appuser /app</code> in Dockerfile</td></tr>
+      <tr><td>SELinux or AppArmor MAC policy</td><td>Unix permissions look correct but EACCES persists</td><td>Check <code>ausearch -m avc</code>; adjust SELinux context or AppArmor profile</td></tr>
+      <tr><td>Volume mount overwrites in-image permissions</td><td><code>EACCES</code> only when volume is mounted</td><td>Set correct permissions on the host directory or use named volumes</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Privileged Port Binding (app.listen(80) or app.listen(443))</h2>
+
+  <p>
+    On Linux and macOS, TCP/UDP ports <strong>0–1023</strong> are designated as privileged ports.
+    Only the root user (UID 0) or processes with the <code>CAP_NET_BIND_SERVICE</code> Linux
+    capability can bind to them. When a non-root Node.js process calls
+    <code>app.listen(80)</code> or <code>app.listen(443)</code>, the kernel rejects the
+    <code>bind(2)</code> syscall with EACCES.
+  </p>
+  <pre><code>// Triggers EACCES on Linux/macOS when run as a non-root user
+const express = require('express');
+const app = express();
+
+app.listen(80, () => {
+  console.log('Server running on port 80');
+});
+// Error: listen EACCES: permission denied 0.0.0.0:80</code></pre>
+
+  <h3>Fix A – Reverse proxy (recommended for production)</h3>
+  <p>
+    Run your Node.js app on a high port (3000, 8080) and put Nginx, Caddy, or HAProxy in
+    front to accept connections on 80/443 and proxy them to your app. This is the
+    <strong>correct production architecture</strong> — it also adds TLS termination, load
+    balancing, static file serving, and rate limiting.
+  </p>
+  <pre><code># Your Node.js app binds to a non-privileged port
+const PORT = process.env.PORT || 3000;
+app.listen(PORT);</code></pre>
+
+  <pre><code># nginx.conf — minimal reverse proxy config
+server {
+    listen 80;
+    server_name example.com;
+
+    location / {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection 'upgrade';
+        proxy_set_header   Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}</code></pre>
+
+  <pre><code># Caddyfile — automatic HTTPS, even simpler
+example.com {
+    reverse_proxy localhost:3000
+}</code></pre>
+
+  <h3>Fix B – setcap (Linux only — grants minimum capability)</h3>
+  <p>
+    The <code>setcap</code> utility grants a specific Linux capability to a binary without
+    giving it full root privileges. Grant <code>CAP_NET_BIND_SERVICE</code> to the Node.js
+    binary so it can bind to ports below 1024:
+  </p>
+  <pre><code># Grant the capability (run once after installing/upgrading Node.js)
+sudo setcap 'cap_net_bind_service=+ep' $(which node)
+
+# Verify it was set
+getcap $(which node)
+# Output: /usr/bin/node = cap_net_bind_service+ep
+
+# Your app now works without sudo
+node app.js   # binds to port 80 successfully</code></pre>
+
+  <div class="callout warn">
+    <strong>Important:</strong> <code>setcap</code> is applied to the binary file itself and
+    is lost when Node.js is upgraded (e.g., via <code>apt upgrade</code>, <code>nvm use</code>,
+    or <code>n</code>). Add <code>setcap</code> to your server provisioning scripts or a
+    post-install hook so it is reapplied automatically after upgrades.
+  </div>
+
+  <h3>Fix C – iptables redirect (Linux — redirect port 80 to 3000)</h3>
+  <p>
+    Use Linux's <code>iptables</code> NAT table to redirect incoming traffic on port 80 to
+    your Node.js app's high port. Your app keeps running on port 3000; the kernel handles
+    the redirect transparently.
+  </p>
+  <pre><code># Redirect inbound port 80 to localhost:3000 (applies immediately)
+sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3000
+
+# Also redirect local connections (from the same machine)
+sudo iptables -t nat -A OUTPUT -p tcp --dport 80 -j REDIRECT --to-port 3000
+
+# Make the rule survive reboots (Debian/Ubuntu)
+sudo apt-get install -y iptables-persistent
+sudo netfilter-persistent save</code></pre>
+
+  <h3>Fix D – authbind (Linux — user-level privileged port access)</h3>
+  <p>
+    <code>authbind</code> lets a specific user bind to specific ports without root or
+    setcap. Useful for per-user controlled access in shared environments.
+  </p>
+  <pre><code># Install authbind
+sudo apt-get install authbind
+
+# Allow the current user to bind to port 80
+sudo touch /etc/authbind/byport/80
+sudo chown $USER /etc/authbind/byport/80
+sudo chmod 755 /etc/authbind/byport/80
+
+# Run Node.js through authbind
+authbind --deep node app.js</code></pre>
+
+  <h3>Fix E – Change the port (simplest for development)</h3>
+  <p>
+    In development, there is no need to use port 80. Use any port above 1023 and tell your
+    browser to include the port number in the URL.
+  </p>
+  <pre><code>// Read port from environment variable with a safe default
+const PORT = parseInt(process.env.PORT, 10) || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});</code></pre>
+
+  <div class="callout warn">
+    <strong>Never do this in production:</strong> <code>sudo node app.js</code>. Running your
+    application as root means any vulnerability in your code or its dependencies can compromise
+    the entire server. Use a reverse proxy or setcap instead.
+  </div>
+
+  <h2>Cause 2 – npm install -g Fails (global node_modules owned by root)</h2>
+
+  <p>
+    When Node.js is installed via the system package manager (<code>apt</code>, <code>brew</code>,
+    or the official installer), the global <code>node_modules</code> directory is typically
+    <code>/usr/local/lib/node_modules</code> or <code>/usr/lib/node_modules</code>, owned by
+    <code>root</code>. Running <code>npm install -g &lt;package&gt;</code> as a regular user
+    tries to write to that root-owned directory and gets EACCES.
+  </p>
+  <pre><code># This triggers EACCES on systems where node was installed as root
+npm install -g typescript
+
+# npm ERR! code EACCES
+# npm ERR! syscall mkdir
+# npm ERR! path /usr/local/lib/node_modules/typescript
+# npm ERR! Error: EACCES: permission denied, mkdir '/usr/local/lib/node_modules/typescript'</code></pre>
+
+  <h3>Fix A – Switch to nvm (recommended — permanent fix)</h3>
+  <p>
+    <a href="https://github.com/nvm-sh/nvm" rel="noopener noreferrer">nvm (Node Version Manager)</a>
+    installs Node.js and npm into <code>~/.nvm</code> in your home directory, which is owned
+    by you. Global packages are installed into your home directory too — no root ever required.
+    This is the approach the official npm documentation recommends.
+  </p>
+  <pre><code># 1. Install nvm (check https://github.com/nvm-sh/nvm for the latest version)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+
+# 2. Reload your shell profile
+source ~/.bashrc   # or ~/.zshrc, ~/.profile
+
+# 3. Install the Node.js version you need
+nvm install 20        # install Node 20 LTS
+nvm use 20
+nvm alias default 20  # make it the default for new shells
+
+# 4. Verify npm prefix is now in your home directory
+npm config get prefix
+# Output: /home/youruser/.nvm/versions/node/v20.x.x
+
+# 5. Global installs now work without sudo
+npm install -g typescript
+npm install -g nodemon</code></pre>
+
+  <h3>Fix B – Change the npm global prefix to a user-owned directory</h3>
+  <p>
+    If you cannot or do not want to use nvm, configure npm to use a directory in your home
+    folder for global packages. No root access required after the initial setup.
+  </p>
+  <pre><code># 1. Create a directory for global npm packages
+mkdir -p ~/.npm-global
+
+# 2. Tell npm to use it
+npm config set prefix '~/.npm-global'
+
+# 3. Add the bin directory to your PATH
+echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+
+# Verify the new prefix
+npm config get prefix
+# Output: /home/youruser/.npm-global
+
+# Global installs now work without sudo
+npm install -g typescript</code></pre>
+
+  <h3>Fix C – Fix ownership of the existing global directory (chown)</h3>
+  <p>
+    If you want to keep the current npm prefix location but stop needing root, change
+    ownership of that directory to your user. This is a valid one-time fix on a developer
+    machine but is not appropriate for shared servers.
+  </p>
+  <pre><code># Find the current global prefix
+npm config get prefix
+# e.g. /usr/local
+
+# Change ownership of the npm-managed subdirectories to your user
+sudo chown -R $(whoami) $(npm config get prefix)/lib/node_modules
+sudo chown -R $(whoami) $(npm config get prefix)/bin
+sudo chown -R $(whoami) $(npm config get prefix)/share
+
+# Verify you can install globally now
+npm install -g typescript</code></pre>
+
+  <h3>Fix D – sudo npm install -g (quick fix, not recommended)</h3>
+  <p>
+    Adding <code>sudo</code> installs the package as root and works in the short term, but
+    creates root-owned files that will cause EACCES on every subsequent <code>npm install</code>,
+    script execution, or <code>npx</code> invocation run as your normal user.
+  </p>
+  <pre><code># Works once, but creates root-owned files — avoid as a long-term fix
+sudo npm install -g typescript
+
+# Subsequent commands will fail with EACCES because root owns the global files
+npm list -g    # may fail
+npx tsc --version  # may fail with EACCES on cache dir</code></pre>
+
+  <div class="callout warn">
+    <strong>Warning:</strong> Using <code>sudo npm install -g</code> is a trap. It fixes the
+    current install but poisons the global npm installation state. If you have already done
+    this, the cleanest recovery is to reinstall Node.js via <code>nvm</code> and start fresh.
+  </div>
+
+  <h2>Cause 3 – Filesystem Permission Denied (fs operations)</h2>
+
+  <p>
+    Any Node.js <code>fs</code> operation — <code>readFile</code>, <code>writeFile</code>,
+    <code>mkdir</code>, <code>unlink</code>, <code>rename</code>, <code>chmod</code>,
+    <code>stat</code>, <code>open</code> — throws EACCES when the current OS user does not
+    have the necessary read, write, or execute permission on the target file or directory.
+  </p>
+  <pre><code>const fs = require('fs');
+
+// EACCES: trying to read a file owned by root with mode 600
+fs.readFile('/etc/sudoers', 'utf8', (err, data) => {
+  if (err) {
+    console.error(err.code);   // 'EACCES'
+    console.error(err.path);   // '/etc/sudoers'
+    console.error(err.syscall); // 'open'
+  }
+});
+
+// EACCES: trying to write to a directory where we have no write permission
+await fs.promises.mkdir('/var/log/myapp/data', { recursive: true });
+// Error: EACCES: permission denied, mkdir '/var/log/myapp/data'</code></pre>
+
+  <h3>Fix A – Inspect and fix file ownership</h3>
+  <pre><code># Check the current owner, group, and permissions
+ls -la /path/to/file
+# Example output:
+# -rw------- 1 root root 1234 May 10 12:00 /path/to/file
+# The first column shows permissions; the third and fourth show owner and group.
+
+# Change the owner to your current user
+sudo chown $(whoami) /path/to/file
+
+# Change the owner recursively for a directory
+sudo chown -R $(whoami) /path/to/directory
+
+# Verify the change
+ls -la /path/to/file</code></pre>
+
+  <h3>Fix B – Adjust file mode bits with chmod</h3>
+  <pre><code># Add read permission for the file's owner
+chmod u+r /path/to/file
+
+# Add read+write permission for the file's owner
+chmod u+rw /path/to/file
+
+# Add write permission for the group (useful for shared app directories)
+chmod g+w /path/to/directory
+
+# Make a directory traversable (required for listing/entering it)
+chmod u+x /path/to/directory
+
+# Set explicit mode: owner rw, group r, others none (640)
+chmod 640 /path/to/file</code></pre>
+
+  <h3>Fix C – Write to a user-owned directory instead</h3>
+  <p>
+    Rather than fighting system-owned paths, write application data to directories your
+    user already owns: the application's own directory, <code>$HOME</code>, or
+    <code>/tmp</code>.
+  </p>
+  <pre><code>const os = require('os');
+const path = require('path');
+const fs = require('fs');
+
+// Good: write to the app's own directory (you own this)
+const logFile = path.join(__dirname, 'logs', 'app.log');
+
+// Good: write to the user's home directory
+const configFile = path.join(os.homedir(), '.config', 'myapp', 'config.json');
+
+// Good: write to /tmp (world-writable, but cleared on reboot)
+const tempFile = path.join(os.tmpdir(), 'myapp-cache.json');
+
+// Ensure the directory exists before writing
+await fs.promises.mkdir(path.dirname(logFile), { recursive: true });
+await fs.promises.writeFile(logFile, 'started\n');</code></pre>
+
+  <h3>Fix D – Handle EACCES gracefully in code</h3>
+  <pre><code>const fs = require('fs/promises');
+
+async function readConfigSafe(filePath) {
+  try {
+    return await fs.readFile(filePath, 'utf8');
+  } catch (err) {
+    if (err.code === 'EACCES') {
+      // Permission denied — log clearly and use fallback
+      console.error(
+        `Permission denied reading ${err.path}. ` +
+        `Current user: ${process.env.USER}. ` +
+        `Run: sudo chown ${process.env.USER} ${err.path}`
+      );
+      return null; // or return a default config
+    }
+    if (err.code === 'ENOENT') {
+      return null; // file does not exist — also acceptable
+    }
+    throw err; // unexpected error — re-throw
+  }
+}</code></pre>
+
+  <h3>Fix E – Docker: fix file ownership in the image</h3>
+  <p>
+    When a Docker container runs as a non-root user (via <code>USER</code> instruction or
+    <code>docker run --user</code>) but files were <code>COPY</code>-ed in as root, the
+    runtime user cannot access them.
+  </p>
+  <pre><code># Dockerfile — correct pattern
+FROM node:20-alpine
+
+# Create a non-root user
+RUN addgroup -S appgroup &amp;&amp; adduser -S appuser -G appgroup
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY . .
+
+# Transfer ownership BEFORE switching user
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user for runtime
+USER appuser
+
+CMD ["node", "src/index.js"]</code></pre>
+
+  <pre><code># docker-compose.yml — if a volume mount overwrites /app permissions,
+# use a named volume for the data directory so it inherits image permissions
+services:
+  app:
+    image: myapp
+    volumes:
+      - app_data:/app/data    # named volume — inherits image ownership
+      # NOT: - ./data:/app/data  (bind mount inherits host ownership)
+
+volumes:
+  app_data:</code></pre>
+
+  <h3>Fix F – SELinux / AppArmor denials</h3>
+  <p>
+    On systems with Mandatory Access Control (SELinux on RHEL/CentOS/Fedora, AppArmor on
+    Ubuntu/Debian), EACCES can be returned even when standard Unix file permissions look
+    correct. The MAC layer enforces additional policy rules on top of DAC.
+  </p>
+  <pre><code># SELinux: check for recent Access Vector Cache (AVC) denials
+sudo ausearch -m avc -ts recent
+
+# Example denial output:
+# type=AVC msg=audit(1715000000.000:123): avc:  denied  { write }
+#   for pid=12345 comm="node" name="app.log"
+#   scontext=system_u:system_r:init_t:s0
+#   tcontext=unconfined_u:object_r:var_log_t:s0 tclass=file
+
+# Fix the SELinux file context to match what Node.js needs:
+sudo chcon -t var_log_t /var/log/myapp/app.log
+
+# Or generate and apply a custom policy module from the denial:
+sudo ausearch -m avc -ts recent | audit2allow -M mypolicy
+sudo semodule -i mypolicy.pp
+
+# AppArmor: check for denials
+sudo journalctl -xe | grep DENIED
+# or
+sudo dmesg | grep apparmor | grep DENIED
+
+# Temporarily put the profile in complain mode to diagnose:
+sudo aa-complain /etc/apparmor.d/usr.bin.node</code></pre>
+
+  <h2>EACCES vs EPERM</h2>
+  <p>
+    Both <code>EACCES</code> and <code>EPERM</code> indicate a permission failure. The
+    distinction is at the kernel level:
+  </p>
+  <table>
+    <thead><tr><th>Error</th><th>errno</th><th>Meaning</th><th>When you see it</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>EACCES</code></td>
+        <td><code>-13</code></td>
+        <td>Standard DAC (Discretionary Access Control) check failed — the Unix file permission bits or ACL denied access</td>
+        <td>Reading a file you don't own, binding to a privileged port, writing to a read-only directory</td>
+      </tr>
+      <tr>
+        <td><code>EPERM</code></td>
+        <td><code>-1</code></td>
+        <td>The operation itself is not permitted for this process, regardless of file ownership — often a privileged syscall</td>
+        <td>Calling <code>chown</code> as non-root, setting network interface flags, MAC policy denial in some kernels, Windows permission errors</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    In practice: if you see <code>EACCES</code>, check <code>ls -la</code> and fix ownership
+    or mode bits first. If permissions look correct and you still get an error, suspect SELinux,
+    AppArmor, or a privileged operation — both may surface as <code>EPERM</code> in some
+    kernel configurations.
+  </p>
+
+  <h2>Safe Permission Patterns</h2>
+
+  <h3>Always check err.code before reacting</h3>
+  <pre><code>const fs = require('fs/promises');
+
+async function safeWrite(filePath, content) {
+  try {
+    await fs.writeFile(filePath, content, 'utf8');
+  } catch (err) {
+    switch (err.code) {
+      case 'EACCES':
+        throw new Error(
+          `Permission denied writing to ${err.path}. ` +
+          `Check file ownership and mode bits.`
+        );
+      case 'ENOENT':
+        // Parent directory missing — create it and retry
+        await fs.mkdir(require('path').dirname(filePath), { recursive: true });
+        await fs.writeFile(filePath, content, 'utf8');
+        break;
+      default:
+        throw err;
+    }
+  }
+}</code></pre>
+
+  <h3>Check access before operating (non-atomic — informational only)</h3>
+  <pre><code>const fs = require('fs/promises');
+const { constants } = require('fs');
+
+async function checkWritable(filePath) {
+  try {
+    await fs.access(filePath, constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+if (await checkWritable('/path/to/file')) {
+  await fs.writeFile('/path/to/file', data);
+} else {
+  console.error('No write permission on /path/to/file — check ownership');
+}</code></pre>
+
+  <div class="callout">
+    <strong>Note:</strong> <code>fs.access()</code> is subject to TOCTOU (time-of-check
+    time-of-use) race conditions. For robust code, use a <code>try/catch</code> around the
+    actual operation rather than checking first.
+  </div>
+
+  <h3>Run Node.js as the correct user in production (systemd)</h3>
+  <pre><code># /etc/systemd/system/myapp.service
+[Unit]
+Description=My Node.js App
+After=network.target
+
+[Service]
+Type=simple
+User=appuser          # run as a dedicated non-root user
+Group=appgroup
+WorkingDirectory=/opt/myapp
+ExecStart=/usr/bin/node /opt/myapp/src/index.js
+Restart=on-failure
+RestartSec=5
+
+# Let systemd provide the privileged port via socket activation,
+# or use a reverse proxy and keep PORT above 1024
+Environment=PORT=3000
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read <code>err.code</code> — confirm it is <code>'EACCES'</code>, not <code>'ENOENT'</code> or <code>'EPERM'</code>.</li>
+    <li>Read <code>err.syscall</code> — <code>'listen'</code> means a port issue; <code>'open'</code>, <code>'mkdir'</code>, <code>'unlink'</code> mean a filesystem issue.</li>
+    <li>For port errors: confirm <code>err.port</code> is below 1024. If so, choose reverse proxy, setcap, or iptables redirect.</li>
+    <li>For npm errors: run <code>npm config get prefix</code> — if it points to <code>/usr/local</code> or similar root-owned path, switch to nvm or change the prefix.</li>
+    <li>For filesystem errors: run <code>ls -la $(dirname /path/from/err)</code> to see ownership and mode bits.</li>
+    <li>Run <code>whoami</code> and <code>id</code> to confirm which user your Node.js process runs as.</li>
+    <li>In Docker: run <code>docker exec -it &lt;container&gt; id</code> and <code>ls -la /app</code> to check the runtime user and file ownership.</li>
+    <li>If Unix permissions look correct, check SELinux: <code>sudo ausearch -m avc -ts recent</code> or AppArmor: <code>sudo journalctl -xe | grep DENIED</code>.</li>
+    <li>Never use <code>sudo node</code> or <code>sudo npm install -g</code> as a long-term fix — both create privilege problems downstream.</li>
+    <li>After applying setcap, verify with <code>getcap $(which node)</code> and test with a non-root user.</li>
+  </ol>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is EACCES in Node.js?</summary>
+    <div class="faq-answer">
+      <p><strong>EACCES</strong> stands for <em>Error ACCESs</em> — a POSIX system error code meaning the OS denied the requested operation because the current user lacks the required permission. Node.js surfaces it as <code>Error: EACCES: permission denied</code> when binding to privileged ports (below 1024), when <code>npm install -g</code> cannot write to a root-owned global directory, or when any <code>fs</code> operation targets a file/directory the current user cannot access.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix Error: listen EACCES: permission denied 0.0.0.0:80?</summary>
+    <div class="faq-answer">
+      <p>Three production-safe options: (1) <strong>Reverse proxy</strong> — run your app on port 3000 and let Nginx/Caddy listen on 80 and forward traffic; (2) <strong>setcap</strong> on Linux — <code>sudo setcap 'cap_net_bind_service=+ep' $(which node)</code>; (3) <strong>iptables redirect</strong> — <code>sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3000</code>. Never run Node.js as root in production.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix npm ERR! EACCES: permission denied when running npm install -g?</summary>
+    <div class="faq-answer">
+      <p>The recommended fix is to switch to <strong>nvm</strong>: install nvm from github.com/nvm-sh/nvm, then run <code>nvm install 20 &amp;&amp; nvm use 20</code>. nvm installs Node.js into your home directory so global packages never require root. Alternative: run <code>mkdir -p ~/.npm-global &amp;&amp; npm config set prefix '~/.npm-global'</code> and add <code>~/.npm-global/bin</code> to your PATH. Avoid <code>sudo npm install -g</code> — it creates root-owned files that break future commands.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix EACCES: permission denied on a file or directory?</summary>
+    <div class="faq-answer">
+      <p>Run <code>ls -la /path/to/file</code> to see the owner and permissions. Then either: (1) take ownership: <code>sudo chown $(whoami) /path/to/file</code>; (2) add permissions: <code>chmod u+rw /path/to/file</code>; (3) move your write target to a directory you already own (the app directory, home directory, or <code>/tmp</code>). If permissions look correct but EACCES persists, check SELinux or AppArmor audit logs.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Is it safe to use sudo node or sudo npm install -g to fix EACCES?</summary>
+    <div class="faq-answer">
+      <p>No. Running <code>sudo node app.js</code> means any vulnerability in your code or dependencies can compromise the entire server. Running <code>sudo npm install -g</code> installs root-owned files that break all subsequent npm commands run as your normal user. Use nvm, npm prefix configuration, reverse proxy, or setcap instead — these solve the permission problem without creating security or maintenance risks.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between EACCES and EPERM in Node.js?</summary>
+    <div class="faq-answer">
+      <p><code>EACCES</code> (errno -13) means the standard Unix DAC permission check failed — the file mode bits or directory ACL denied access. <code>EPERM</code> (errno -1) means the operation itself is not permitted regardless of file ownership — typically a privileged syscall (e.g., <code>chown</code> as non-root) or a MAC (SELinux/AppArmor) denial. If you see <code>EACCES</code>, fix ownership and mode bits. If you see <code>EPERM</code> with correct-looking permissions, investigate MAC policies or privileged syscall requirements.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does EACCES happen in Docker or CI but not locally?</summary>
+    <div class="faq-answer">
+      <p>Common causes: (1) The container runs as a non-root user but files were copied into the image as root — fix with <code>RUN chown -R appuser:appgroup /app</code> in your Dockerfile after the <code>COPY</code> steps; (2) a bind-mount volume overwrites a directory that had correct in-image permissions with a host directory owned by root; (3) CI clones the repo as a different user than owns the cached <code>node_modules</code> layer. Always run <code>id</code> and <code>ls -la</code> inside the container to confirm the runtime user and file ownership.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I grant Node.js permission to bind to port 80 without sudo?</summary>
+    <div class="faq-answer">
+      <p>On Linux, use setcap: <code>sudo setcap 'cap_net_bind_service=+ep' $(which node)</code>. This grants only the specific capability needed to bind to privileged ports without full root access. Verify with <code>getcap $(which node)</code>. Re-apply this command after every Node.js upgrade since setcap is applied to the binary file. Alternatively, configure an iptables redirect or use a reverse proxy.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix EACCES: permission denied on macOS?</summary>
+    <div class="faq-answer">
+      <p>For port binding on macOS: macOS does not support <code>setcap</code>; use a reverse proxy (Nginx, Caddy) or <code>pfctl</code> port forwarding (<code>echo "rdr pass on lo0 proto tcp from any to any port 80 -&gt; 127.0.0.1 port 3000" | sudo pfctl -ef -</code>). For npm global installs: switch to nvm (<code>brew install nvm</code>) or set a custom npm prefix. For filesystem EACCES: use <code>ls -la</code> and <code>chown</code>/<code>chmod</code> exactly as on Linux. macOS does not use SELinux, but may use System Integrity Protection (SIP) which prevents modification of system-owned paths — move your data to user-owned directories instead.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/ENOENT/"><code>ENOENT: no such file or directory</code></a> — the path does not exist at all (vs. EACCES where it exists but is inaccessible)</li>
+    <li><a href="https://nodejs-errors.dev/EADDRINUSE/"><code>EADDRINUSE: address already in use</code></a> — port binding fails because another process owns the port (vs. EACCES where the current user lacks privilege)</li>
+    <li><a href="https://nodejs-errors.dev/EMFILE/"><code>EMFILE: too many open files</code></a> — file descriptor limit exhausted; the file exists and is accessible but cannot be opened</li>
+    <li><code>EPERM: operation not permitted</code> — similar to EACCES but for privileged syscalls rather than DAC file permission checks; no dedicated page yet</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-10 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#common-system-errors">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>
