@@ -15,9 +15,12 @@ Each page covers the exact error message, root cause, step-by-step fixes, and co
 | `Error: Cannot find module` | [nodejs-errors.dev/MODULE_NOT_FOUND/](https://nodejs-errors.dev/MODULE_NOT_FOUND/) |
 | `ERR_PACKAGE_PATH_NOT_EXPORTED` | [nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/](https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/) |
 | `ERR_REQUIRE_ESM` | [nodejs-errors.dev/ERR_REQUIRE_ESM/](https://nodejs-errors.dev/ERR_REQUIRE_ESM/) |
+| `ERR_REQUIRE_ASYNC_MODULE` | [nodejs-errors.dev/ERR_REQUIRE_ASYNC_MODULE/](https://nodejs-errors.dev/ERR_REQUIRE_ASYNC_MODULE/) |
 | `SyntaxError: Cannot use import statement outside a module` | [nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/](https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/) |
 | `ERR_UNSUPPORTED_DIR_IMPORT` | [nodejs-errors.dev/ERR_UNSUPPORTED_DIR_IMPORT/](https://nodejs-errors.dev/ERR_UNSUPPORTED_DIR_IMPORT/) |
 | `ERR_DLOPEN_FAILED` (native addon ABI mismatch) | [nodejs-errors.dev/ERR_DLOPEN_FAILED/](https://nodejs-errors.dev/ERR_DLOPEN_FAILED/) |
+| `TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".ts"` | [nodejs-errors.dev/ERR_UNKNOWN_FILE_EXTENSION/](https://nodejs-errors.dev/ERR_UNKNOWN_FILE_EXTENSION/) |
+| `Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config` | [nodejs-errors.dev/ERR_INVALID_PACKAGE_CONFIG/](https://nodejs-errors.dev/ERR_INVALID_PACKAGE_CONFIG/) |
 
 ### File System & I/O
 
@@ -136,6 +139,10 @@ nodejs-errors.dev/
 │   └── index.html
 ├── RangeError-Maximum-call-stack-size-exceeded/
 │   └── index.html
-└── TypeError-Cannot-set-properties-of-undefined/
+├── TypeError-Cannot-set-properties-of-undefined/
+│   └── index.html
+├── ERR_UNKNOWN_FILE_EXTENSION/
+│   └── index.html
+└── ERR_INVALID_PACKAGE_CONFIG/
     └── index.html
 ```

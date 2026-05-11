@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config – Node.js Fix</title>
+  <meta name="description" content='Node.js throws Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config when package.json is malformed JSON or contains an invalid "exports", "imports", or "type" field. Fix by validating JSON syntax, correcting the exports map structure, and fixing mixed subpath/condition keys.' />
+  <link rel="canonical" href="https://nodejs-errors.dev/ERR_INVALID_PACKAGE_CONFIG/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content='Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config – Node.js Fix' />
+  <meta property="og:description" content='Node.js throws ERR_INVALID_PACKAGE_CONFIG when package.json is malformed JSON or has an invalid exports/imports/type field. Covers every cause: trailing commas, mixed exports keys, bad conditional exports, wrong type value, and empty package.json files in node_modules.' />
+  <meta property="og:url" content="https://nodejs-errors.dev/ERR_INVALID_PACKAGE_CONFIG/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config – Node.js Fix",
+    "description": "Node.js throws ERR_INVALID_PACKAGE_CONFIG when it encounters a package.json that is malformed JSON or contains an invalid exports map, imports map, or type field. Causes: trailing commas in JSON, mixing subpath keys and condition keys in exports, exports target paths not starting with ./, invalid type value, empty or corrupted package.json in node_modules, and malformed conditional exports. Fixes: node -e JSON validation, restructuring exports, clean reinstall.",
+    "url": "https://nodejs-errors.dev/ERR_INVALID_PACKAGE_CONFIG/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-11",
+    "dateModified": "2026-05-11"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config what does this mean",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_INVALID_PACKAGE_CONFIG is a Node.js error thrown when Node.js reads a package.json file and finds it either contains invalid JSON (syntax error) or has an invalid value for a semantically validated field like 'exports', 'imports', or 'type'. The error can come from your own package.json or from a package.json deep inside node_modules."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "ERR_INVALID_PACKAGE_CONFIG causes package.json exports node.js",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The most common causes are: (1) malformed JSON in package.json — trailing commas, single quotes, missing quotes around keys, or comments; (2) the exports object mixing keys that start with '.' (subpath exports) and keys that do not start with '.' (conditional exports) in the same object level; (3) an exports target path that does not start with './' (e.g. an absolute path or bare module specifier); (4) the 'type' field set to a value other than 'module' or 'commonjs'; (5) an empty or completely corrupted package.json file in a dependency inside node_modules; (6) a path traversal sequence (..) inside an exports target value."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "ERR_INVALID_PACKAGE_CONFIG which package.json file is causing the error",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The error message includes the full file path to the offending package.json. Look for the path in brackets after 'Invalid package config', e.g.: Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config /project/node_modules/some-package/package.json. If the path is your own package.json, validate it with: node -e \"require('./package.json')\" — a SyntaxError means malformed JSON. If it is inside node_modules, a clean reinstall usually fixes it."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "exports cannot contain some keys starting with . and some not fix node.js",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "This error means your exports object mixes subpath keys (starting with '.') and bare condition keys (like 'import', 'require', 'default') at the same level. Fix it by nesting the condition keys under a '.' subpath: { \"exports\": { \".\": { \"import\": \"./dist/esm/index.js\", \"require\": \"./dist/cjs/index.js\" }, \"./utils\": \"./dist/utils.js\" } }. Never mix '.' and non-'.' keys at the same nesting level."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "ERR_INVALID_PACKAGE_CONFIG after upgrading node version",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Newer Node.js versions (especially 12.17+, 14+, and 22+) apply stricter validation to the exports and imports fields. A package.json that was silently tolerated on an older Node.js version may now throw ERR_INVALID_PACKAGE_CONFIG. The elasticsearch-js package triggered this for Node.js 23 users in 2024. Fix by updating the dependency that has the invalid package.json, or by pinning to an older Node.js version while you wait for the fix upstream."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "ERR_INVALID_PACKAGE_CONFIG in production CI docker but not locally",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "This almost always means the Node.js version differs between environments. Production or CI may run a newer Node.js with stricter package.json validation. Run 'node --version' in both environments and compare. A clean 'npm ci' in CI (which installs from the lockfile exactly) versus 'npm install' locally can also produce different installed versions of transitive dependencies, one of which may have an invalid package.json."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "validate package.json syntax command line node",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Run: node -e \"JSON.parse(require('fs').readFileSync('./package.json','utf8'))\" — if it throws SyntaxError, the JSON is malformed. Alternatively: node -e \"require('./package.json')\" — Node.js will print the SyntaxError with the line and column number of the offending character. For CI-generated package.json files, use a JSON linter like 'npx jsonlint package.json' for human-readable output."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "ERR_INVALID_PACKAGE_CONFIG pnpm yarn clean install fix",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "For pnpm: rm -rf node_modules && pnpm store prune && pnpm install. For Yarn Classic: rm -rf node_modules yarn.lock && yarn cache clean && yarn install. For Yarn Berry (PnP): yarn cache clean && yarn install. The error almost always means a corrupted or partially written package.json inside the package manager store or node_modules directory."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "nodejs-errors.dev",
+        "item": "https://nodejs-errors.dev/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "ERR_INVALID_PACKAGE_CONFIG",
+        "item": "https://nodejs-errors.dev/ERR_INVALID_PACKAGE_CONFIG/"
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix Error [ERR_INVALID_PACKAGE_CONFIG] in Node.js",
+    "step": [
+      {
+        "@type": "HowToStep",
+        "position": 1,
+        "name": "Identify the offending package.json from the error message",
+        "text": "Read the full error message — it contains the absolute path to the invalid package.json, e.g. /project/node_modules/some-package/package.json. If it is your own package.json, proceed to step 2. If it is inside node_modules, jump to step 5."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 2,
+        "name": "Validate the JSON syntax",
+        "text": "Run: node -e \"require('./package.json')\" in the directory containing the file. A SyntaxError output will show the exact line and column of the problem — trailing commas, single quotes, unquoted keys, or JavaScript comments are common culprits."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 3,
+        "name": "Fix the exports field structure if the JSON is valid",
+        "text": "If the JSON is syntactically valid but the error persists, the 'exports' field has an invalid structure. The most common issue is mixing subpath keys (starting with '.') and bare condition keys (like 'import', 'require') at the same object level. Nest all conditions under the '.' subpath key."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 4,
+        "name": "Verify the type field value",
+        "text": "The 'type' field only accepts 'module' or 'commonjs'. Any other value (e.g. 'esm', 'cjs', 'es6', or a typo like 'modules') triggers ERR_INVALID_PACKAGE_CONFIG. Remove the field entirely to default to CommonJS, or set it to exactly 'module'."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 5,
+        "name": "Do a clean reinstall for node_modules errors",
+        "text": "If the invalid package.json is inside node_modules, delete node_modules and your lockfile, then reinstall: rm -rf node_modules && rm -f package-lock.json && npm install. This replaces any corrupted or partially written package.json files that arrived via a failed install."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 6,
+        "name": "Update the dependency or patch it",
+        "text": "If the invalid package.json belongs to a third-party dependency, check if a newer version fixes the exports map. If not, use patch-package to apply a local fix to the dependency's package.json without waiting for an upstream release."
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.7;
+      color: #1a1a1a;
+      background: #fff;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge {
+      display: inline-block;
+      background: #d63031;
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 0.2rem 0.6rem;
+      border-radius: 3px;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+    }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 0.875rem;
+      margin: 0.5rem 0 1rem;
+    }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code {
+      background: #f0f0f0;
+      padding: 0.15em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    .quick-answer {
+      background: #f0fff4;
+      border-left: 4px solid #00b894;
+      padding: 0.75rem 1rem;
+      border-radius: 0 6px 6px 0;
+      margin: 0 0 2rem;
+      font-size: 0.95rem;
+    }
+    .callout {
+      border-left: 4px solid #0984e3;
+      background: #f0f7ff;
+      padding: 0.75rem 1rem;
+      border-radius: 0 6px 6px 0;
+      margin: 1rem 0;
+    }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ERR_INVALID_PACKAGE_CONFIG</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config</h1>
+  <span class="error-code">error code: <code>ERR_INVALID_PACKAGE_CONFIG</code></span>
+  <p><code>Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config /path/to/package.json</code> — complete causes and fixes for malformed JSON, invalid <code>exports</code> maps, and corrupted <code>node_modules</code>.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js throws <code>Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config /path/to/package.json</code> when a <code>package.json</code> is either malformed JSON (trailing commas, comments, single quotes) or contains an invalid <code>"exports"</code>, <code>"imports"</code>, or <code>"type"</code> field. The fastest fixes are: (1) run <code>node -e "require('./package.json')"</code> to surface JSON syntax errors, (2) restructure a mixed-key <code>"exports"</code> object so all conditions are nested under <code>"."</code>, (3) do a clean <code>npm install</code> if the error is inside <code>node_modules</code>.
+  </div>
+
+  <h2>Exact Error Messages You Will See</h2>
+
+  <div class="callout">
+    <strong>Malformed JSON in your own package.json:</strong><br>
+    <code>Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config /project/package.json while importing /project/index.js. "name" is not valid JSON.</code>
+  </div>
+
+  <div class="callout">
+    <strong>Mixed subpath and condition keys in exports:</strong><br>
+    <code>Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config /project/node_modules/some-package/package.json while importing /project/index.js. "exports" cannot contain some keys starting with '.' and some not. The exports object must either be an object of package subpath keys or an object of main entry condition name keys only.</code>
+  </div>
+
+  <div class="callout">
+    <strong>Invalid exports target (does not start with ./):</strong><br>
+    <code>Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config /project/package.json. "exports" must start with "."</code>
+  </div>
+
+  <div class="callout">
+    <strong>Corrupted / empty package.json in node_modules:</strong><br>
+    <code>Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config /project/node_modules/semver/package.json. "name" is not valid JSON.</code>
+  </div>
+
+  <div class="callout">
+    <strong>Real-world: emotion / stylis (Next.js with-emotion example, Node.js 14+):</strong><br>
+    <code>Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config /project/node_modules/@emotion/babel-plugin/node_modules/stylis/package.json while importing /project/index.js. "exports" cannot contain some keys starting with '.' and some not. The exports object must either be an object of package subpath keys or an object of main entry condition name keys only.</code>
+  </div>
+
+  <div class="callout">
+    <strong>Node.js 12+ internal module binding variant:</strong><br>
+    <code>Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config /project/node_modules/some-package/package.json while importing file:///project/index.js. "name" is not valid JSON.</code><br>
+    <code>node:internal/modules/package_json_reader:83<br>
+const parsed = modulesBinding.readPackageJSON(...)</code>
+  </div>
+
+  <h2>Full Error Stack Trace</h2>
+  <pre><code class="language-text">node:internal/modules/esm/resolve:855
+  throw new ERR_INVALID_PACKAGE_CONFIG(fileURL, base, message);
+        ^
+
+Error [ERR_INVALID_PACKAGE_CONFIG]: Invalid package config
+/project/node_modules/some-package/package.json while importing
+file:///project/index.js. "exports" cannot contain some keys starting
+with '.' and some not. The exports object must either be an object of
+package subpath keys or an object of main entry condition name keys only.
+    at packageExportsResolve (node:internal/modules/esm/resolve:855:13)
+    at resolveExports (node:internal/modules/cjs/loader:573:36)
+    at Module._findPath (node:internal/modules/cjs/loader:652:31)
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1091:27)
+    at Module._load (node:internal/modules/cjs/loader:942:27)
+    at Object.&lt;anonymous&gt; (/project/index.js:1:21) {
+  code: 'ERR_INVALID_PACKAGE_CONFIG'
+}</code></pre>
+
+  <h2>What is ERR_INVALID_PACKAGE_CONFIG?</h2>
+  <p>
+    <code>ERR_INVALID_PACKAGE_CONFIG</code> is thrown by Node.js when it reads a
+    <code>package.json</code> file and finds either:
+  </p>
+  <ul>
+    <li><strong>A JSON syntax error</strong> — the file is not valid JSON at all.</li>
+    <li><strong>A semantically invalid field</strong> — the JSON is syntactically valid but a field
+    like <code>"exports"</code>, <code>"imports"</code>, or <code>"type"</code> does not meet
+    Node.js's structural requirements.</li>
+  </ul>
+  <p>
+    The error can originate from your project's own <code>package.json</code>, or from a
+    <code>package.json</code> file deep inside <code>node_modules</code>. Node.js reads every
+    <code>package.json</code> it encounters on the path from the importer to the target module,
+    so a corrupted dependency can block your entire application from starting.
+  </p>
+  <p>
+    See the
+    <a href="https://nodejs.org/api/errors.html#err_invalid_package_config" rel="noopener noreferrer">official Node.js error docs</a>
+    and the
+    <a href="https://nodejs.org/api/packages.html" rel="noopener noreferrer">Packages documentation</a>
+    for the full specification.
+  </p>
+
+  <h2>Error Object Properties</h2>
+  <table>
+    <thead>
+      <tr><th>Property</th><th>Value</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>err.code</code></td><td><code>'ERR_INVALID_PACKAGE_CONFIG'</code></td><td>Always this string; use for programmatic detection</td></tr>
+      <tr><td><code>err.message</code></td><td>Includes the full path to the offending <code>package.json</code></td><td>Parse it to find which file to fix</td></tr>
+      <tr><td>Exit code</td><td>1</td><td>Node.js terminates the process immediately</td></tr>
+      <tr><td>Catchable?</td><td>No (startup) / Sometimes (dynamic import)</td><td>Thrown during module resolution, often before user code runs</td></tr>
+    </tbody>
+  </table>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead>
+      <tr><th>Cause</th><th>Symptom in error message</th><th>Fix</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Trailing comma or comment in JSON</td>
+        <td><code>"name" is not valid JSON</code> or <code>SyntaxError</code> in message</td>
+        <td>Remove trailing commas and comments; use <code>node -e "require('./package.json')"</code></td>
+      </tr>
+      <tr>
+        <td>Mixing subpath and condition keys in <code>"exports"</code></td>
+        <td><code>"exports" cannot contain some keys starting with '.' and some not</code></td>
+        <td>Nest condition keys under <code>"."</code> subpath</td>
+      </tr>
+      <tr>
+        <td>Exports target does not start with <code>./</code></td>
+        <td><code>"exports" must start with "."</code></td>
+        <td>Change target values to relative paths starting with <code>./</code></td>
+      </tr>
+      <tr>
+        <td>Path traversal (<code>..</code>) in exports target</td>
+        <td><code>Invalid package config ... Invalid "exports" target</code></td>
+        <td>Use <code>./dist/file.js</code> not <code>../other/file.js</code></td>
+      </tr>
+      <tr>
+        <td>Invalid <code>"type"</code> value</td>
+        <td><code>Invalid package config ... "type" is not valid</code></td>
+        <td>Set <code>"type"</code> to <code>"module"</code> or <code>"commonjs"</code> only</td>
+      </tr>
+      <tr>
+        <td>Empty or corrupted <code>package.json</code> in <code>node_modules</code></td>
+        <td><code>expected value at line 1 column 1</code></td>
+        <td>Delete <code>node_modules</code> and reinstall</td>
+      </tr>
+      <tr>
+        <td>CI-generated <code>package.json</code> with extra syntax</td>
+        <td><code>SyntaxError</code> or <code>is not valid JSON</code></td>
+        <td>Validate generated JSON with <code>npx jsonlint</code> before use</td>
+      </tr>
+      <tr>
+        <td>Dependency upgraded with broken exports map (e.g. elasticsearch-js, stylis)</td>
+        <td>Mixed key error in <code>node_modules/&lt;pkg&gt;/package.json</code></td>
+        <td>Update or pin the dependency; use <code>patch-package</code> as stopgap</td>
+      </tr>
+      <tr>
+        <td>Node.js version stricter than when package was published</td>
+        <td>Error appears after <code>node</code> upgrade only</td>
+        <td>Update the dependency; or pin the old Node.js version temporarily</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Malformed JSON (trailing commas, comments, single quotes)</h2>
+  <p>
+    JSON does not allow trailing commas, JavaScript-style comments (<code>//</code> or <code>/* */</code>),
+    or single-quoted strings. These are valid in JavaScript but illegal in JSON. Build scripts and
+    code generators occasionally produce invalid JSON — CI pipelines are a common source.
+  </p>
+  <pre><code class="language-json">// INVALID package.json — three JSON violations
+{
+  "name": "my-app",
+  "version": "1.0.0",  // trailing comma after last key is illegal
+  "type": "module",    /* comments are not valid JSON */
+  'scripts': {         // single-quoted key is illegal
+    "start": "node index.js",
+  }                    // trailing comma inside object is illegal
+}
+</code></pre>
+  <pre><code class="language-json">// VALID package.json
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  }
+}
+</code></pre>
+
+  <h3>Diagnosing the JSON syntax error</h3>
+  <pre><code class="language-bash"># Option 1: Node.js built-in — prints the offending line and column
+node -e "require('./package.json')"
+
+# Option 2: JSON.parse with readable output
+node -e "JSON.parse(require('fs').readFileSync('./package.json','utf8'))"
+
+# Option 3: dedicated JSON linter with line numbers and suggestions
+npx jsonlint package.json</code></pre>
+
+  <div class="callout">
+    <strong>Pro tip:</strong> If your <code>package.json</code> is generated by a script (e.g. a
+    CI pipeline that writes environment-specific fields), add a validation step immediately after
+    generation: <code>node -e "require('./package.json') &amp;&amp; console.log('OK')"</code>.
+    A non-zero exit code will fail the pipeline before Node.js ever tries to use the file.
+  </div>
+
+  <h2>Cause 2 – Mixed subpath and condition keys in <code>"exports"</code></h2>
+  <p>
+    The <code>"exports"</code> field supports two distinct forms. At any given nesting level, all
+    keys must be either <strong>subpath keys</strong> (start with <code>.</code>) or
+    <strong>condition keys</strong> (do not start with <code>.</code>) — never a mix of both.
+  </p>
+  <pre><code class="language-json">// INVALID — mixing '.' subpath keys with bare condition keys
+{
+  "exports": {
+    "import": "./dist/esm/index.js",   // condition key (no dot prefix)
+    "require": "./dist/cjs/index.js",  // condition key (no dot prefix)
+    "./utils": "./dist/utils.js"       // subpath key (dot prefix)
+  }
+}
+// → Error: "exports" cannot contain some keys starting with '.' and some not
+</code></pre>
+  <pre><code class="language-json">// VALID — all conditions nested under the "." subpath key
+{
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/cjs/index.js"
+    },
+    "./utils": "./dist/utils.js"
+  }
+}
+</code></pre>
+  <pre><code class="language-json">// ALSO VALID — top-level conditions only (no subpath keys at all)
+{
+  "exports": {
+    "import": "./dist/esm/index.js",
+    "require": "./dist/cjs/index.js",
+    "default": "./dist/cjs/index.js"
+  }
+}
+</code></pre>
+
+  <p>
+    This was the cause behind the <strong>stylis</strong> package (used by Emotion and Next.js with-emotion
+    examples) and the <strong>USWDS v2.11</strong> issue. The fix in both cases was to nest
+    the condition keys under a <code>"."</code> subpath key.
+  </p>
+
+  <h2>Cause 3 – Exports target that does not start with <code>./</code></h2>
+  <p>
+    Every value (the target path) in the <code>"exports"</code> and <code>"imports"</code> maps
+    must be a relative path beginning with <code>./</code>. Absolute file paths, bare package
+    specifiers, and <code>file://</code> URLs are rejected.
+  </p>
+  <pre><code class="language-json">// INVALID export targets
+{
+  "exports": {
+    ".": "/absolute/path/index.js",         // absolute path — invalid
+    "./helper": "dist/helper.js",           // missing leading ./ — invalid
+    "./other": "file:///app/dist/other.js", // file:// URL — invalid
+    "./internal": "../sibling/index.js"     // path traversal (..) — invalid
+  }
+}
+</code></pre>
+  <pre><code class="language-json">// VALID export targets
+{
+  "exports": {
+    ".": "./dist/index.js",
+    "./helper": "./dist/helper.js",
+    "./package.json": "./package.json"
+  }
+}
+</code></pre>
+
+  <h2>Cause 4 – Invalid <code>"type"</code> field value</h2>
+  <p>
+    The <code>"type"</code> field controls whether <code>.js</code> files in the package are
+    treated as CommonJS or ES modules. Node.js only accepts <code>"module"</code> or
+    <code>"commonjs"</code> (case-sensitive). Any other string — including common typos — triggers
+    <code>ERR_INVALID_PACKAGE_CONFIG</code>.
+  </p>
+  <pre><code class="language-json">// INVALID "type" values
+{ "type": "esm" }        // invalid
+{ "type": "cjs" }        // invalid
+{ "type": "es6" }        // invalid
+{ "type": "modules" }    // invalid — extra 's'
+{ "type": "Module" }     // invalid — case sensitive
+</code></pre>
+  <pre><code class="language-json">// VALID "type" values
+{ "type": "module" }     // treat .js files as ESM
+{ "type": "commonjs" }   // treat .js files as CJS (also the default if omitted)
+</code></pre>
+
+  <h2>Cause 5 – Empty or corrupted <code>package.json</code> in <code>node_modules</code></h2>
+  <p>
+    A failed or interrupted <code>npm install</code> can leave a <code>package.json</code> file
+    empty or partially written. Node.js reads these files at module resolution time; an empty file
+    causes a JSON parse error at line 1, column 1.
+  </p>
+
+  <div class="callout">
+    <strong>Real-world example:</strong> The zigbee2mqtt project reported this exact error
+    (<code>Invalid package config /app/node_modules/semver/package.json</code>) after an upgrade
+    that interrupted the npm install mid-write. The supabase auth-js package triggered the same
+    issue in Deno's node_modules cache. The fix in all cases was a clean reinstall.
+  </div>
+
+  <pre><code class="language-bash"># Clean reinstall — macOS / Linux
+rm -rf node_modules
+rm -f package-lock.json
+npm cache clean --force
+npm install</code></pre>
+
+  <pre><code class="language-bash"># Clean reinstall — Windows (Command Prompt)
+rd /s /q node_modules
+del package-lock.json
+npm cache clean --force
+npm install</code></pre>
+
+  <pre><code class="language-powershell"># Clean reinstall — Windows (PowerShell)
+Remove-Item -Recurse -Force node_modules
+Remove-Item package-lock.json
+npm cache clean --force
+npm install</code></pre>
+
+  <h2>Cause 6 – Malformed conditional exports (typos in condition names)</h2>
+  <p>
+    Node.js recognizes specific built-in condition names: <code>"import"</code>,
+    <code>"require"</code>, <code>"default"</code>, <code>"node"</code>, <code>"node-addons"</code>,
+    <code>"browser"</code>, <code>"development"</code>, <code>"production"</code>. Typos in these
+    names do not throw <code>ERR_INVALID_PACKAGE_CONFIG</code> directly but cause no conditions to
+    match, which can cascade into other errors. However, structurally invalid condition objects — such
+    as a condition whose value is not a string, object, or array — do trigger it.
+  </p>
+  <pre><code class="language-json">// INVALID — condition value is a number, not a path or nested object
+{
+  "exports": {
+    ".": {
+      "import": 1,         // must be a string path or nested object
+      "require": null      // null is only valid to block a subpath, not a condition
+    }
+  }
+}
+</code></pre>
+  <pre><code class="language-json">// VALID — standard dual CJS/ESM exports with default fallback
+{
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.cjs"
+    }
+  }
+}
+</code></pre>
+  <pre><code class="language-json">// VALID — nested conditions (Node.js + browser splits)
+{
+  "exports": {
+    ".": {
+      "node": {
+        "import": "./dist/node.mjs",
+        "require": "./dist/node.cjs"
+      },
+      "browser": "./dist/browser.js",
+      "default": "./dist/index.js"
+    }
+  }
+}
+</code></pre>
+
+  <h2>Fix for Dependency-Owned package.json (patch-package)</h2>
+  <p>
+    When the invalid <code>package.json</code> is inside a third-party dependency and no fixed
+    release is available, use
+    <a href="https://www.npmjs.com/package/patch-package" rel="noopener noreferrer"><code>patch-package</code></a>
+    to apply a local fix that survives <code>npm install</code>.
+  </p>
+  <pre><code class="language-bash"># 1. Manually edit the offending file in node_modules
+#    e.g. node_modules/some-package/package.json
+
+# 2. Generate the patch file
+npx patch-package some-package
+
+# 3. Commit the patches/ directory to source control
+
+# 4. Auto-apply after every install — add to package.json scripts:
+#    "postinstall": "patch-package"</code></pre>
+
+  <h2>Fix for Node.js Version Mismatch in CI / Docker</h2>
+  <p>
+    If the error only appears on CI or in a Docker container but not locally, the Node.js version
+    probably differs. Newer versions apply stricter validation.
+  </p>
+  <pre><code class="language-bash"># Check versions in both environments
+node --version
+npm --version
+
+# Pin Node.js in a Dockerfile
+FROM node:20-alpine
+
+# Pin Node.js in .nvmrc (for nvm / fnm)
+echo "20" > .nvmrc
+
+# Pin in GitHub Actions
+- uses: actions/setup-node@v4
+  with:
+    node-version: '20'</code></pre>
+
+  <pre><code class="language-bash"># Diagnose which package triggers the error in Node.js 22+
+# The error message contains the full path — grep for it:
+node index.js 2&gt;&amp;1 | grep "ERR_INVALID_PACKAGE_CONFIG"</code></pre>
+
+  <h2>Validating Your Own exports Map</h2>
+  <p>
+    Use this checklist before publishing a package with a non-trivial <code>"exports"</code> field.
+  </p>
+  <pre><code class="language-json">// package.json validation checklist
+
+// 1. Every target path starts with ./
+//    INVALID: "dist/index.js"   VALID: "./dist/index.js"
+
+// 2. No path traversal in targets
+//    INVALID: "../lib/index.js"  VALID: "./lib/index.js"
+
+// 3. No mixing subpath and condition keys at the same level
+//    INVALID:
+{
+  "exports": {
+    "import": "./esm.js",   // condition key
+    "./helper": "./helper.js" // subpath key — MIXED!
+  }
+}
+//    VALID:
+{
+  "exports": {
+    ".": { "import": "./esm.js" },
+    "./helper": "./helper.js"
+  }
+}
+
+// 4. "default" is the last condition key in every conditions object
+{
+  "exports": {
+    ".": {
+      "import": "./dist/esm.js",
+      "require": "./dist/cjs.js",
+      "default": "./dist/cjs.js"   // always last
+    }
+  }
+}
+
+// 5. "type" is exactly "module" or "commonjs" — no other value</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read the full error message — it includes the absolute path to the offending <code>package.json</code>. Note whether it is your file or a dependency.</li>
+    <li>If it is your file: run <code>node -e "require('./package.json')"</code> to surface the JSON syntax error with line and column.</li>
+    <li>If the JSON is syntactically valid: inspect the <code>"exports"</code> field for mixed subpath and condition keys at the same level.</li>
+    <li>Check the <code>"type"</code> field — it must be exactly <code>"module"</code> or <code>"commonjs"</code>; remove it entirely to default to CommonJS.</li>
+    <li>If it is inside <code>node_modules</code>: delete <code>node_modules</code> and <code>package-lock.json</code>, run <code>npm cache clean --force</code>, then <code>npm install</code>.</li>
+    <li>Compare <code>node --version</code> between the working environment (local) and the failing one (CI/Docker) — newer Node.js may reject previously tolerated configs.</li>
+    <li>Check the dependency's GitHub issues and CHANGELOG for the error code — many popular packages (elasticsearch-js, stylis/emotion, USWDS) have had this exact bug.</li>
+    <li>If no fixed version of the dependency exists, apply a patch with <code>patch-package</code>.</li>
+    <li>For CI-generated <code>package.json</code> files: add <code>node -e "require('./package.json') &amp;&amp; console.log('valid')"</code> as a validation step in your pipeline.</li>
+  </ol>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ERR_INVALID_PACKAGE_CONFIG?</summary>
+    <div class="faq-answer">
+      <p><code>ERR_INVALID_PACKAGE_CONFIG</code> is thrown by Node.js when it reads a <code>package.json</code> file and finds it either contains invalid JSON syntax or has a semantically invalid <code>"exports"</code>, <code>"imports"</code>, or <code>"type"</code> field. The error can come from your own <code>package.json</code> or from one inside <code>node_modules</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I find which package.json is invalid?</summary>
+    <div class="faq-answer">
+      <p>The error message always includes the full file path. For example: <code>Invalid package config /project/node_modules/some-package/package.json</code>. Open that file to diagnose the problem. If it is your own <code>package.json</code>, run <code>node -e "require('./package.json')"</code> to get Node.js to point at the exact line and character.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix "exports cannot contain some keys starting with '.' and some not"?</summary>
+    <div class="faq-answer">
+      <p>This error means your <code>exports</code> object mixes subpath keys (starting with <code>.</code>) and bare condition keys (like <code>import</code>, <code>require</code>, <code>default</code>) at the same level. Nest all conditions under a <code>"."</code> key:</p>
+      <pre style="background:#1e1e1e;color:#d4d4d4;padding:0.75rem;border-radius:4px;font-size:0.85rem;overflow-x:auto;margin-top:0.5rem;">{
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/cjs/index.js"
+    },
+    "./utils": "./dist/utils.js"
+  }
+}</pre>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_INVALID_PACKAGE_CONFIG appear after upgrading Node.js?</summary>
+    <div class="faq-answer">
+      <p>Newer Node.js versions apply stricter validation to <code>package.json</code> fields. A package.json that was silently tolerated on Node.js 16 may throw on Node.js 20 or 22. The elasticsearch-js package triggered this for Node.js 23 users in 2024. Fix by updating the problematic dependency to a version with a corrected <code>package.json</code>, or use <code>patch-package</code> while waiting for the upstream fix.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_INVALID_PACKAGE_CONFIG appear in production but not locally?</summary>
+    <div class="faq-answer">
+      <p>The most common reason is a different Node.js version in production or CI. Run <code>node --version</code> in both environments. A secondary cause is that <code>npm ci</code> in CI installs an exact transitive dependency version from the lockfile that differs from what <code>npm install</code> resolved locally — one of those versions has an invalid <code>package.json</code>. Fix by ensuring your lockfile is committed and both environments use the same Node.js version.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I validate a package.json from the command line?</summary>
+    <div class="faq-answer">
+      <p>Three options, in order of usefulness:</p>
+      <p><code>node -e "require('./package.json')"</code> — uses Node.js itself; prints SyntaxError with line/column on failure.</p>
+      <p><code>npx jsonlint package.json</code> — dedicated linter with readable diff-style output.</p>
+      <p><code>python3 -m json.tool package.json</code> — works on any machine with Python 3; no install needed.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>ERR_INVALID_PACKAGE_CONFIG with pnpm or yarn clean install fix</summary>
+    <div class="faq-answer">
+      <p>The same clean-reinstall fix applies for pnpm and Yarn. For pnpm: <code>rm -rf node_modules && pnpm store prune && pnpm install</code>. For Yarn Classic: <code>rm -rf node_modules yarn.lock && yarn cache clean && yarn install</code>. For Yarn Berry (PnP): <code>yarn cache clean && yarn install</code>. The error almost always means a corrupted or partially written <code>package.json</code> inside the store or <code>node_modules</code> directory.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Does ERR_INVALID_PACKAGE_CONFIG only affect ESM projects?</summary>
+    <div class="faq-answer">
+      <p>No. While the <code>exports</code> field is most commonly used in ESM-aware packages, <code>ERR_INVALID_PACKAGE_CONFIG</code> is thrown for both <code>require()</code> (CommonJS) and <code>import</code> (ESM) when Node.js resolves a module and encounters an invalid <code>package.json</code> on the resolution path. A malformed JSON file in a CJS-only project will trigger the error just as quickly.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What Node.js versions enforce ERR_INVALID_PACKAGE_CONFIG?</summary>
+    <div class="faq-answer">
+      <p>The <code>exports</code> and <code>imports</code> field validation was introduced in Node.js 12.7 (unflagged in 12.17). Structural validation has tightened with every major Node.js release. Node.js 14+ enforces the no-mixed-keys rule for <code>exports</code>. Node.js 22 applies the strictest checks currently available. Node.js versions before 12.7 ignore the <code>exports</code> field entirely and would not throw this error for exports-related issues (but would still throw for malformed JSON).</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/"><code>ERR_PACKAGE_PATH_NOT_EXPORTED</code></a> — the <code>package.json</code> is structurally valid but the subpath you are importing is not listed in the <code>"exports"</code> map; the complement to this error</li>
+    <li><a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/"><code>ERR_REQUIRE_ESM</code></a> — the <code>package.json</code> is valid and has <code>"type": "module"</code>, but you tried to <code>require()</code> it instead of using <code>import</code></li>
+    <li><a href="https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/"><code>SyntaxError: Cannot use import statement outside a module</code></a> — the inverse: your file uses ESM syntax but Node.js treats it as CJS because of the <code>"type"</code> field</li>
+    <li><a href="https://nodejs-errors.dev/MODULE_NOT_FOUND/"><code>Error: Cannot find module (MODULE_NOT_FOUND)</code></a> — the file or package does not exist at all, versus existing but having an invalid config</li>
+    <li><a href="https://nodejs-errors.dev/ERR_UNSUPPORTED_DIR_IMPORT/"><code>ERR_UNSUPPORTED_DIR_IMPORT</code></a> — your import targets a directory; often a companion error when migrating a package to use an <code>exports</code> map</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-11 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#err_invalid_package_config">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

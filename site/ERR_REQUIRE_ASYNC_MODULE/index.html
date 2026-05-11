@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>ERR_REQUIRE_ASYNC_MODULE: require() cannot be used on an ESM graph with top-level await – Node.js Fix</title>
+  <meta name="description" content="Fix ERR_REQUIRE_ASYNC_MODULE: require() cannot be used on an ESM graph with top-level await. Covers dynamic import(), removing top-level await, --experimental-print-required-tla, Node.js version differences (20.19+ vs 20.18), firebase-tools, lru-cache, and all workarounds." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ERR_REQUIRE_ASYNC_MODULE/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="ERR_REQUIRE_ASYNC_MODULE: require() cannot be used on an ESM graph with top-level await – Node.js Fix" />
+  <meta property="og:description" content="Fix ERR_REQUIRE_ASYNC_MODULE: require() cannot be used on an ESM graph with top-level await. Covers dynamic import(), removing top-level await, --experimental-print-required-tla, Node.js 20.19+ vs 20.18, firebase-tools, lru-cache, and all workarounds." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ERR_REQUIRE_ASYNC_MODULE/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "ERR_REQUIRE_ASYNC_MODULE: require() cannot be used on an ESM graph with top-level await – Node.js Fix",
+    "description": "Node.js throws ERR_REQUIRE_ASYNC_MODULE when require() is called on an ES module (or any module in its dependency graph) that contains top-level await. Introduced in Node.js 20.19.0 and 22.12.0 when require(esm) was enabled by default. Diagnosed with --experimental-print-required-tla. Fixed by replacing require() with dynamic import(), removing top-level await from the dependency, or converting the caller to ESM. Affects firebase-tools, lru-cache v11.3+, jsdom, and any package that added top-level await to its ESM build.",
+    "url": "https://nodejs-errors.dev/ERR_REQUIRE_ASYNC_MODULE/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-11",
+    "dateModified": "2026-05-11"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ERR_REQUIRE_ASYNC_MODULE?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_REQUIRE_ASYNC_MODULE is a Node.js error thrown when require() is called on an ES module that uses top-level await, or whose dependency graph contains a module that uses top-level await. Because top-level await makes a module asynchronous, it cannot be loaded synchronously via require(). The full error message reads: Error [ERR_REQUIRE_ASYNC_MODULE]: require() cannot be used on an ESM graph with top-level await. Use import() instead. To find which module has top-level await, use the --experimental-print-required-tla flag."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between ERR_REQUIRE_ASYNC_MODULE and ERR_REQUIRE_ESM?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_REQUIRE_ESM is thrown when require() is used on any ES module (regardless of top-level await). ERR_REQUIRE_ASYNC_MODULE is the more specific error introduced in Node.js 20.19.0 and 22.12.0 when those versions enabled require(esm) by default — meaning synchronous ESM can now be required, but ESM that uses top-level await cannot. On Node.js 20.18 and earlier, calling require() on an async ESM would throw ERR_REQUIRE_ESM instead."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_REQUIRE_ASYNC_MODULE?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Three approaches: (1) Replace require() with dynamic import(): const mod = await import('./module.mjs'). This works in any CJS file and requires no other changes. (2) Remove top-level await from the dependency — if it's your own code or you can patch the package, rewrite the TLA to use .then() or move it inside a function. (3) Convert your caller to ESM by adding 'type': 'module' to package.json and switching to static import statements, which natively support async module graphs. Use --experimental-print-required-tla to identify exactly which module in the graph has top-level await."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I find which module has top-level await?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Run your program with the --experimental-print-required-tla flag: node --experimental-print-required-tla your-script.js. Node.js will print the file path and line number of the top-level await expression that is causing the error. This is especially useful when the async module is deep in a transitive dependency chain and not obvious from the stack trace."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_REQUIRE_ASYNC_MODULE appear after upgrading Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Node.js 20.19.0 and 22.12.0 enabled require(esm) by default. Before those versions, any require() of an ESM file threw ERR_REQUIRE_ESM immediately. After those versions, require() of synchronous ESM is allowed, but if the ESM graph contains top-level await, Node.js throws the new ERR_REQUIRE_ASYNC_MODULE error. So upgrading from Node 20.18 to 20.19+ (or from Node 22.11 to 22.12+) can surface this error in code that previously hid behind ERR_REQUIRE_ESM."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_REQUIRE_ASYNC_MODULE happen with firebase-tools or lru-cache?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "firebase-tools (issue #8054) uses a synchronous require() in its runtime loader that cannot handle ESM with top-level await when running on Node.js 22.12.0+. lru-cache v11.3.0 introduced top-level await in its ESM build (diagnostics-channel-esm.mts) which broke any CJS package that transitively loaded lru-cache, including jsdom. The fix for lru-cache was to replace the top-level await with .then() callbacks (fixed in v11.3.1+). For firebase-tools, pin the Node.js version or use a patched release."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I disable the require(esm) feature to avoid ERR_REQUIRE_ASYNC_MODULE?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, but only as a temporary workaround. Run with --no-experimental-require-module (or set NODE_OPTIONS=--no-experimental-require-module) to revert require(esm) behavior to the pre-20.19 behavior. This will turn ERR_REQUIRE_ASYNC_MODULE back into ERR_REQUIRE_ESM for the entire module graph. This is not a long-term fix — it just moves the error surface. The correct fix is to use import() or remove top-level await from the dependency."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_REQUIRE_ASYNC_MODULE in a transitive dependency?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "If you never directly require the module with top-level await — a dependency does — your options are: (1) pin the dependency to the last version before it introduced top-level await (e.g. lru-cache@11.2.7); (2) use npm/yarn/pnpm overrides to force a patched version; (3) open an issue with the dependency to replace TLA with .then() callbacks; (4) use dynamic import() at the call site where the transitive require() happens, if you control that code; (5) convert your project root to ESM so the entire graph loads asynchronously."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ERR_REQUIRE_ASYNC_MODULE", "item": "https://nodejs-errors.dev/ERR_REQUIRE_ASYNC_MODULE/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix ERR_REQUIRE_ASYNC_MODULE in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Identify the top-level await source", "text": "Run node --experimental-print-required-tla your-script.js. Node.js will print the exact file and line of the top-level await that blocks synchronous loading." },
+      { "@type": "HowToStep", "position": 2, "name": "Replace require() with dynamic import()", "text": "Change require('./module') or require('package') to const mod = await import('./module'). Dynamic import() works inside any CommonJS file and handles async module graphs." },
+      { "@type": "HowToStep", "position": 3, "name": "Remove top-level await from the dependency", "text": "If you own the module, convert top-level await to .then() callbacks so the module evaluates synchronously. If the TLA is in a third-party package, pin to the last version before TLA was introduced or open an issue." },
+      { "@type": "HowToStep", "position": 4, "name": "Convert the caller to ESM", "text": "Add 'type': 'module' to package.json and use static import statements. ESM callers can load async ESM graphs without error." },
+      { "@type": "HowToStep", "position": 5, "name": "Use npm overrides for transitive dependencies", "text": "If the TLA is deep in the dependency tree, add an overrides field in package.json to force a patched version of the offending package: { \"overrides\": { \"lru-cache\": \"^11.3.1\" } }." },
+      { "@type": "HowToStep", "position": 6, "name": "Temporary: disable require(esm) feature", "text": "Add --no-experimental-require-module to NODE_OPTIONS to revert to pre-20.19 behavior. This converts the error back to ERR_REQUIRE_ESM. Use only as a short-term workaround while implementing a real fix." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ERR_REQUIRE_ASYNC_MODULE</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>ERR_REQUIRE_ASYNC_MODULE</h1>
+  <p>Complete reference for <code>Error [ERR_REQUIRE_ASYNC_MODULE]: require() cannot be used on an ESM graph with top-level await. Use import() instead.</code> — what it means, every cause, and all fixes including the <code>--experimental-print-required-tla</code> diagnostic flag.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js throws <code>ERR_REQUIRE_ASYNC_MODULE</code> when <code>require()</code> is called on an ES module (or any module in its dependency graph) that uses top-level <code>await</code>. The fastest fix is replacing <code>require('pkg')</code> with <code>const mod = await import('pkg')</code>. To find which file has the top-level <code>await</code>, run with <code>--experimental-print-required-tla</code>. This error first appears in Node.js 20.19+ and 22.12+ (when <code>require(esm)</code> was enabled by default).
+  </div>
+
+  <div class="callout">
+    <strong>Exact error strings you will see in Node.js:</strong>
+    <ul style="margin:0.5rem 0 0; padding-left:1.25rem;">
+      <li><code>Error [ERR_REQUIRE_ASYNC_MODULE]: require() cannot be used on an ESM graph with top-level await. Use import() instead. To find the top-level await, use --experimental-print-required-tla.</code></li>
+      <li><code>Error [ERR_REQUIRE_ASYNC_MODULE]: require() cannot be used on an ESM graph with top-level await.</code></li>
+      <li><code>node:internal/modules/cjs/loader: throw new ERR_REQUIRE_ASYNC_MODULE</code></li>
+    </ul>
+  </div>
+
+  <h2>What is ERR_REQUIRE_ASYNC_MODULE?</h2>
+  <p>
+    <code>ERR_REQUIRE_ASYNC_MODULE</code> is thrown by the
+    <a href="https://nodejs.org/api/esm.html" rel="noopener noreferrer">Node.js module loader</a>
+    when <code>require()</code> is called on an ES module whose evaluation is asynchronous — meaning
+    the module itself, or any module in its import chain, contains a
+    <strong>top-level <code>await</code></strong> expression.
+  </p>
+  <p>
+    <code>require()</code> is fundamentally synchronous: it blocks the event loop until the module
+    is fully evaluated and returns its exports. Top-level <code>await</code> makes a module
+    asynchronous — it cannot complete synchronously — so Node.js refuses to load it via
+    <code>require()</code> and throws this error instead.
+  </p>
+  <p>
+    This error was introduced alongside the <em>require(ESM)</em> feature that became the default in
+    <strong>Node.js 20.19.0</strong> and <strong>Node.js 22.12.0</strong>. Before those versions,
+    any <code>require()</code> of an ESM file threw <code>ERR_REQUIRE_ESM</code>. Starting with those
+    versions, synchronous ESM can be <code>require()</code>d successfully — but asynchronous ESM
+    (containing top-level <code>await</code>) throws the new <code>ERR_REQUIRE_ASYNC_MODULE</code> error.
+  </p>
+
+  <h2>Full Error Example</h2>
+  <pre><code>$ node app.js
+node:internal/modules/cjs/loader:1431
+    throw new ERR_REQUIRE_ASYNC_MODULE(mod.filename);
+          ^
+
+Error [ERR_REQUIRE_ASYNC_MODULE]: require() cannot be used on an ESM graph
+with top-level await. Use import() instead. To find the top-level await,
+use --experimental-print-required-tla.
+    at Object.&lt;anonymous&gt; (/project/app.js:3:17)
+    at Module._compile (node:internal/modules/cjs/loader:1364:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1422:10)
+    at Module.load (node:internal/modules/cjs/loader:1203:32)
+    at Module._load (node:internal/modules/cjs/loader:1019:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/run_main:128:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'ERR_REQUIRE_ASYNC_MODULE'
+}</code></pre>
+
+  <h3>With --experimental-print-required-tla diagnostic</h3>
+  <pre><code>$ node --experimental-print-required-tla app.js
+(node:12345) ExperimentalWarning: --experimental-print-required-tla is an experimental feature.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  Top-level await in /project/node_modules/some-package/dist/index.mjs line 3:
+
+    const [metrics, tracing] = await import('node:diagnostics_channel')
+                               ^^^^^
+
+Error [ERR_REQUIRE_ASYNC_MODULE]: require() cannot be used on an ESM graph
+with top-level await. Use import() instead.
+    ...</code></pre>
+
+  <h2>Error Object Properties</h2>
+  <table>
+    <thead>
+      <tr><th>Property</th><th>Value</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>err.code</code></td><td><code>'ERR_REQUIRE_ASYNC_MODULE'</code></td><td>Use this to catch specifically in error handlers</td></tr>
+      <tr><td><code>err.message</code></td><td><code>require() cannot be used on an ESM graph with top-level await. Use import() instead.</code></td><td>Exact string; verbatim in stack traces</td></tr>
+      <tr><td><code>err.name</code></td><td><code>'Error'</code></td><td>Inherits from <code>Error</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Node.js Version Matrix</h2>
+  <table>
+    <thead>
+      <tr><th>Node.js version</th><th>require(sync ESM)</th><th>require(async ESM with TLA)</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>≤ 20.18.x</td><td>Throws <code>ERR_REQUIRE_ESM</code></td><td>Throws <code>ERR_REQUIRE_ESM</code></td></tr>
+      <tr><td>20.19.0+</td><td>Works — returns module exports</td><td>Throws <code>ERR_REQUIRE_ASYNC_MODULE</code></td></tr>
+      <tr><td>≤ 22.11.x</td><td>Throws <code>ERR_REQUIRE_ESM</code></td><td>Throws <code>ERR_REQUIRE_ESM</code></td></tr>
+      <tr><td>22.12.0+</td><td>Works — returns module exports</td><td>Throws <code>ERR_REQUIRE_ASYNC_MODULE</code></td></tr>
+      <tr><td>23.x, 24.x, 26.x</td><td>Works — returns module exports</td><td>Throws <code>ERR_REQUIRE_ASYNC_MODULE</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <strong>Upgrading from Node 20.18 to 20.19 (or 22.11 to 22.12) can surface this error.</strong>
+    Code that previously failed with <code>ERR_REQUIRE_ESM</code> will now succeed if the ESM is synchronous,
+    but will throw the new <code>ERR_REQUIRE_ASYNC_MODULE</code> if the ESM contains top-level await.
+    Tools that catch <code>ERR_REQUIRE_ESM</code> by error code (e.g. Serverless Framework 3.40.0) will
+    silently miss the new error code.
+  </div>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Cause</th>
+        <th>What triggers it</th>
+        <th>Recommended fix</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Direct <code>require()</code> of a TLA module</td>
+        <td><code>require('./async-module.mjs')</code> where the file has <code>await</code> at the top level</td>
+        <td>Use <code>await import('./async-module.mjs')</code></td>
+      </tr>
+      <tr>
+        <td>Transitive TLA in dependency graph</td>
+        <td>You <code>require('pkg')</code>; <code>pkg</code> imports <code>dep</code>; <code>dep</code> has top-level <code>await</code></td>
+        <td>Replace <code>require()</code> with <code>import()</code>, or pin/patch the dep</td>
+      </tr>
+      <tr>
+        <td>Node.js upgrade (20.18→20.19 or 22.11→22.12)</td>
+        <td>Previously hidden by <code>ERR_REQUIRE_ESM</code>; now surfaces after <code>require(esm)</code> was enabled by default</td>
+        <td>Use <code>import()</code> or remove TLA from the dependency</td>
+      </tr>
+      <tr>
+        <td>Package introduced TLA in a minor/patch release</td>
+        <td><code>lru-cache@11.3.0</code> added TLA via <code>diagnostics-channel-esm.mts</code></td>
+        <td>Pin to version before TLA (e.g. <code>lru-cache@11.2.7</code>) or update to patched release</td>
+      </tr>
+      <tr>
+        <td>Dynamic <code>import()</code> result re-exported with TLA</td>
+        <td>ESM module does <code>export const x = await dynamicImport()</code> at top level</td>
+        <td>Remove the top-level <code>await</code>; lazy-load inside a function instead</td>
+      </tr>
+      <tr>
+        <td>Tooling catches <code>ERR_REQUIRE_ESM</code> but not <code>ERR_REQUIRE_ASYNC_MODULE</code></td>
+        <td>Serverless Framework, firebase-tools, or custom loaders hardcode the old error code string</td>
+        <td>Update the error code check or upgrade the tool to a version that handles both codes</td>
+      </tr>
+      <tr>
+        <td>TypeScript compiled output calls <code>require()</code> on TLA ESM</td>
+        <td>TypeScript with <code>"module": "commonjs"</code> emits <code>require()</code> for dynamic imports that resolve to async ESM</td>
+        <td>Use <code>"module": "nodenext"</code> or <code>"module": "es2022"</code> in tsconfig</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Direct require() of a file with top-level await</h2>
+  <p>
+    The simplest case: you are directly calling <code>require()</code> on a <code>.mjs</code> file
+    or an ESM package that contains a top-level <code>await</code> expression.
+  </p>
+  <pre><code>// async-config.mjs  ← contains top-level await
+const config = await fetch('https://api.example.com/config').then(r => r.json());
+export default config;
+
+// app.js (CommonJS)  ← this will throw
+const config = require('./async-config.mjs');
+// Error [ERR_REQUIRE_ASYNC_MODULE]: require() cannot be used on an ESM graph
+// with top-level await. Use import() instead.</code></pre>
+
+  <h2>Cause 2 – Top-level await hidden in a transitive dependency</h2>
+  <p>
+    You never call <code>require()</code> on an async module directly — but a package you require
+    imports another module that uses top-level await somewhere in its graph. The error still
+    propagates to your call site.
+  </p>
+  <pre><code>// your-app.js (CJS)
+const jsdom = require('jsdom');   // requires @asamuzakjp/css-color
+                                  // which requires lru-cache@11.3.0
+                                  // which has TLA in diagnostics-channel-esm.mts
+// → Error [ERR_REQUIRE_ASYNC_MODULE]
+
+// Dependency chain:
+// jsdom (CJS)
+//   └── @asamuzakjp/css-color (ESM)
+//         └── lru-cache@11.3.0 (ESM with top-level await)  ← the culprit</code></pre>
+
+  <p>Use <code>--experimental-print-required-tla</code> to pin down the exact file:</p>
+  <pre><code>node --experimental-print-required-tla your-app.js
+# Prints: Top-level await in /project/node_modules/lru-cache/dist/esm/index.js line 12</code></pre>
+
+  <h2>Cause 3 – Node.js upgrade surface (20.18 → 20.19, 22.11 → 22.12)</h2>
+  <p>
+    Before Node.js 20.19 and 22.12, <em>all</em> <code>require()</code> calls on ESM files threw
+    <code>ERR_REQUIRE_ESM</code> — including ones that would have worked if the ESM were synchronous.
+    After those releases, <code>require(esm)</code> is enabled by default: synchronous ESM loads
+    correctly, but async ESM (TLA) now surfaces as <code>ERR_REQUIRE_ASYNC_MODULE</code>.
+  </p>
+  <pre><code>// Node.js 20.18 behavior:
+require('./sync-esm.mjs')   // throws ERR_REQUIRE_ESM
+require('./async-esm.mjs')  // throws ERR_REQUIRE_ESM
+
+// Node.js 20.19+ behavior:
+require('./sync-esm.mjs')   // works! returns module.exports
+require('./async-esm.mjs')  // throws ERR_REQUIRE_ASYNC_MODULE  ← new error</code></pre>
+
+  <h2>Cause 4 – Package silently added top-level await in a patch release</h2>
+  <p>
+    A package you depend on introduced top-level <code>await</code> in a minor or patch version,
+    breaking any CJS consumer that loads it. <strong>lru-cache v11.3.0</strong> is the canonical
+    real-world example: it added optional diagnostics via <code>diagnostics-channel-esm.mts</code>
+    which contained:
+  </p>
+  <pre><code>// lru-cache/src/diagnostics-channel-esm.mts (v11.3.0, introduced TLA)
+export const [metrics, tracing] = await import('node:diagnostics_channel')
+  .then(dc => [dc.channel('lru-cache:set'), dc.channel('lru-cache:get')]);
+  //   ^^^^^ top-level await — blocks synchronous require()</code></pre>
+  <p>
+    This was fixed in <strong>lru-cache v11.3.1</strong> by replacing the top-level <code>await</code>
+    with a <code>.then()</code>-based initializer. If you cannot upgrade, pin to v11.2.7 or earlier.
+  </p>
+
+  <h2>Fix 1 – Replace require() with dynamic import() (recommended)</h2>
+  <p>
+    The universal fix that works in any CommonJS file with no project-wide migration. Dynamic
+    <code>import()</code> returns a Promise and handles async module graphs natively.
+  </p>
+  <pre><code>// Before (throws ERR_REQUIRE_ASYNC_MODULE)
+const mod = require('./async-module.mjs');
+
+// After — using top-level await (requires Node.js 14.8+ in ESM, or CJS with async IIFE)
+const mod = await import('./async-module.mjs');
+const value = mod.default;  // access default export
+const { named } = mod;      // access named exports
+
+// If you are in a synchronous CJS context without top-level await support:
+(async () => {
+  const { default: config } = await import('./async-config.mjs');
+  console.log(config);
+})();
+
+// For a module that needs to be loaded once and reused:
+let _pkg;
+async function getPkg() {
+  if (!_pkg) _pkg = await import('some-async-esm-package');
+  return _pkg;
+}</code></pre>
+
+  <div class="callout">
+    <strong>Default vs named exports:</strong> ESM packages may use <code>export default</code>
+    or named exports. Dynamic <code>import()</code> always returns a module namespace object.
+    Access the default export as <code>mod.default</code> or destructure as
+    <code>const { default: myName } = await import('...')</code>.
+    Named exports: <code>const { readFile, writeFile } = await import('fs/promises')</code>.
+  </div>
+
+  <h2>Fix 2 – Remove top-level await from the module</h2>
+  <p>
+    If the top-level <code>await</code> is in code you control, refactor it out. The module then
+    evaluates synchronously and can be safely <code>require()</code>d.
+  </p>
+  <pre><code>// Before — module with top-level await (cannot be require()'d)
+// async-config.mjs
+const config = await loadConfig();
+export default config;
+
+// After option A — lazy initialization inside a function
+// config.mjs
+let _config;
+export async function getConfig() {
+  if (!_config) _config = await loadConfig();
+  return _config;
+}
+
+// After option B — replace TLA with .then() for side effects
+// diagnostics.mjs
+let metrics, tracing;
+import('node:diagnostics_channel').then(dc => {
+  metrics = dc.channel('app:metric');
+  tracing = dc.channel('app:trace');
+});
+export { metrics, tracing };</code></pre>
+
+  <h2>Fix 3 – Convert the caller to ESM</h2>
+  <p>
+    ESM callers can import async ESM modules using static <code>import</code> or dynamic
+    <code>import()</code>. Converting the top-level caller to ESM means the entire module graph
+    loads asynchronously, eliminating the conflict.
+  </p>
+  <pre><code>// 1. Add to package.json:
+{ "type": "module" }
+
+// 2. Rename .js files to .mjs, or rely on "type": "module"
+
+// 3. Replace require() with static import:
+// Before (CJS):
+const config = require('./async-config.mjs');
+
+// After (ESM):
+import config from './async-config.mjs';   // works even with top-level await inside
+
+// 4. Replace __dirname / __filename:
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);</code></pre>
+
+  <h2>Fix 4 – Pin or override the transitive dependency</h2>
+  <p>
+    If the top-level <code>await</code> is in a third-party package you cannot patch directly,
+    pin to the last version before TLA was introduced, or force a patched version via your package
+    manager's overrides mechanism.
+  </p>
+  <pre><code>// npm overrides — force lru-cache to a version without TLA
+// package.json
+{
+  "overrides": {
+    "lru-cache": "^11.3.1"
+  }
+}
+
+// yarn resolutions
+{
+  "resolutions": {
+    "lru-cache": "^11.3.1"
+  }
+}
+
+// pnpm overrides
+{
+  "pnpm": {
+    "overrides": {
+      "lru-cache": "^11.3.1"
+    }
+  }
+}
+
+// Direct pin — install a specific safe version
+npm install lru-cache@11.2.7</code></pre>
+
+  <h2>Fix 5 – Temporary: disable require(esm) feature</h2>
+  <p>
+    As a short-term workaround while you fix the root cause, you can disable the
+    <code>require(esm)</code> feature entirely. This reverts Node.js to the pre-20.19 behavior
+    where all <code>require()</code> of ESM throws <code>ERR_REQUIRE_ESM</code>.
+  </p>
+  <pre><code># Command-line flag
+node --no-experimental-require-module your-script.js
+
+# Via environment variable (useful for tooling you cannot control directly)
+NODE_OPTIONS="--no-experimental-require-module" npx firebase deploy
+NODE_OPTIONS="--no-experimental-require-module" npx serverless deploy</code></pre>
+  <div class="callout warn">
+    <strong>This is not a real fix.</strong> It changes the error from
+    <code>ERR_REQUIRE_ASYNC_MODULE</code> back to <code>ERR_REQUIRE_ESM</code> and prevents
+    you from using the require(esm) feature entirely. Use only while implementing Fix 1, 2, or 3.
+  </div>
+
+  <h2>Fix 6 – TypeScript: change the module target</h2>
+  <p>
+    TypeScript with <code>"module": "commonjs"</code> emits <code>require()</code> calls at runtime.
+    If the required package contains top-level await, this triggers
+    <code>ERR_REQUIRE_ASYNC_MODULE</code>.
+  </p>
+  <pre><code>// tsconfig.json — switch to a non-CJS module format
+{
+  "compilerOptions": {
+    "module": "nodenext",          // or "node16" / "es2022"
+    "moduleResolution": "nodenext",
+    "esModuleInterop": true,
+    "target": "es2022"
+  }
+}
+
+// Or use dynamic import() in TypeScript (works with any module target):
+const { default: mod } = await import('async-esm-package');</code></pre>
+
+  <h2>Real-World Package Reference</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Package</th>
+        <th>Version that added TLA</th>
+        <th>Fixed in</th>
+        <th>Workaround</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>lru-cache</code></td>
+        <td>11.3.0 (<code>diagnostics-channel-esm.mts</code>)</td>
+        <td>11.3.1+</td>
+        <td><code>npm install lru-cache@11.2.7</code></td>
+      </tr>
+      <tr>
+        <td><code>firebase-tools</code></td>
+        <td>Triggered by Node.js 22.12.0 upgrade (issue #8054)</td>
+        <td>Later firebase-functions patch</td>
+        <td>Pin Node.js to 22.11.0; use <code>NODE_OPTIONS=--no-experimental-require-module</code></td>
+      </tr>
+      <tr>
+        <td><code>jsdom</code></td>
+        <td>29.0.1+ (transitive via <code>@asamuzakjp/css-color</code> → <code>lru-cache@11.3.0</code>)</td>
+        <td>After lru-cache 11.3.1 update</td>
+        <td><code>overrides: { "lru-cache": "11.2.7" }</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Safe async-ESM Patterns</h2>
+  <p>These patterns work whether you are calling from CJS or ESM.</p>
+
+  <h3>Pattern A: Async factory function (replaces module-level TLA)</h3>
+  <pre><code>// database.mjs — safe to require() because no TLA at module level
+let pool;
+
+export async function getPool() {
+  if (!pool) {
+    const { createPool } = await import('./db-driver.mjs');
+    pool = await createPool(process.env.DATABASE_URL);
+  }
+  return pool;
+}
+
+// caller — CJS or ESM
+const { getPool } = require('./database.mjs');  // works: module is sync
+const pool = await getPool();                    // async init deferred to call time</code></pre>
+
+  <h3>Pattern B: Promise-based module initializer (no TLA)</h3>
+  <pre><code>// metrics.mjs — initializes async without top-level await
+let _channel;
+const _ready = import('node:diagnostics_channel').then(dc => {
+  _channel = dc.channel('app:requests');
+});
+
+export async function record(data) {
+  await _ready;  // wait for init only on first call
+  _channel.publish(data);
+}
+
+// This module has no TLA — _ready is a Promise stored in a variable,
+// not awaited at the module's top scope. require() works fine.</code></pre>
+
+  <h3>Pattern C: Dynamic import() wrapper in CJS</h3>
+  <pre><code>// app.js (CommonJS)
+// Wraps any async ESM module so CJS code can consume it
+
+async function loadAsyncModule(specifier) {
+  return import(specifier);
+}
+
+// Usage
+const { default: config } = await loadAsyncModule('./async-config.mjs');
+
+// Or with error handling:
+let mod;
+try {
+  mod = await import('some-async-esm-package');
+} catch (err) {
+  if (err.code === 'ERR_REQUIRE_ASYNC_MODULE') {
+    // Should not reach here — import() handles async ESM fine
+    // This code catches the error if someone else require()'d it
+  }
+  throw err;
+}</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Run with <code>node --experimental-print-required-tla your-script.js</code> to get the exact file and line of the top-level <code>await</code>.</li>
+    <li>Check the Node.js version: <code>node --version</code>. This error only appears on 20.19.0+ and 22.12.0+.</li>
+    <li>If the TLA is in a third-party package, check the package's GitHub issues or changelog for a patch release that removes it.</li>
+    <li>Run <code>npm ls &lt;package-name&gt;</code> to trace the full dependency chain from your code to the module with TLA.</li>
+    <li>Verify that your error-handling code is not checking <code>err.code === 'ERR_REQUIRE_ESM'</code> — it needs to also handle <code>'ERR_REQUIRE_ASYNC_MODULE'</code>.</li>
+    <li>If you own the async module, check whether the top-level <code>await</code> is truly necessary or can be deferred to a factory function.</li>
+    <li>For TypeScript: confirm <code>tsconfig.json</code> <code>module</code> is not <code>"commonjs"</code> if you are importing ESM packages with TLA.</li>
+    <li>In Docker/CI: verify the Node.js version in the container image matches your local environment — the error only appears on 20.19+/22.12+.</li>
+  </ol>
+
+  <h2>ERR_REQUIRE_ASYNC_MODULE vs ERR_REQUIRE_ESM — Key Differences</h2>
+  <table>
+    <thead>
+      <tr><th></th><th>ERR_REQUIRE_ESM</th><th>ERR_REQUIRE_ASYNC_MODULE</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Introduced</td><td>Node.js 12 (stable)</td><td>Node.js 20.19.0 / 22.12.0</td></tr>
+      <tr><td>Trigger</td><td>Any <code>require()</code> of any ESM file</td><td><code>require()</code> of ESM with top-level <code>await</code> in graph</td></tr>
+      <tr><td>Synchronous ESM</td><td>Also throws this (pre-20.19)</td><td>Does not apply — sync ESM loads fine</td></tr>
+      <tr><td>Async ESM (TLA)</td><td>Also throws this (pre-20.19)</td><td>Only error that fires in 20.19+</td></tr>
+      <tr><td>Diagnostic flag</td><td>None needed (the error message names the file)</td><td><code>--experimental-print-required-tla</code> shows the TLA location</td></tr>
+      <tr><td>Fix</td><td><code>import()</code> or convert to ESM or pin to CJS version</td><td><code>import()</code> or remove TLA or convert to ESM</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ERR_REQUIRE_ASYNC_MODULE?</summary>
+    <div class="faq-answer">
+      <p><code>ERR_REQUIRE_ASYNC_MODULE</code> is thrown when <code>require()</code> is called on an ES module that uses top-level <code>await</code>, or whose dependency graph contains a module with top-level <code>await</code>. Because <code>require()</code> is synchronous, it cannot evaluate a module that needs to wait for a Promise. The full error message is: <code>Error [ERR_REQUIRE_ASYNC_MODULE]: require() cannot be used on an ESM graph with top-level await. Use import() instead.</code></p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between ERR_REQUIRE_ASYNC_MODULE and ERR_REQUIRE_ESM?</summary>
+    <div class="faq-answer">
+      <p><code>ERR_REQUIRE_ESM</code> is the older error thrown when <code>require()</code> tries to load any ES module file. <code>ERR_REQUIRE_ASYNC_MODULE</code> is the newer, more specific error introduced in Node.js 20.19 and 22.12 when those versions enabled <code>require(esm)</code> by default — synchronous ESM can now be loaded with <code>require()</code>, but ESM with top-level <code>await</code> cannot, so it gets its own distinct error code.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I find which module has top-level await?</summary>
+    <div class="faq-answer">
+      <p>Use the <code>--experimental-print-required-tla</code> flag: <code>node --experimental-print-required-tla your-script.js</code>. Node.js will print the file path and exact line number of the top-level <code>await</code> expression that is blocking synchronous loading. This is essential when the offending module is buried deep in a transitive dependency chain.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why did ERR_REQUIRE_ASYNC_MODULE appear after upgrading Node.js?</summary>
+    <div class="faq-answer">
+      <p>Before Node.js 20.19.0 and 22.12.0, all <code>require()</code> calls on ESM files threw <code>ERR_REQUIRE_ESM</code> regardless of top-level await. After those releases, <code>require(esm)</code> is enabled by default: synchronous ESM loads fine, but async ESM (containing top-level <code>await</code>) throws the new <code>ERR_REQUIRE_ASYNC_MODULE</code>. So upgrading Node.js can expose a previously hidden top-level await in a dependency.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does this happen with firebase-tools or lru-cache?</summary>
+    <div class="faq-answer">
+      <p>firebase-tools uses a synchronous <code>require()</code> in its runtime loader (<code>src/runtime/loader.ts</code>) that cannot handle async ESM when running on Node.js 22.12.0+. lru-cache v11.3.0 introduced top-level await in its ESM diagnostics build, breaking CJS packages that transitively loaded it (including jsdom). lru-cache fixed this in v11.3.1 by replacing TLA with a <code>.then()</code> initializer. Pin lru-cache to 11.2.7 if you cannot upgrade.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Can I use --no-experimental-require-module to fix this?</summary>
+    <div class="faq-answer">
+      <p>Yes, as a temporary workaround only. Adding <code>--no-experimental-require-module</code> (or <code>NODE_OPTIONS=--no-experimental-require-module</code>) reverts to pre-20.19 behavior where all <code>require()</code> of ESM throws <code>ERR_REQUIRE_ESM</code>. This does not fix the underlying problem — it just changes the error code and disables the entire <code>require(esm)</code> feature. Use only while implementing a real fix.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_REQUIRE_ASYNC_MODULE in a transitive dependency I cannot change?</summary>
+    <div class="faq-answer">
+      <p>Your options: (1) add an <code>overrides</code> field in your <code>package.json</code> to force a version of the offending sub-dependency that does not use top-level await; (2) pin the intermediate dependency that pulls in the async ESM module; (3) use dynamic <code>import()</code> at the point where the synchronous <code>require()</code> chain starts in your code; (4) convert your project root to ESM so everything loads asynchronously. Run <code>--experimental-print-required-tla</code> and <code>npm ls &lt;package&gt;</code> to identify the exact version and chain before deciding.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_REQUIRE_ASYNC_MODULE in Docker or CI?</summary>
+    <div class="faq-answer">
+      <p>Check the Node.js version in your container image. If it is 20.19+ or 22.12+, the <code>require(esm)</code> feature is active. Pinning your base image to <code>node:20.18-alpine</code> or <code>node:22.11-slim</code> will revert to the old behavior. The correct long-term fix is to replace <code>require()</code> with <code>import()</code> in your code. Set <code>NODE_OPTIONS=--no-experimental-require-module</code> as an environment variable in <code>docker-compose.yml</code> or your CI config as a quick workaround.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/"><code>ERR_REQUIRE_ESM</code></a> — the predecessor error: <code>require()</code> of any ES module, thrown on Node.js &lt; 20.19</li>
+    <li><a href="https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/"><code>ERR_PACKAGE_PATH_NOT_EXPORTED</code></a> — a subpath of the package is not in its <code>exports</code> map</li>
+    <li><a href="https://nodejs-errors.dev/MODULE_NOT_FOUND/"><code>MODULE_NOT_FOUND</code></a> — the package cannot be located at all</li>
+    <li><a href="https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/"><code>SyntaxError: Cannot use import statement outside a module</code></a> — static <code>import</code> used in a file Node.js parses as CommonJS</li>
+    <li><a href="https://nodejs-errors.dev/ERR_UNSUPPORTED_DIR_IMPORT/"><code>ERR_UNSUPPORTED_DIR_IMPORT</code></a> — ESM import targeting a directory instead of a specific file</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-11 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#err_require_async_module">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

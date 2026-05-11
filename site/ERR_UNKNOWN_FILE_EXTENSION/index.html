@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".ts" – Node.js Fix</title>
+  <meta name="description" content="Fix TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension &quot;.ts&quot; in Node.js. Covers ts-node ESM config, tsx, Node 22+ --experimental-strip-types, native TypeScript stripping in Node 23.6+, .json5/.wasm loaders, and every other cause." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ERR_UNKNOWN_FILE_EXTENSION/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension &quot;.ts&quot; – Node.js Fix" />
+  <meta property="og:description" content="Fix TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension &quot;.ts&quot; in Node.js. Covers ts-node ESM config, tsx, Node 22+ --experimental-strip-types, native TypeScript stripping in Node 23.6+, .json5/.wasm loaders, and every other cause." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ERR_UNKNOWN_FILE_EXTENSION/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension \".ts\" – Node.js Fix",
+    "description": "Node.js throws ERR_UNKNOWN_FILE_EXTENSION when it encounters a file extension it cannot execute natively in ESM mode. The most common trigger is running a .ts TypeScript file directly with node or ts-node when \"type\": \"module\" is set in package.json. Modern fixes include tsx, node --import tsx (Node 18+), Node 22 --experimental-strip-types, and native TypeScript execution in Node 23.6+. Also covers .json5, .wasm, and any unknown extension requiring a custom loader.",
+    "url": "https://nodejs-errors.dev/ERR_UNKNOWN_FILE_EXTENSION/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-05-11",
+    "dateModified": "2026-05-11"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is TypeError [ERR_UNKNOWN_FILE_EXTENSION]?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_UNKNOWN_FILE_EXTENSION is thrown by Node.js's ESM loader when it encounters a file extension it does not recognise as a valid JavaScript module. Node natively handles .js, .mjs, .cjs, and .json (as of Node 22+) — any other extension such as .ts, .tsx, .jsx, .json5, or .wasm requires a registered loader or module hook to pre-process the file before Node can execute it."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_UNKNOWN_FILE_EXTENSION happen with ts-node and \"type\": \"module\"?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "When \"type\": \"module\" is in package.json, Node.js uses its ESM loader for .js files. The legacy ts-node CJS hook (which intercepts require()) does not run under the ESM loader, so Node sees a .ts extension it cannot handle and throws ERR_UNKNOWN_FILE_EXTENSION. The fix is to either enable ts-node's ESM mode (ts-node --esm, or \"esm\": true in tsconfig.json's ts-node section), switch to tsx, or use Node 22+ native TypeScript support."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the fastest fix for ERR_UNKNOWN_FILE_EXTENSION unknown file extension .ts?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The fastest fix in 2026 is to replace ts-node with tsx: run `npx tsx src/index.ts` or `npm install --save-dev tsx` and update your scripts. tsx handles both CJS and ESM projects transparently with no tsconfig changes. Alternatively, on Node 22.6+ use `node --experimental-strip-types src/index.ts`, or on Node 23.6+ just `node src/index.ts` (enabled by default)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_UNKNOWN_FILE_EXTENSION in ts-node without switching tools?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Add \"esm\": true and \"experimentalSpecifierResolution\": \"node\" inside the \"ts-node\" key of tsconfig.json, then run `ts-node --esm src/index.ts` or use the ts-node-esm binary. Alternatively set NODE_OPTIONS=\"--loader ts-node/esm\" and run `node src/index.ts`. For Node 20+ with broken ts-node ESM, use `node --no-warnings=ExperimentalWarning --loader ts-node/esm/transpile-only src/index.ts`."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_UNKNOWN_FILE_EXTENSION in Node 22?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Node 22.6+ added --experimental-strip-types which strips TypeScript type annotations at load time using the Amaro library. Run: `node --experimental-strip-types src/index.ts`. Node 22.14 introduced a regression (nodejs/node#57756) that broke some setups — update to Node 22.15+ or use the tsx workaround. As of Node 23.6+ TypeScript stripping is enabled by default with no flag needed."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_UNKNOWN_FILE_EXTENSION only appear in production or CI but not locally?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Local dev often runs ts-node via nodemon which registers the CJS hook before any ESM is loaded. CI or production scripts frequently call node src/index.ts directly, hitting the ESM loader without ts-node's hook. Additionally, CI may use a different Node.js version where ts-node's ESM support is broken. Use tsx or node --experimental-strip-types for a consistent cross-environment solution."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_UNKNOWN_FILE_EXTENSION for .json5 or .wasm files?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "For .json5 files, register a custom module hook: `node --import ./json5-loader.mjs src/index.mjs`. The hook intercepts .json5 imports, parses them with the json5 package, and returns the serialised object. For .wasm, Node 22+ has experimental WebAssembly module support via `--experimental-wasm-modules`. For other unknown extensions, write a `load()` hook in a register file passed to `--import` or `--loader`."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Should I use ts-node or tsx in 2025?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "For most projects in 2026, tsx is the better default. It works out-of-the-box for both CJS and ESM projects, requires zero configuration, and actively keeps pace with Node.js releases. ts-node remains appropriate for projects that rely on its TypeScript compilation pipeline (e.g. paths aliases via tsconfig-paths) or that need full type checking at runtime. For teams that can target Node 22+, the built-in --experimental-strip-types flag eliminates the need for either tool."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ERR_UNKNOWN_FILE_EXTENSION", "item": "https://nodejs-errors.dev/ERR_UNKNOWN_FILE_EXTENSION/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix TypeError [ERR_UNKNOWN_FILE_EXTENSION] in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Identify the extension and context", "text": "Read the error message — it names the exact extension (e.g. .ts, .tsx, .json5). Check whether your project has \"type\": \"module\" in package.json, which activates the ESM loader that triggers this error." },
+      { "@type": "HowToStep", "position": 2, "name": "Use tsx (recommended for TypeScript)", "text": "Install tsx: `npm install --save-dev tsx`. Replace `ts-node` with `tsx` in your package.json scripts. Run `npx tsx src/index.ts`. No tsconfig changes needed." },
+      { "@type": "HowToStep", "position": 3, "name": "Use Node 22+ native TypeScript support", "text": "On Node 22.6+ run `node --experimental-strip-types src/index.ts`. On Node 23.6+ it works with no flag. Limitation: only inline type annotations are stripped — TypeScript enums and namespaces require tsx or tsc." },
+      { "@type": "HowToStep", "position": 4, "name": "Enable ts-node ESM mode (legacy path)", "text": "Add `\"ts-node\": { \"esm\": true, \"experimentalSpecifierResolution\": \"node\" }` inside tsconfig.json. Run with `ts-node --esm src/index.ts` or `node --loader ts-node/esm src/index.ts`." },
+      { "@type": "HowToStep", "position": 5, "name": "Remove \"type\": \"module\" (CommonJS fallback)", "text": "If you do not actually need ESM, remove `\"type\": \"module\"` from package.json. ts-node's CJS hook will work without the ESM loader. Verify no .mjs imports exist in your project." },
+      { "@type": "HowToStep", "position": 6, "name": "Write a custom module hook for other extensions", "text": "For .json5, .wasm, or any other extension, create a --import hook file that implements the `load()` function and registers it with `node --import ./loader.mjs src/index.mjs`." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ERR_UNKNOWN_FILE_EXTENSION</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".ts"</h1>
+  <p>Complete reference for <code>TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".ts"</code> — what it means, every cause, and all modern fixes including <code>tsx</code>, Node 22+ <code>--experimental-strip-types</code>, native TypeScript execution, and custom loader hooks.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js throws <code>ERR_UNKNOWN_FILE_EXTENSION</code> when its ESM loader encounters a file extension it cannot execute — most often <code>.ts</code> when <code>"type": "module"</code> is set in <code>package.json</code>. The fastest modern fix is replacing <code>ts-node</code> with <code>tsx</code> (<code>npx tsx src/index.ts</code>), or on Node 22.6+ using <code>node --experimental-strip-types src/index.ts</code>, or on Node 23.6+ just <code>node src/index.ts</code> (TypeScript stripping is on by default).
+  </div>
+
+  <h2>What is ERR_UNKNOWN_FILE_EXTENSION?</h2>
+  <p>
+    <code>ERR_UNKNOWN_FILE_EXTENSION</code> is thrown by Node.js's
+    <a href="https://nodejs.org/api/esm.html" rel="noopener noreferrer">ESM loader</a>
+    when it encounters a file whose extension it does not recognise as a natively executable
+    module format. Node.js natively handles <code>.js</code>, <code>.mjs</code>, <code>.cjs</code>,
+    and (since Node 22 with a flag) <code>.ts</code>. Every other extension — <code>.tsx</code>,
+    <code>.jsx</code>, <code>.json5</code>, <code>.wasm</code>, <code>.coffee</code>, etc. —
+    requires a registered loader or module hook.
+  </p>
+  <p>
+    The ESM loader is active when a file is treated as an ES module: either the file has a
+    <code>.mjs</code> extension, or the nearest <code>package.json</code> contains
+    <code>"type": "module"</code>. In CommonJS mode Node.js uses <code>require()</code> hooks
+    instead — that is why the same <code>ts-node</code> setup that works without
+    <code>"type": "module"</code> breaks immediately after you add it.
+  </p>
+
+  <h2>Full Error Message</h2>
+  <pre><code>TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".ts" for /project/src/index.ts
+    at new NodeError (node:internal/errors:405:5)
+    at Object.getFileProtocolModuleFormat [as file:] (node:internal/modules/esm/get_format:99:9)
+    at defaultGetFormat (node:internal/modules/esm/get_format:142:36)
+    at defaultLoad (node:internal/modules/esm/load:91:20)
+    at ESMLoader.load (node:internal/modules/esm/loader:407:26)
+    at ESMLoader.moduleProvider (node:internal/modules/esm/loader:326:58)
+    at new ModuleJob (node:internal/modules/esm/module_job:66:26)
+    at ESMLoader.#createModuleJob (node:internal/modules/esm/loader:378:17)
+    at ESMLoader.getModuleJob (node:internal/modules/esm/loader:356:34)
+    at async Promise.all (index 0) {
+  code: 'ERR_UNKNOWN_FILE_EXTENSION'
+}</code></pre>
+
+  <p>You may also see the same error for other extensions:</p>
+  <pre><code>TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".tsx" for /project/src/App.tsx
+TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".jsx" for /project/src/app.jsx
+TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".json5" for /project/config/app.json5
+TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".wasm" for /project/lib/crypto.wasm</code></pre>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Extension</th>
+        <th>Cause</th>
+        <th>Recommended fix</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>.ts</code></td>
+        <td><code>"type": "module"</code> in package.json; ts-node CJS hook not active under ESM loader</td>
+        <td><code>tsx</code>, or <code>node --experimental-strip-types</code> (Node 22.6+), or ts-node <code>--esm</code></td>
+      </tr>
+      <tr>
+        <td><code>.tsx</code></td>
+        <td>Same as .ts plus JSX transform needed (Node native stripping does not support .tsx)</td>
+        <td><code>tsx</code> (handles .tsx natively); ts-node with <code>--esm</code> also works</td>
+      </tr>
+      <tr>
+        <td><code>.ts</code> (Node 22.14 regression)</td>
+        <td>Node 22.14 broke native TS stripping (nodejs/node#57756); works in Node 22.13 and 22.15+</td>
+        <td>Upgrade to Node 22.15+ or use tsx as a workaround</td>
+      </tr>
+      <tr>
+        <td><code>.ts</code> (direct <code>node</code> without any loader)</td>
+        <td>Running <code>node src/index.ts</code> without <code>--experimental-strip-types</code> on Node &lt; 22.6</td>
+        <td>Add the flag, or use tsx, or compile first with tsc</td>
+      </tr>
+      <tr>
+        <td><code>.json5</code></td>
+        <td>No built-in loader for JSON5; Node only parses standard <code>.json</code></td>
+        <td>Custom <code>--import</code> loader hook using the <code>json5</code> package</td>
+      </tr>
+      <tr>
+        <td><code>.wasm</code></td>
+        <td>WebAssembly modules are not loaded by default in ESM mode</td>
+        <td><code>node --experimental-wasm-modules src/index.mjs</code> (Node 12+)</td>
+      </tr>
+      <tr>
+        <td>Any unknown extension</td>
+        <td>Custom in-house extension (e.g. <code>.vue</code> SSR, <code>.graphql</code> as module)</td>
+        <td>Write a custom <code>load()</code> module hook registered with <code>--import</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – ts-node with "type": "module" in package.json</h2>
+  <p>
+    This is by far the most common trigger. When <code>"type": "module"</code> is added to
+    <code>package.json</code> — often to enable <code>import</code>/<code>export</code> syntax —
+    Node.js switches to its ESM loader for <code>.js</code> files. The legacy ts-node integration
+    works by registering a <code>require()</code> hook that intercepts <code>.ts</code> files before
+    Node's CJS loader processes them. That hook is never called in ESM mode, so Node falls through
+    to its default handler and throws <code>ERR_UNKNOWN_FILE_EXTENSION</code>.
+  </p>
+  <pre><code>// package.json — the presence of "type": "module" triggers this error with ts-node
+{
+  "name": "my-app",
+  "type": "module",
+  "scripts": {
+    "dev": "ts-node src/index.ts"   // ← fails with ERR_UNKNOWN_FILE_EXTENSION
+  }
+}</code></pre>
+
+  <pre><code>// tsconfig.json — even with correct compilerOptions, ts-node's CJS hook won't fire in ESM mode
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "target": "ES2020",
+    "esModuleInterop": true
+  }
+}</code></pre>
+
+  <div class="callout warn">
+    <strong>Key insight:</strong> The error is <em>not</em> caused by a TypeScript misconfiguration —
+    it is caused by the module loader switching from CJS to ESM. ts-node's default install only hooks
+    the CJS loader.
+  </div>
+
+  <h2>Cause 2 – Running node src/index.ts directly on Node &lt; 22.6</h2>
+  <p>
+    Developers sometimes run <code>node src/index.ts</code> expecting Node.js to handle TypeScript.
+    Before Node 22.6, Node has no built-in TypeScript support and immediately rejects the extension.
+    This happens regardless of whether <code>"type": "module"</code> is present.
+  </p>
+  <pre><code># Node 20 / Node 18 — no native TypeScript support
+$ node src/index.ts
+TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".ts" for /project/src/index.ts</code></pre>
+
+  <h2>Cause 3 – Node 22.14 regression (nodejs/node#57756)</h2>
+  <p>
+    Node 22.14 (released January 2025) introduced a regression in
+    <code>--experimental-strip-types</code> that caused it to emit
+    <code>ERR_UNKNOWN_FILE_EXTENSION</code> for previously-working setups. The bug was tracked in
+    <a href="https://github.com/nodejs/node/issues/57756" rel="noopener noreferrer">nodejs/node#57756</a>.
+    Node 22.15 restores correct behavior.
+  </p>
+  <pre><code># Node 22.14 — broken
+$ node --experimental-strip-types src/index.ts
+TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".ts" ...
+
+# Node 22.15+ — works
+$ node --experimental-strip-types src/index.ts
+# runs successfully</code></pre>
+
+  <h2>Cause 4 – .tsx files (JSX + TypeScript)</h2>
+  <p>
+    <code>.tsx</code> files need both TypeScript type stripping and JSX transformation. Node 22+'s
+    native <code>--experimental-strip-types</code> does not support <code>.tsx</code> (only
+    <code>.ts</code> and <code>.mts</code>). ts-node's ESM mode requires additional JSX config.
+    <code>tsx</code> handles <code>.tsx</code> natively without any configuration.
+  </p>
+
+  <h2>Cause 5 – Unknown extensions: .json5, .wasm, .graphql, etc.</h2>
+  <p>
+    Any file extension Node.js does not recognise in ESM context — <code>.json5</code>,
+    <code>.wasm</code>, <code>.graphql</code>, <code>.yaml</code>, <code>.csv</code>, etc. — will
+    trigger this error when imported. These require a custom module hook.
+  </p>
+
+  <h2>Fix 1 – Use tsx (recommended for all TypeScript projects)</h2>
+  <p>
+    <code>tsx</code> is a Node.js CLI enhancement that transparently handles <code>.ts</code> and
+    <code>.tsx</code> files. It works with both CJS and ESM projects, requires zero configuration,
+    and is actively maintained to keep up with Node.js releases.
+  </p>
+  <pre><code># Install
+npm install --save-dev tsx
+
+# Run directly
+npx tsx src/index.ts
+
+# With nodemon
+npx nodemon --exec "npx tsx" src/index.ts</code></pre>
+
+  <pre><code>// package.json scripts
+{
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "dev:watch": "tsx watch src/index.ts"
+  }
+}</code></pre>
+
+  <pre><code>// tsx also supports --import mode for registering it as a loader
+// Useful when you still need `node` to be the process entry point (e.g. for debuggers):
+node --import tsx/esm src/index.ts    // ESM projects
+node --import tsx/cjs src/index.ts    // CJS projects
+node --import tsx    src/index.ts     // auto-detects mode</code></pre>
+
+  <div class="callout">
+    <strong>tsx vs ts-node:</strong> tsx uses esbuild under the hood, making it roughly 10x faster
+    than ts-node for startup. It does not perform type checking — run <code>tsc --noEmit</code>
+    separately for type safety. ts-node can optionally run the type checker inline but this is
+    significantly slower.
+  </div>
+
+  <h2>Fix 2 – Node 22.6+ native TypeScript stripping (--experimental-strip-types)</h2>
+  <p>
+    Node 22.6 added experimental native TypeScript support via the
+    <a href="https://nodejs.org/api/typescript.html" rel="noopener noreferrer">Amaro</a> library.
+    It strips type annotations from <code>.ts</code> files without transforming TypeScript-specific
+    syntax. No npm install required.
+  </p>
+  <pre><code># Node 22.6 to 23.5 — requires flag
+node --experimental-strip-types src/index.ts
+
+# Suppress the experimental warning
+node --experimental-strip-types --no-warnings src/index.ts
+
+# Node 23.6+ — enabled by default, no flag needed
+node src/index.ts</code></pre>
+
+  <pre><code>// package.json — use NODE_OPTIONS so all child processes inherit the flag
+{
+  "scripts": {
+    "dev": "node --experimental-strip-types src/index.ts"
+  }
+}
+
+// Or set in the environment (CI, Docker):
+// NODE_OPTIONS="--experimental-strip-types"</code></pre>
+
+  <div class="callout warn">
+    <strong>Limitations of --experimental-strip-types:</strong>
+    <ul>
+      <li>Only inline type annotations are stripped. TypeScript enums, namespaces, and decorators are <strong>not</strong> supported — use tsx or tsc for those.</li>
+      <li>Does <strong>not</strong> support <code>.tsx</code> files.</li>
+      <li>Import specifiers must keep the <code>.ts</code> extension (e.g. <code>import { foo } from './utils.ts'</code>), not <code>.js</code> as the TypeScript docs recommend for ESM.</li>
+      <li>Node 22.14 regression — update to 22.15+ if you hit ERR_UNKNOWN_FILE_EXTENSION after upgrading.</li>
+    </ul>
+  </div>
+
+  <h2>Fix 3 – ts-node ESM mode (legacy path)</h2>
+  <p>
+    If you need to stay on ts-node, enable its ESM integration. This requires changes to both
+    <code>tsconfig.json</code> and how you invoke the script.
+  </p>
+
+  <h3>Option A: tsconfig.json + --esm flag</h3>
+  <pre><code>// tsconfig.json
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",   // or "node16" / "nodenext"
+    "target": "ES2022",
+    "esModuleInterop": true,
+    "strict": true
+  },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  }
+}</code></pre>
+
+  <pre><code>// package.json scripts
+{
+  "scripts": {
+    "dev": "ts-node --esm src/index.ts"
+  }
+}</code></pre>
+
+  <h3>Option B: ts-node-esm binary</h3>
+  <pre><code>npx ts-node-esm src/index.ts</code></pre>
+
+  <h3>Option C: node --loader (deprecated in Node 20, still functional)</h3>
+  <pre><code># Basic
+node --loader ts-node/esm src/index.ts
+
+# Suppress deprecation warning on Node 20+
+node --no-warnings=ExperimentalWarning --loader ts-node/esm src/index.ts
+
+# Transpile-only mode (skips type checking, faster startup)
+node --no-warnings=ExperimentalWarning --loader ts-node/esm/transpile-only src/index.ts</code></pre>
+
+  <div class="callout warn">
+    <strong>ts-node ESM compatibility:</strong> ts-node v10.9.2 has known issues with Node 20+ ESM.
+    If you encounter persistent failures, use the <code>transpile-only</code> loader variant or
+    switch to tsx.
+  </div>
+
+  <h2>Fix 4 – Remove "type": "module" (CommonJS fallback)</h2>
+  <p>
+    If your project does not actually need ESM — you added <code>"type": "module"</code> because
+    something said to, but you use <code>require()</code> everywhere — simply remove it.
+    ts-node's default CJS hook will work correctly.
+  </p>
+  <pre><code>// package.json — before (broken with ts-node)
+{
+  "type": "module",
+  "scripts": {
+    "dev": "ts-node src/index.ts"
+  }
+}
+
+// package.json — after (works)
+{
+  "scripts": {
+    "dev": "ts-node src/index.ts"
+  }
+}</code></pre>
+
+  <pre><code>// tsconfig.json for CommonJS ts-node (no "type": "module" in package.json)
+{
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "target": "ES2020",
+    "esModuleInterop": true,
+    "strict": true
+  }
+}</code></pre>
+
+  <h2>Fix 5 – Compile TypeScript first, then run JavaScript</h2>
+  <p>
+    The cleanest production approach: compile <code>.ts</code> to <code>.js</code> with
+    <code>tsc</code>, then run the output with <code>node</code>. No loader, no experimental flags,
+    no runtime dependency on ts-node or tsx.
+  </p>
+  <pre><code>// tsconfig.json
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "nodenext",
+    "target": "ES2022",
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true,
+    "strict": true
+  },
+  "include": ["src"]
+}
+</code></pre>
+
+  <pre><code>// package.json
+{
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"          // tsx for dev, compiled JS for prod
+  }
+}</code></pre>
+
+  <h2>Fix 6 – Custom module hook for .json5 and other unknown extensions</h2>
+  <p>
+    For non-TypeScript extensions, register a custom <code>load()</code> hook using the
+    <code>--import</code> flag (Node 20.6+). This replaces the deprecated <code>--loader</code>
+    flag for production use.
+  </p>
+  <pre><code>// json5-loader.mjs — custom hook for .json5 imports
+import { readFileSync } from 'node:fs';
+import JSON5 from 'json5';
+
+// Node 20.6+ module hook API
+export async function load(url, context, nextLoad) {
+  if (url.endsWith('.json5')) {
+    const source = readFileSync(new URL(url), 'utf8');
+    const parsed = JSON5.parse(source);
+    return {
+      format: 'json',
+      shortCircuit: true,
+      source: JSON.stringify(parsed),
+    };
+  }
+  return nextLoad(url, context);
+}
+</code></pre>
+
+  <pre><code># Register the hook before loading the entry point
+node --import ./json5-loader.mjs src/index.mjs
+
+# Or set via NODE_OPTIONS for the whole process tree
+NODE_OPTIONS="--import ./json5-loader.mjs" node src/index.mjs</code></pre>
+
+  <pre><code>// src/index.mjs — importing a .json5 config
+import config from '../config/app.json5';   // works with the hook registered
+console.log(config.apiUrl);</code></pre>
+
+  <h2>Fix 7 – WebAssembly modules (.wasm)</h2>
+  <pre><code># Node 12+ experimental WebAssembly module support
+node --experimental-wasm-modules src/index.mjs</code></pre>
+
+  <pre><code>// src/index.mjs
+import wasmModule from './lib/crypto.wasm';
+// wasmModule is a WebAssembly.Module instance
+const instance = await WebAssembly.instantiate(wasmModule);
+console.log(instance.exports.add(1, 2));  // 3</code></pre>
+
+  <h2>Safe TypeScript Run Patterns</h2>
+  <p>Choose the right pattern for your use case:</p>
+
+  <h3>Pattern A — Development with tsx, production with compiled JS</h3>
+  <pre><code>// package.json
+{
+  "type": "module",
+  "scripts": {
+    "dev":   "tsx watch src/index.ts",
+    "build": "tsc --noEmit && tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}</code></pre>
+
+  <h3>Pattern B — Node 22+ native TypeScript (zero dependencies)</h3>
+  <pre><code>// package.json
+{
+  "type": "module",
+  "scripts": {
+    "dev":   "node --experimental-strip-types --watch src/index.ts",
+    "start": "node --experimental-strip-types src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^22.0.0"
+  }
+}</code></pre>
+
+  <h3>Pattern C — ts-node ESM (existing ts-node projects)</h3>
+  <pre><code>// package.json
+{
+  "type": "module",
+  "scripts": {
+    "dev": "node --no-warnings=ExperimentalWarning --loader ts-node/esm/transpile-only src/index.ts"
+  }
+}
+
+// tsconfig.json
+{
+  "compilerOptions": { "module": "ESNext", "moduleResolution": "bundler", "target": "ES2022" },
+  "ts-node": { "esm": true, "experimentalSpecifierResolution": "node" }
+}</code></pre>
+
+  <h3>Pattern D — nodemon + tsx for file-watching dev server</h3>
+  <pre><code>// nodemon.json
+{
+  "watch": ["src"],
+  "ext": "ts,tsx",
+  "exec": "tsx src/index.ts"
+}
+</code></pre>
+
+  <pre><code># Or inline (no nodemon.json)
+npx nodemon --watch src --ext ts,tsx --exec "tsx src/index.ts"</code></pre>
+
+  <h3>Pattern E — Docker / CI consistency</h3>
+  <pre><code># Dockerfile — compile TypeScript, run the output (no runtime loader needed)
+FROM node:22-alpine AS builder
+WORKDIR /app
+COPY package*.json tsconfig.json ./
+RUN npm ci
+COPY src ./src
+RUN npm run build        # runs tsc → dist/
+
+FROM node:22-alpine AS runner
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+RUN npm ci --omit=dev
+CMD ["node", "dist/index.js"]</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read the error — note the exact file extension and full path.</li>
+    <li>Check your <code>package.json</code> for <code>"type": "module"</code>. If present, ts-node's CJS hook is inactive.</li>
+    <li>Run <code>node --version</code>. Node 22.6+ supports <code>--experimental-strip-types</code>; Node 23.6+ runs <code>.ts</code> natively.</li>
+    <li>If on Node 22.14, upgrade to 22.15+ — 22.14 has a known regression in TypeScript stripping.</li>
+    <li>If using ts-node, verify you are calling it with <code>--esm</code> or via <code>ts-node-esm</code> when <code>"type": "module"</code> is set.</li>
+    <li>If the extension is <code>.tsx</code>, use <code>tsx</code> — neither ts-node's default ESM mode nor Node's native strip supports JSX.</li>
+    <li>For non-TypeScript extensions (<code>.json5</code>, <code>.wasm</code>), write a custom <code>--import</code> loader hook.</li>
+    <li>Check for a <code>NODE_OPTIONS</code> env var that may be adding or missing a required loader flag.</li>
+    <li>Confirm your <code>tsconfig.json</code> <code>module</code> matches your intended module system: <code>CommonJS</code> for CJS projects, <code>ESNext</code> or <code>NodeNext</code> for ESM.</li>
+    <li>Run <code>tsc --noEmit</code> separately to ensure type errors are not hiding the real problem.</li>
+  </ol>
+
+  <h2>Node.js Version Compatibility Table</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Node.js version</th>
+        <th>Native .ts support</th>
+        <th>Recommended approach</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Node 16, 18, 20</td>
+        <td>None</td>
+        <td><code>tsx</code>, or ts-node with <code>--esm</code>, or compile with tsc</td>
+      </tr>
+      <tr>
+        <td>Node 22.0 – 22.5</td>
+        <td>None</td>
+        <td><code>tsx</code>, or ts-node with <code>--esm</code>, or compile with tsc</td>
+      </tr>
+      <tr>
+        <td>Node 22.6 – 22.13</td>
+        <td><code>--experimental-strip-types</code> (inline types only)</td>
+        <td><code>node --experimental-strip-types</code> or <code>tsx</code></td>
+      </tr>
+      <tr>
+        <td>Node 22.14</td>
+        <td>Broken (regression #57756)</td>
+        <td><code>tsx</code>; avoid native stripping on this release</td>
+      </tr>
+      <tr>
+        <td>Node 22.15+</td>
+        <td><code>--experimental-strip-types</code> fixed</td>
+        <td><code>node --experimental-strip-types</code> or <code>tsx</code></td>
+      </tr>
+      <tr>
+        <td>Node 23.0 – 23.5</td>
+        <td><code>--experimental-strip-types</code></td>
+        <td><code>node --experimental-strip-types</code> or <code>tsx</code></td>
+      </tr>
+      <tr>
+        <td>Node 23.6+</td>
+        <td>Enabled by default (no flag needed for inline types)</td>
+        <td><code>node src/index.ts</code> works; use <code>tsx</code> for enums/decorators</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is TypeError [ERR_UNKNOWN_FILE_EXTENSION]?</summary>
+    <div class="faq-answer">
+      <p><code>ERR_UNKNOWN_FILE_EXTENSION</code> is thrown by Node.js's ESM loader when it encounters a file extension it cannot execute natively — most commonly <code>.ts</code> when <code>"type": "module"</code> is in <code>package.json</code>. Node natively handles <code>.js</code>, <code>.mjs</code>, <code>.cjs</code>, and <code>.json</code>. All other extensions require a registered loader or module hook to process the file before Node executes it.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_UNKNOWN_FILE_EXTENSION happen with ts-node and "type": "module"?</summary>
+    <div class="faq-answer">
+      <p>ts-node's default setup registers a <code>require()</code> hook for the CJS loader. When <code>"type": "module"</code> is present, Node uses its ESM loader instead — the CJS hook is never invoked. The ESM loader sees a <code>.ts</code> extension it does not understand and throws the error. The fix: enable ts-node's ESM mode (<code>--esm</code>), or switch to <code>tsx</code>, or use Node 22.6+ native TypeScript support.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the fastest fix for Unknown file extension ".ts"?</summary>
+    <div class="faq-answer">
+      <p>In 2026, the fastest fix is replacing <code>ts-node</code> with <code>tsx</code>: run <code>npx tsx src/index.ts</code> with no other changes. Alternatively, on Node 22.6+ add <code>--experimental-strip-types</code> to your <code>node</code> invocation. On Node 23.6+, <code>node src/index.ts</code> works out of the box.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_UNKNOWN_FILE_EXTENSION in ts-node without switching tools?</summary>
+    <div class="faq-answer">
+      <p>Add <code>"ts-node": { "esm": true, "experimentalSpecifierResolution": "node" }</code> to your <code>tsconfig.json</code> and run with <code>ts-node --esm src/index.ts</code>. Or use the <code>node --loader ts-node/esm</code> invocation. For Node 20+ where ts-node's ESM is known to be unstable, use <code>node --no-warnings=ExperimentalWarning --loader ts-node/esm/transpile-only src/index.ts</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_UNKNOWN_FILE_EXTENSION in Node 22?</summary>
+    <div class="faq-answer">
+      <p>Use <code>node --experimental-strip-types src/index.ts</code> on Node 22.6+. If you are on Node 22.14, upgrade to 22.15+ — 22.14 has a known regression. This flag strips inline TypeScript type annotations only; it does not support enums, namespaces, or <code>.tsx</code> files. For those, use <code>tsx</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_UNKNOWN_FILE_EXTENSION only appear in production or CI?</summary>
+    <div class="faq-answer">
+      <p>Local dev often uses nodemon or ts-node directly, which registers the CJS hook early. CI and production scripts frequently call <code>node src/index.ts</code> directly without any loader. The difference: CJS hook vs. bare Node invocation. Use <code>tsx</code> or Node 22+ <code>--experimental-strip-types</code> for consistent behavior across all environments.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_UNKNOWN_FILE_EXTENSION for .json5 files?</summary>
+    <div class="faq-answer">
+      <p>Write a custom <code>load()</code> module hook that intercepts <code>.json5</code> URLs, parses them with the <code>json5</code> npm package, and returns the result as JSON. Register it with <code>node --import ./json5-loader.mjs src/index.mjs</code>. See the code example in Fix 6 above.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Should I use ts-node or tsx in 2025?</summary>
+    <div class="faq-answer">
+      <p>For most projects in 2026, <code>tsx</code> is the better default. It is zero-config, handles both CJS and ESM, works with <code>.tsx</code> files, and is significantly faster at startup. ts-node remains useful for projects that need built-in type checking during development, or that rely on ts-node-specific plugins. On Node 22.6+ you can skip both tools for simple TypeScript files by using <code>--experimental-strip-types</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Does ERR_UNKNOWN_FILE_EXTENSION affect .tsx files?</summary>
+    <div class="faq-answer">
+      <p>Yes. <code>.tsx</code> triggers the same error. Node 22+'s <code>--experimental-strip-types</code> does not support <code>.tsx</code> — only <code>.ts</code> and <code>.mts</code>. Use <code>tsx</code> (the npm package) for <code>.tsx</code> files as it handles JSX transformation natively.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the --loader flag vs --import for fixing this error?</summary>
+    <div class="faq-answer">
+      <p><code>--loader</code> was the original way to register ESM hooks. It was deprecated in Node 20 in favour of <code>--import</code> with a module that calls <code>register()</code> (Node 20.6+). Both still work, but <code>--loader</code> emits a deprecation warning on Node 20+. For new projects, use <code>--import</code>: <code>node --import tsx src/index.ts</code>. For legacy ts-node setups using <code>--loader ts-node/esm</code>, add <code>--no-warnings=ExperimentalWarning</code> to suppress the warning.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/"><code>ERR_REQUIRE_ESM</code></a> — thrown when <code>require()</code> is used to load a pure ES module; the CJS-mode counterpart to this error</li>
+    <li><a href="https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/"><code>SyntaxError: Cannot use import statement outside a module</code></a> — thrown when <code>import</code> syntax is used in a file Node treats as CommonJS</li>
+    <li><a href="https://nodejs-errors.dev/ERR_UNSUPPORTED_DIR_IMPORT/"><code>ERR_UNSUPPORTED_DIR_IMPORT</code></a> — thrown when an ESM import targets a directory instead of a specific file</li>
+    <li><a href="https://nodejs-errors.dev/MODULE_NOT_FOUND/"><code>MODULE_NOT_FOUND</code></a> — the module cannot be found at all; check path and install</li>
+    <li><a href="https://nodejs-errors.dev/ERR_INVALID_PACKAGE_CONFIG/"><code>ERR_INVALID_PACKAGE_CONFIG</code></a> — malformed <code>package.json</code> (bad <code>"exports"</code> or <code>"type"</code> field) prevents ESM resolution</li>
+    <li><a href="https://nodejs-errors.dev/ERR_REQUIRE_ASYNC_MODULE/"><code>ERR_REQUIRE_ASYNC_MODULE</code></a> — thrown when <code>require()</code> is called on an async ES module; related ESM loading error</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-05-11 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#err_unknown_file_extension">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>
