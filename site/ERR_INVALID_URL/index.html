@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>TypeError [ERR_INVALID_URL]: Invalid URL – Node.js Fix</title>
+  <meta name="description" content="Fix TypeError [ERR_INVALID_URL]: Invalid URL in Node.js. Thrown by new URL() when a malformed string is passed — missing protocol, relative URL without base, undefined/empty string, fetch(), axios, undici, environment variable gotchas, and URL.canParse() guard." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ERR_INVALID_URL/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="TypeError [ERR_INVALID_URL]: Invalid URL – Node.js Fix" />
+  <meta property="og:description" content="Fix TypeError [ERR_INVALID_URL]: Invalid URL in Node.js. Thrown by new URL() when a malformed string is passed — missing protocol, relative URL without base, undefined/empty string, fetch(), axios, undici, environment variable gotchas, and URL.canParse() guard." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ERR_INVALID_URL/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "TypeError [ERR_INVALID_URL]: Invalid URL – Node.js Fix",
+    "description": "ERR_INVALID_URL is thrown by Node.js whenever new URL() receives a string that does not pass the WHATWG URL parser — including missing protocol, relative URLs without a base, empty or undefined strings, all-numeric hostnames, whitespace padding, and URL-encoding issues. Covers fetch(), axios, undici, Next.js, environment variable gotchas, URL.canParse() guard (Node 19+), and the second-argument base URL pattern.",
+    "url": "https://nodejs-errors.dev/ERR_INVALID_URL/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-07-29",
+    "dateModified": "2026-07-29"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is TypeError [ERR_INVALID_URL]: Invalid URL in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_INVALID_URL is a TypeError thrown by Node.js whenever new URL(input) or new URL(input, base) receives a string that fails the WHATWG URL parser. The thrown error object has a code property equal to 'ERR_INVALID_URL' and an input property containing the string that failed to parse. The WHATWG URL parser is stricter than the legacy url.parse() — it rejects relative URLs with no base, strings missing a protocol scheme, empty strings, undefined coerced to 'undefined', whitespace, and all-numeric hostnames."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_INVALID_URL: missing protocol or scheme?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The most common fix is to add the protocol. new URL('example.com/path') throws because it has no scheme; new URL('https://example.com/path') succeeds. For environment variables that omit the scheme, prepend it: new URL('https://' + process.env.API_HOST + '/api'). Use URL.canParse(input) on Node 19+ to test before constructing, or wrap in try/catch for older versions."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I pass a relative URL to new URL() without ERR_INVALID_URL?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Pass an absolute base URL as the second argument: new URL('/api/users', 'https://example.com') resolves correctly to https://example.com/api/users. Both arguments must be strings — if the base is undefined the error still fires. Validate the base URL first or derive it from process.env.BASE_URL with a fallback."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does fetch() throw ERR_INVALID_URL?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Node.js's built-in fetch() (and undici, which powers it) calls new URL() internally on the URL you pass. If that string is invalid — relative path, missing protocol, undefined coerced to the string 'undefined', or empty — the underlying new URL() throws ERR_INVALID_URL and it surfaces from your fetch() call. The fix is the same: pass a fully-qualified absolute URL string."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does axios throw TypeError [ERR_INVALID_URL]: Invalid URL?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Axios throws ERR_INVALID_URL when you call axios.get('/relative/path') without configuring a baseURL on the axios instance. Axios's Node.js adapter calls new URL() on the resolved path, which fails for a bare relative path. Fix: set baseURL on the axios instance (axios.create({ baseURL: 'https://api.example.com' })) or always pass absolute URLs."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I use URL.canParse() to avoid ERR_INVALID_URL?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "URL.canParse(input) and URL.canParse(input, base) were added in Node.js 19.9.0 / 18.17.0. They return true if new URL() would succeed and false if it would throw — with no try/catch overhead. Example: if (URL.canParse(input)) { const u = new URL(input); } else { /* handle invalid */ }. For older Node.js versions use a try/catch wrapper function."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_INVALID_URL happen in production but not locally?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The most common reason is a missing or mismatched environment variable. Locally you have a .env file or shell variable that sets API_URL or BASE_URL; in production (CI, Docker, Kubernetes, Vercel, Render) the variable is unset or set without the http:// prefix. process.env.API_URL being undefined causes new URL(undefined) to parse the literal string 'undefined', which throws. Always validate required env vars at startup."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between ERR_INVALID_URL and url.parse() behavior?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The legacy url.parse() was lenient and accepted many technically-invalid strings (bare hostnames, relative paths, all-numeric hostnames) without throwing. The WHATWG URL constructor (new URL()) follows the WHATWG URL Standard strictly and throws ERR_INVALID_URL for those same inputs. Node.js deprecated url.parse() in v11 because of security issues (host confusion attacks). The fix is to pass well-formed absolute URLs to new URL() rather than relying on url.parse() permissiveness."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ERR_INVALID_URL", "item": "https://nodejs-errors.dev/ERR_INVALID_URL/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix TypeError [ERR_INVALID_URL]: Invalid URL in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Read the error's input property", "text": "The thrown error object has an input property containing the exact string that failed to parse. Log it: catch(err) { console.error('Failed URL input:', err.input); }. This immediately reveals whether the value is undefined, an empty string, a relative path, or missing a scheme." },
+      { "@type": "HowToStep", "position": 2, "name": "Add a missing protocol scheme", "text": "If the input is a bare hostname like 'example.com/api', add the scheme: new URL('https://example.com/api'). For environment variables that contain only a host, prepend: new URL('https://' + process.env.API_HOST)." },
+      { "@type": "HowToStep", "position": 3, "name": "Use the second-argument base URL for relative paths", "text": "Relative URLs require a base: new URL('/api/users', 'https://example.com'). Both arguments must be strings. Derive the base from a validated environment variable or a constant." },
+      { "@type": "HowToStep", "position": 4, "name": "Guard with URL.canParse() on Node 19+", "text": "Use URL.canParse(input) or URL.canParse(input, base) to test validity without a try/catch. On older Node.js versions, wrap new URL() in a try/catch helper function." },
+      { "@type": "HowToStep", "position": 5, "name": "Validate environment variables at startup", "text": "Check all URL-valued environment variables when the application starts. Throw a descriptive error if they are missing, empty, or lack a protocol scheme. This prevents 'undefined' string literals from reaching new URL() at runtime." },
+      { "@type": "HowToStep", "position": 6, "name": "Fix axios: set a baseURL on the instance", "text": "When using axios, always configure baseURL on the instance via axios.create({ baseURL: 'https://api.example.com' }) so that relative path calls like instance.get('/users') resolve correctly." },
+      { "@type": "HowToStep", "position": 7, "name": "Trim whitespace before parsing", "text": "Leading or trailing whitespace (spaces, tabs, newlines) in a URL string causes ERR_INVALID_URL. Always call input.trim() before passing to new URL()." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ERR_INVALID_URL</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>TypeError [ERR_INVALID_URL]: Invalid URL</h1>
+  <span class="error-code">error code: <code>ERR_INVALID_URL</code></span>
+  <p>Complete reference — thrown by <code>new URL()</code> when the WHATWG URL parser rejects a malformed string. Covers every cause: missing protocol, relative URL without base, <code>undefined</code>/<code>null</code> input, empty string, whitespace, all-numeric hostname, IPv6 syntax, URL-encoding issues, <code>fetch()</code>/<code>axios</code>/<code>undici</code> indirect throws, environment variable gotchas, and the <code>URL.canParse()</code> guard introduced in Node 19.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> <code>TypeError [ERR_INVALID_URL]: Invalid URL</code> means <code>new URL(input)</code> (or a library calling it internally) received a string that the WHATWG URL parser rejects. Check <code>err.input</code> to see the exact string. The three most common fixes: (1) add a missing <code>https://</code> scheme, (2) pass an absolute base as the second argument — <code>new URL(path, base)</code> — for relative paths, or (3) validate the value before constructing: <code>URL.canParse(input)</code> (Node 19+) or a <code>try/catch</code> wrapper.
+  </div>
+
+  <h2>What is ERR_INVALID_URL?</h2>
+  <p>
+    <strong>ERR_INVALID_URL</strong> is a <code>TypeError</code> thrown by Node.js's implementation
+    of the <a href="https://url.spec.whatwg.org/" rel="noopener">WHATWG URL Standard</a> whenever
+    <code>new URL(input)</code> or <code>new URL(input, base)</code> receives a string that does
+    not conform to the standard. It replaced the permissive legacy <code>url.parse()</code>, which
+    was deprecated in Node.js v11 (and later marked for removal) due to security ambiguities.
+  </p>
+  <p>
+    The WHATWG URL parser is substantially stricter than its predecessor. Strings that
+    <code>url.parse()</code> would silently accept — bare hostnames, relative paths, all-numeric
+    hostnames — cause <code>new URL()</code> to throw immediately.
+  </p>
+  <p>
+    The error object has two notable properties beyond the standard <code>message</code> and
+    <code>code</code>: <code>err.input</code> holds the exact string that failed to parse, and
+    <code>err.code</code> is always <code>'ERR_INVALID_URL'</code>. Reading <code>err.input</code>
+    in your catch block immediately reveals whether the value was <code>undefined</code>, an empty
+    string, or missing a scheme.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error strings you will encounter:</strong><br>
+    <code>TypeError [ERR_INVALID_URL]: Invalid URL</code><br>
+    <code>TypeError [ERR_INVALID_URL]: Invalid URL: example.com/path</code><br>
+    <code>TypeError [ERR_INVALID_URL]: Invalid URL: /api/users</code><br>
+    <code>TypeError [ERR_INVALID_URL]: Invalid URL: undefined</code><br>
+    <code>TypeError [ERR_INVALID_URL]: Invalid URL: </code> (empty string)<br>
+    <code>TypeError: Failed to parse URL from /relative/path</code> (undici / Node built-in fetch)<br>
+    <code>TypeError [ERR_INVALID_URL]: Invalid URL: http://</code> (scheme present but no host)
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>// Triggering code
+const { URL } = require('url'); // or globalThis.URL in modern Node.js
+const endpoint = new URL(process.env.API_URL); // API_URL is undefined
+
+// Stack trace
+TypeError [ERR_INVALID_URL]: Invalid URL
+    at new URL (node:internal/url:775:36)
+    at Object.&lt;anonymous&gt; (/app/src/client.js:5:20)
+    at Module._compile (node:internal/modules/cjs/loader:1364:14)
+    at Object.Module._extensions..js (node:internal/modules/cjs/loader:1422:10)
+    at Module.load (node:internal/modules/cjs/loader:1203:32)
+    at Function.Module._load (node:internal/modules/cjs/loader:1019:12) {
+  input: 'undefined',   // ← the string that was parsed: process.env returned undefined,
+  code: 'ERR_INVALID_URL'   //   coerced to the literal string 'undefined'
+}</code></pre>
+
+  <h2>Error Object Properties</h2>
+  <table>
+    <thead><tr><th>Property</th><th>Value</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>err.name</code></td>
+        <td><code>'TypeError'</code></td>
+        <td>Always a <code>TypeError</code> subclass</td>
+      </tr>
+      <tr>
+        <td><code>err.code</code></td>
+        <td><code>'ERR_INVALID_URL'</code></td>
+        <td>Node.js error code — use for <code>instanceof</code>-style checks</td>
+      </tr>
+      <tr>
+        <td><code>err.input</code></td>
+        <td>The string passed to <code>new URL()</code></td>
+        <td>Log this first — it tells you exactly what was wrong</td>
+      </tr>
+      <tr>
+        <td><code>err.message</code></td>
+        <td><code>'Invalid URL'</code> or <code>'Invalid URL: &lt;input&gt;'</code></td>
+        <td>Varies slightly across Node.js versions</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Failing input example</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Missing protocol scheme</td>
+        <td><code>'example.com/api'</code></td>
+        <td>Add <code>https://</code>: <code>'https://example.com/api'</code></td>
+      </tr>
+      <tr>
+        <td>Relative URL without base</td>
+        <td><code>'/api/users'</code></td>
+        <td><code>new URL('/api/users', 'https://example.com')</code></td>
+      </tr>
+      <tr>
+        <td><code>undefined</code> env var coerced to string</td>
+        <td><code>'undefined'</code></td>
+        <td>Validate env vars at startup; throw early if missing</td>
+      </tr>
+      <tr>
+        <td>Empty string</td>
+        <td><code>''</code></td>
+        <td>Guard with <code>if (!input)</code> before calling <code>new URL()</code></td>
+      </tr>
+      <tr>
+        <td>Whitespace in URL string</td>
+        <td><code>'  https://example.com  '</code></td>
+        <td>Call <code>input.trim()</code> before parsing</td>
+      </tr>
+      <tr>
+        <td>Scheme present but host missing</td>
+        <td><code>'http://'</code></td>
+        <td>Validate that the env var or config value is complete</td>
+      </tr>
+      <tr>
+        <td>All-numeric hostname</td>
+        <td><code>'http://810492618439'</code></td>
+        <td>WHATWG parser treats all-digit hosts as IPv4 — value overflows; ensure real hostname</td>
+      </tr>
+      <tr>
+        <td>Malformed IPv6 literal</td>
+        <td><code>'http://[::1'</code> (unclosed bracket)</td>
+        <td>Use correct IPv6 syntax: <code>'http://[::1]:3000'</code></td>
+      </tr>
+      <tr>
+        <td>Unencoded special characters that invalidate the URL</td>
+        <td><code>'https://example.com/path with spaces'</code></td>
+        <td>Encode with <code>encodeURIComponent()</code> on path segments</td>
+      </tr>
+      <tr>
+        <td>Double colon / garbled scheme</td>
+        <td><code>'http:://example.com'</code></td>
+        <td>Fix the scheme separator: one colon, two slashes</td>
+      </tr>
+      <tr>
+        <td>axios relative path without <code>baseURL</code></td>
+        <td><code>axios.get('/users')</code></td>
+        <td><code>axios.create({ baseURL: 'https://api.example.com' })</code></td>
+      </tr>
+      <tr>
+        <td><code>fetch()</code> / undici with invalid URL</td>
+        <td><code>fetch(process.env.URL)</code> where env is unset</td>
+        <td>Validate the variable before calling <code>fetch()</code></td>
+      </tr>
+      <tr>
+        <td>Punycode / IDN domain edge case</td>
+        <td><code>'http://xn--www-4m0aa.hergivenhair.com/?y=...'</code></td>
+        <td>Verify Punycode encoding is correct; some IDNs rejected by WHATWG parser differ from browsers</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Missing Protocol Scheme</h2>
+  <p>
+    The single most common cause. <code>new URL('example.com/path')</code> fails because the WHATWG
+    URL parser requires an absolute URL with a scheme. <code>url.parse('example.com/path')</code>
+    used to return an object with <code>pathname: 'example.com/path'</code>; the new parser throws.
+  </p>
+  <pre><code>// ❌ Missing scheme — throws ERR_INVALID_URL
+new URL('example.com/api/v1');
+new URL('example.com');
+new URL('//example.com/path');  // protocol-relative also fails without a base
+
+// ✅ Absolute URL with scheme
+new URL('https://example.com/api/v1');
+new URL('http://localhost:3000/health');
+
+// ✅ Fix environment variable that holds only a host
+const host = process.env.API_HOST; // 'api.example.com'
+const endpoint = new URL('https://' + host + '/v1/users');
+
+// ✅ ESM equivalent — same API
+import { URL } from 'node:url';
+const u = new URL('https://api.example.com/v1/users');</code></pre>
+
+  <h2>Cause 2 – Relative URL Without a Base</h2>
+  <p>
+    <code>new URL('/api/users')</code> throws because a path-only string is not a valid absolute URL.
+    The fix is to provide an absolute base URL as the second argument. The constructor resolves the
+    relative reference against the base, exactly as a browser would.
+  </p>
+  <pre><code>// ❌ Relative path — no base provided
+new URL('/api/users');       // ERR_INVALID_URL
+new URL('./config');         // ERR_INVALID_URL
+new URL('api/users');        // ERR_INVALID_URL
+
+// ✅ Provide an absolute base as the second argument
+new URL('/api/users', 'https://api.example.com');
+// → https://api.example.com/api/users
+
+new URL('./config', 'https://api.example.com/v1/');
+// → https://api.example.com/v1/config
+
+// ✅ Derive base from a validated env var
+const BASE = new URL(process.env.API_BASE_URL ?? 'https://api.example.com');
+const endpoint = new URL('/users', BASE);
+
+// ✅ ESM — import.meta.url as a base for local file paths
+import { fileURLToPath } from 'node:url';
+const configURL = new URL('./config.json', import.meta.url);
+const configPath = fileURLToPath(configURL); // → absolute file path</code></pre>
+
+  <div class="callout">
+    <strong>Tip — import.meta.url as a base:</strong> In ESM modules, <code>import.meta.url</code>
+    is the <code>file://</code> URL of the current module. You can use it as a base to resolve
+    sibling files: <code>new URL('./data.json', import.meta.url)</code>. This is the idiomatic ESM
+    replacement for <code>path.join(__dirname, 'data.json')</code> in CommonJS.
+  </div>
+
+  <h2>Cause 3 – undefined or null Input (Environment Variables)</h2>
+  <p>
+    When <code>process.env.SOME_VAR</code> is not set, it returns <code>undefined</code>.
+    JavaScript coerces <code>undefined</code> to the string <code>'undefined'</code> during
+    string concatenation or when passed directly to <code>new URL()</code>. The parser then tries
+    to parse the literal string <code>'undefined'</code> and throws. This is the dominant cause
+    of the error appearing in production but not locally (where the <code>.env</code> file is
+    present).
+  </p>
+  <pre><code>// Environment: API_URL is not set in this deployment
+
+// ❌ process.env.API_URL is undefined — coerced to the string 'undefined'
+const url = new URL(process.env.API_URL);
+// TypeError [ERR_INVALID_URL]: Invalid URL  { input: 'undefined' }
+
+// ❌ Same trap with null
+const url2 = new URL(null);
+// TypeError [ERR_INVALID_URL]: Invalid URL  { input: 'null' }
+
+// ✅ Validate at startup — fail fast with a clear message
+function requireEnvUrl(name) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `Missing required environment variable: ${name}\n` +
+      `Set it to a full URL including scheme, e.g. https://api.example.com`
+    );
+  }
+  // Also validate it is actually a parseable URL
+  try {
+    return new URL(value);
+  } catch {
+    throw new Error(
+      `Environment variable ${name} is not a valid URL: "${value}"\n` +
+      `Ensure it includes the scheme (https://) and a valid hostname.`
+    );
+  }
+}
+
+const API_BASE = requireEnvUrl('API_URL'); // throws at startup, not mid-request
+
+// ✅ Nullish coalescing fallback (only if a default makes sense)
+const endpoint = new URL(process.env.API_URL ?? 'https://api.example.com');</code></pre>
+
+  <h2>Cause 4 – Empty String or Whitespace</h2>
+  <p>
+    An empty string or a string containing only whitespace is not a valid URL. Config files, form
+    inputs, or database values may hold empty strings when not configured. Leading or trailing
+    whitespace (newlines from <code>.env</code> files, spaces from copy-paste) causes the same error.
+  </p>
+  <pre><code>// ❌ Empty string
+new URL('');           // ERR_INVALID_URL { input: '' }
+new URL('   ');        // ERR_INVALID_URL { input: '   ' }
+
+// ❌ .env file value with accidental newline:
+// API_URL=https://api.example.com\n  ← trailing newline
+new URL('https://api.example.com\n'); // ERR_INVALID_URL
+
+// ✅ Always trim before parsing
+function parseUrl(raw) {
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    throw new TypeError(`Expected a non-empty URL string, got: ${JSON.stringify(raw)}`);
+  }
+  return new URL(raw.trim());
+}
+
+parseUrl(process.env.API_URL);       // trims whitespace and newlines
+parseUrl(userInput.trim());          // for user-supplied values</code></pre>
+
+  <h2>Cause 5 – fetch(), undici, and axios Throwing Internally</h2>
+  <p>
+    Node.js 18+ built-in <code>fetch()</code> is powered by undici, which calls <code>new URL()</code>
+    internally. When you pass an invalid URL to <code>fetch()</code>, the <code>ERR_INVALID_URL</code>
+    error originates inside undici's URL resolution and surfaces from your <code>fetch()</code> call.
+    The stack trace will show <code>node:internal/deps/undici/undici</code>.
+  </p>
+  <p>
+    axios on Node.js uses the same WHATWG URL constructor in its adapter since v1.x. Passing a
+    relative path like <code>axios.get('/users')</code> without a <code>baseURL</code> configured
+    causes <code>ERR_INVALID_URL</code>.
+  </p>
+  <pre><code>// ── fetch() (Node 18+ built-in / undici) ──────────────────────────────────
+
+// ❌ Relative URL — fetch() cannot resolve it without a base
+await fetch('/api/health');
+// TypeError [ERR_INVALID_URL]: Invalid URL
+
+// ❌ Undefined env var coerced to 'undefined'
+await fetch(process.env.SERVICE_URL + '/health');
+// TypeError [ERR_INVALID_URL]: Invalid URL: undefined/health
+
+// ✅ Always use an absolute URL
+await fetch('https://api.example.com/health');
+
+// ✅ Compose from a validated base
+const BASE_URL = process.env.SERVICE_URL?.trimEnd().replace(/\/$/, '')
+  ?? (() => { throw new Error('SERVICE_URL is not set'); })();
+await fetch(`${BASE_URL}/health`);
+
+// ── axios ──────────────────────────────────────────────────────────────────
+
+const axios = require('axios');
+
+// ❌ Relative path without a baseURL configured on the instance
+axios.get('/users');
+// TypeError [ERR_INVALID_URL]: Invalid URL
+
+// ✅ Create an instance with baseURL
+const api = axios.create({
+  baseURL: process.env.API_BASE_URL ?? 'https://api.example.com',
+  timeout: 5000,
+});
+await api.get('/users'); // resolves to https://api.example.com/users
+
+// ── undici (direct) ────────────────────────────────────────────────────────
+
+import { request } from 'undici';
+
+// ❌ Invalid URL
+await request('example.com/api'); // no scheme → ERR_INVALID_URL
+
+// ✅ Full URL required
+await request('https://example.com/api');</code></pre>
+
+  <h2>Cause 6 – All-Numeric Hostname</h2>
+  <p>
+    The WHATWG URL parser treats an all-numeric hostname as an IPv4 address. If the numeric value
+    overflows a valid IPv4 range (0–4294967295), the URL is rejected. Legacy tools like
+    <code>url.parse()</code>, <code>curl</code>, and <code>ping</code> may accept the same hostname
+    without error, making this a subtle production-only failure.
+  </p>
+  <pre><code>// ❌ All-numeric hostname exceeds IPv4 range — WHATWG rejects it
+new URL('http://810492618439');
+// TypeError [ERR_INVALID_URL]: Invalid URL
+
+// ❌ Also fails — the WHATWG parser interprets '999999' as the number 999999
+// which is a valid IPv4 octet overflow
+new URL('http://999999:8080/path');
+
+// url.parse() (legacy) would silently accept these — that leniency was intentional
+// but created host-confusion security issues
+
+// ✅ Use a real hostname or valid IP
+new URL('http://api.internal:8080/path');
+new URL('http://192.168.1.10:8080/path');
+
+// ✅ Diagnostic: check whether a hostname is all-numeric
+function isAllNumericHost(hostname) {
+  return /^\d+$/.test(hostname);
+}
+
+const host = extractHostFromConfig(); // e.g. '810492618439'
+if (isAllNumericHost(host)) {
+  throw new Error(`Config host "${host}" is all-numeric and rejected by the WHATWG URL parser.`);
+}</code></pre>
+
+  <h2>Cause 7 – Malformed IPv6 Literal</h2>
+  <p>
+    IPv6 addresses in URLs must be wrapped in square brackets with correct syntax.
+    Common mistakes include unclosed brackets, missing brackets entirely, or using a colon
+    separator instead of the bracket form.
+  </p>
+  <pre><code>// ❌ IPv6 without brackets
+new URL('http://::1:3000/api');         // ERR_INVALID_URL
+new URL('http://2001:db8::1/api');      // ERR_INVALID_URL
+
+// ❌ Unclosed bracket
+new URL('http://[::1:3000/api');        // ERR_INVALID_URL
+
+// ✅ Correct IPv6 URL syntax
+new URL('http://[::1]:3000/api');
+new URL('https://[2001:db8::1]/api');
+new URL('http://[::1]/');              // port is optional</code></pre>
+
+  <h2>Cause 8 – URL-Encoding and Special Characters</h2>
+  <p>
+    Spaces and certain special characters in path segments or query strings cause the URL parser to
+    fail when they appear in positions where only percent-encoded characters are valid. Use
+    <code>encodeURIComponent()</code> on user-supplied path segments and query parameter values.
+    Do not encode the entire URL — only the dynamic parts.
+  </p>
+  <pre><code>// ❌ Space in path — ERR_INVALID_URL in strict parsing contexts
+// Note: new URL() actually accepts spaces in paths in many Node.js versions,
+// but other characters (e.g. raw [ ] in query strings) cause failures
+new URL('https://example.com/search?q=hello world'); // accepted — URL encodes space
+new URL('https://example.com/path[0]');              // may throw depending on Node version
+
+// ✅ Encode dynamic segments properly
+const query = 'node.js error [ERR_INVALID_URL]';
+const searchUrl = new URL('https://example.com/search');
+searchUrl.searchParams.set('q', query); // URLSearchParams handles encoding automatically
+console.log(searchUrl.href);
+// → https://example.com/search?q=node.js+error+%5BERR_INVALID_URL%5D
+
+// ✅ Encode path segments individually
+const username = 'john doe/admin';
+const profileUrl = new URL(
+  `/users/${encodeURIComponent(username)}/profile`,
+  'https://api.example.com'
+);
+
+// ✅ Use URL object properties to build URLs safely — avoids manual string concatenation
+const u = new URL('https://api.example.com/v2/search');
+u.searchParams.append('filter', 'status=active&type=user');
+u.searchParams.append('page', '1');
+console.log(u.toString()); // properly encoded</code></pre>
+
+  <h2>Cause 9 – Next.js and SSR Framework Gotchas</h2>
+  <p>
+    In Next.js API routes, Server Actions, and middleware, <code>new URL()</code> is called
+    internally by the framework on request URLs, <code>NEXTAUTH_URL</code>, and other configuration
+    values. Missing environment variables in Vercel/Netlify deployments are a very common trigger.
+  </p>
+  <pre><code>// next.config.js — ensure env vars are present before the build/start
+// ERR_INVALID_URL in Next.js middleware often means NEXTAUTH_URL is unset
+
+// ── Next.js API route ──────────────────────────────────────────────────────
+// ❌ process.env.NEXTAUTH_URL not set in production → 'undefined'
+export default function handler(req, res) {
+  const callbackUrl = new URL('/api/auth/callback', process.env.NEXTAUTH_URL);
+  // TypeError [ERR_INVALID_URL]: Invalid URL { input: 'undefined' }
+}
+
+// ✅ Validate at startup in next.config.js or a dedicated env check file
+// env-check.js (imported at the top of next.config.js)
+const REQUIRED_URLS = ['NEXTAUTH_URL', 'NEXT_PUBLIC_API_URL'];
+for (const key of REQUIRED_URLS) {
+  if (!process.env[key]) {
+    throw new Error(`Missing env var: ${key} — set it in .env.local or Vercel dashboard`);
+  }
+  try { new URL(process.env[key]); } catch {
+    throw new Error(`${key}="${process.env[key]}" is not a valid URL — include https://`);
+  }
+}
+
+// ── Next.js App Router — Server Component ──────────────────────────────────
+// Use the request URL (already absolute) as the base for relative resolution
+import { headers } from 'next/headers';
+
+export default async function Page() {
+  const headersList = headers();
+  const host = headersList.get('host');
+  const proto = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+  const baseUrl = `${proto}://${host}`;
+
+  const apiUrl = new URL('/api/data', baseUrl); // safe — base is always valid
+  const data = await fetch(apiUrl.toString()).then(r => r.json());
+  return &lt;pre&gt;{JSON.stringify(data)}&lt;/pre&gt;;
+}</code></pre>
+
+  <h2>Safe URL Parsing Patterns</h2>
+
+  <h3>Pattern A — URL.canParse() guard (Node 19.9.0 / 18.17.0+)</h3>
+  <pre><code>// URL.canParse() returns true/false — no try/catch needed
+// Available from Node.js 19.9.0 and backported to 18.17.0
+
+// Check absolute URL
+if (URL.canParse(userInput)) {
+  const u = new URL(userInput);
+  console.log(u.hostname);
+} else {
+  console.error('Invalid URL:', userInput);
+}
+
+// Check relative URL against a base
+if (URL.canParse(path, 'https://api.example.com')) {
+  const u = new URL(path, 'https://api.example.com');
+  await fetch(u.toString());
+} else {
+  throw new TypeError(`Cannot resolve path "${path}" against base URL`);
+}
+
+// ESM
+import { URL } from 'node:url';
+const valid = URL.canParse(process.env.WEBHOOK_URL ?? '');
+if (!valid) throw new Error('WEBHOOK_URL is not a valid URL');</code></pre>
+
+  <h3>Pattern B — try/catch wrapper (all Node.js versions)</h3>
+  <pre><code>// CJS
+function parseUrlSafe(input, base) {
+  try {
+    return base ? new URL(input, base) : new URL(input);
+  } catch (err) {
+    if (err.code === 'ERR_INVALID_URL') {
+      return null; // or re-throw with more context
+    }
+    throw err; // unexpected error — rethrow
+  }
+}
+
+const url = parseUrlSafe(process.env.API_URL);
+if (!url) {
+  console.error('API_URL is not set or invalid');
+  process.exit(1);
+}
+
+// ESM async factory — validate all URLs at module load time
+// config.mjs
+function requireUrl(envKey, fallback) {
+  const raw = (process.env[envKey] ?? fallback ?? '').trim();
+  try {
+    return new URL(raw);
+  } catch {
+    throw new Error(
+      `${envKey}="${raw}" is not a valid URL.\n` +
+      `Check that it includes a scheme (https://) and a valid hostname.`
+    );
+  }
+}
+
+export const API_BASE  = requireUrl('API_BASE_URL', 'https://api.example.com');
+export const AUTH_BASE = requireUrl('AUTH_URL');    // throws if unset or invalid</code></pre>
+
+  <h3>Pattern C — Safe URL builder for dynamic segments</h3>
+  <pre><code>// Build URLs from parts without manual string concatenation
+// This avoids accidental protocol injection or path traversal
+
+function buildApiUrl(base, path, params = {}) {
+  // Validate base at call time (or use a module-level constant)
+  const url = new URL(path, base);
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  return url;
+}
+
+const base = new URL('https://api.example.com');
+
+// Works correctly for all inputs:
+buildApiUrl(base, '/v1/users', { page: 1, limit: 20 });
+buildApiUrl(base, '/v1/search', { q: 'node [ERR_INVALID_URL]', lang: 'en' });
+
+// With path segments — use encodeURIComponent for untrusted segments
+const userId = '42/admin'; // adversarial segment
+const userUrl = new URL(`/v1/users/${encodeURIComponent(userId)}`, base);</code></pre>
+
+  <h3>Pattern D — Detecting the error code reliably</h3>
+  <pre><code>// Always check err.code rather than parsing err.message (messages change across versions)
+async function fetchWithValidation(rawUrl) {
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch (err) {
+    if (err.code === 'ERR_INVALID_URL') {
+      throw new TypeError(
+        `fetchWithValidation received an invalid URL: "${err.input}"\n` +
+        `Ensure the URL includes a scheme (https://) and a valid hostname.`
+      );
+    }
+    throw err;
+  }
+
+  const res = await fetch(url);
+  return res.json();
+}</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Check <code>err.input</code> in your catch block — it shows the exact string <code>new URL()</code> received. If it is <code>'undefined'</code> or <code>'null'</code>, trace back the variable that should have been set.</li>
+    <li>If the input is a bare hostname or path, add the <code>https://</code> scheme or use the second-argument base pattern: <code>new URL(path, base)</code>.</li>
+    <li>For environment variables: confirm the variable is set in every deployment environment (local, staging, production, Docker, CI). Check for missing <code>http://</code> or <code>https://</code> prefix.</li>
+    <li>Call <code>input.trim()</code> before <code>new URL(input)</code> to strip accidental whitespace from <code>.env</code> files or config sources.</li>
+    <li>For fetch / axios errors: look at the stack trace to confirm the error originates from <code>new URL()</code>. If using axios, ensure <code>baseURL</code> is set on the instance when making relative requests.</li>
+    <li>For Next.js / Vercel: check the Vercel dashboard environment variables tab. <code>NEXTAUTH_URL</code> must include the full scheme and hostname. Run <code>vercel env pull</code> to sync to your local <code>.env.local</code>.</li>
+    <li>Add startup validation: call <code>new URL(process.env.REQUIRED_URL)</code> at application boot and let it throw before accepting any traffic — this turns a mid-request crash into a clear startup failure.</li>
+    <li>On Node 19.9+ / 18.17+, use <code>URL.canParse(input)</code> to test validity without a try/catch — useful in hot paths.</li>
+    <li>For all-numeric hostnames: check whether the hostname value is actually a numeric ID that was accidentally used where a hostname should go.</li>
+    <li>If the error appears in a library stack trace (undici, node-fetch, got, superagent): the library is calling <code>new URL()</code> on the URL you passed — the fix is in your code, not the library.</li>
+  </ol>
+
+  <div class="callout warn">
+    <strong>Do not use url.parse() as a workaround:</strong> The legacy <code>url.parse()</code>
+    is deprecated (Node.js 11+) and slated for removal. It was deprecated precisely because its
+    leniency enabled host-confusion attacks. The correct fix is to pass well-formed absolute URLs
+    to <code>new URL()</code>, not to fall back to the permissive legacy parser.
+  </div>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is TypeError [ERR_INVALID_URL]: Invalid URL in Node.js?</summary>
+    <div class="faq-answer">
+      <p><code>ERR_INVALID_URL</code> is a <code>TypeError</code> thrown by Node.js whenever <code>new URL(input)</code> or <code>new URL(input, base)</code> receives a string that fails the WHATWG URL parser. The thrown error has a <code>code</code> of <code>'ERR_INVALID_URL'</code> and an <code>input</code> property holding the exact string that was rejected. The WHATWG parser is stricter than the legacy <code>url.parse()</code> — it rejects relative URLs with no base, strings missing a protocol scheme, empty strings, <code>undefined</code> coerced to the string <code>'undefined'</code>, whitespace, and all-numeric hostnames.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_INVALID_URL caused by a missing protocol / scheme?</summary>
+    <div class="faq-answer">
+      <p>Add the scheme. <code>new URL('example.com/path')</code> throws; <code>new URL('https://example.com/path')</code> succeeds. For environment variables that contain only a hostname, prepend the scheme:</p>
+      <pre><code>// ❌ Missing scheme
+new URL(process.env.API_HOST);  // 'api.example.com' → ERR_INVALID_URL
+
+// ✅ Prepend scheme
+new URL('https://' + process.env.API_HOST);</code></pre>
+      <p>Or better — store the full URL including scheme in the environment variable and validate at startup.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I pass a relative URL to new URL() without getting ERR_INVALID_URL?</summary>
+    <div class="faq-answer">
+      <p>Use the two-argument form: <code>new URL(relativePathOrRef, absoluteBase)</code>. The second argument must be a valid absolute URL string or a <code>URL</code> object.</p>
+      <pre><code>new URL('/api/users', 'https://api.example.com');
+// → https://api.example.com/api/users
+
+new URL('../config', 'https://api.example.com/v2/');
+// → https://api.example.com/config
+
+// In ESM — use import.meta.url as the base for sibling files
+const dataUrl = new URL('./data.json', import.meta.url);</code></pre>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does fetch() throw TypeError [ERR_INVALID_URL]: Invalid URL?</summary>
+    <div class="faq-answer">
+      <p>Node.js's built-in <code>fetch()</code> (backed by undici) calls <code>new URL()</code> internally on the URL argument. If that string is invalid — a relative path, an undefined environment variable coerced to <code>'undefined'</code>, or an empty string — <code>new URL()</code> throws <code>ERR_INVALID_URL</code> and it surfaces from your <code>fetch()</code> call. The fix is the same as for any direct <code>new URL()</code> call: pass a valid absolute URL string.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does axios throw TypeError [ERR_INVALID_URL]: Invalid URL?</summary>
+    <div class="faq-answer">
+      <p>Axios throws <code>ERR_INVALID_URL</code> when you call <code>axios.get('/relative/path')</code> without a <code>baseURL</code> configured on the instance. Axios's Node.js adapter uses the WHATWG <code>URL</code> constructor to resolve the full request URL. A bare relative path is not a valid URL. Fix by creating an axios instance with a <code>baseURL</code>:</p>
+      <pre><code>const api = axios.create({
+  baseURL: process.env.API_BASE_URL ?? 'https://api.example.com',
+});
+await api.get('/users'); // resolves correctly</code></pre>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I use URL.canParse() to avoid ERR_INVALID_URL?</summary>
+    <div class="faq-answer">
+      <p><code>URL.canParse(input)</code> was added in Node.js 19.9.0 and backported to 18.17.0. It returns <code>true</code> if <code>new URL(input)</code> would succeed, <code>false</code> otherwise — no try/catch needed.</p>
+      <pre><code>// Single-argument form
+if (URL.canParse(userInput)) {
+  const u = new URL(userInput);
+} else {
+  return res.status(400).json({ error: 'Invalid URL' });
+}
+
+// Two-argument form — checks relative reference against base
+if (URL.canParse(path, 'https://api.example.com')) {
+  const resolved = new URL(path, 'https://api.example.com');
+}</code></pre>
+      <p>For Node.js versions before 18.17.0, use a <code>try/catch</code> wrapper function instead.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_INVALID_URL happen in production but not locally?</summary>
+    <div class="faq-answer">
+      <p>Almost always an environment variable that exists in your local <code>.env</code> file but is not set in the production environment (Vercel, Heroku, Docker, Kubernetes, GitHub Actions). When the variable is missing, <code>process.env.MY_URL</code> returns <code>undefined</code>, which JavaScript coerces to the string <code>'undefined'</code> — an invalid URL. Fix by adding the variable to your deployment platform's environment configuration and validating all URL env vars at application startup.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between ERR_INVALID_URL and url.parse() behavior?</summary>
+    <div class="faq-answer">
+      <p>The legacy <code>require('url').parse()</code> was deliberately lenient — it parsed bare hostnames, relative paths, all-numeric hostnames, and protocol-relative strings without throwing. It was deprecated in Node.js v11 because this leniency created host-confusion security vulnerabilities. The WHATWG <code>URL</code> constructor (<code>new URL()</code>) follows the WHATWG URL Standard strictly and throws <code>ERR_INVALID_URL</code> for inputs the legacy parser would accept. The correct fix is not to fall back to <code>url.parse()</code> but to pass well-formed absolute URLs.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_INVALID_URL in Next.js / Vercel?</summary>
+    <div class="faq-answer">
+      <p>The most common cause in Next.js is <code>NEXTAUTH_URL</code> or another URL environment variable missing from the Vercel/Netlify deployment. Steps to fix:</p>
+      <ol>
+        <li>Go to your Vercel project → Settings → Environment Variables</li>
+        <li>Add <code>NEXTAUTH_URL</code> (or the relevant variable) with a full URL including <code>https://</code></li>
+        <li>Redeploy — environment variable changes require a new deployment</li>
+        <li>Run <code>vercel env pull .env.local</code> locally to sync production env vars</li>
+      </ol>
+      <p>Add startup validation in <code>next.config.js</code> to catch this before deployment reaches users.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/ERR_INVALID_ARG_TYPE/"><code>TypeError [ERR_INVALID_ARG_TYPE]</code></a> — thrown when a Node.js built-in receives the wrong type; often co-occurs when an <code>undefined</code> env var reaches a function expecting a string before any URL parsing happens</li>
+    <li><a href="https://nodejs-errors.dev/ENOTFOUND/"><code>ENOTFOUND: getaddrinfo ENOTFOUND</code></a> — thrown after a URL is parsed successfully but DNS resolution fails; if you see ENOTFOUND after fixing ERR_INVALID_URL, the hostname is now valid but unreachable</li>
+    <li><a href="https://nodejs-errors.dev/ECONNREFUSED/"><code>ECONNREFUSED: connection refused</code></a> — the next error you may see after fixing the URL: the URL is valid but nothing is listening on that host/port</li>
+    <li><a href="https://nodejs-errors.dev/TypeError-Cannot-read-properties-of-undefined/"><code>TypeError: Cannot read properties of undefined</code></a> — same root cause (undefined env var or missing config value) manifesting one step earlier when a property is accessed before the URL is constructed</li>
+    <li><a href="https://nodejs-errors.dev/UnhandledPromiseRejection/"><code>UnhandledPromiseRejection</code></a> — if <code>ERR_INVALID_URL</code> is thrown inside an async function without a try/catch, it surfaces as an unhandled promise rejection</li>
+    <li><a href="https://nodejs-errors.dev/UNABLE_TO_VERIFY_LEAF_SIGNATURE/"><code>UNABLE_TO_VERIFY_LEAF_SIGNATURE</code></a> — a TLS error that can follow once the URL is fixed and an HTTPS connection is attempted</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-07-29 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#err_invalid_url">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

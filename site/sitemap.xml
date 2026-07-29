@@ -3,9 +3,16 @@
 
   <url>
     <loc>https://nodejs-errors.dev/</loc>
-    <lastmod>2026-05-11</lastmod>
+    <lastmod>2026-07-29</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+
+  <url>
+    <loc>https://nodejs-errors.dev/ERR_MODULE_NOT_FOUND/</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
   </url>
 
   <url>
@@ -214,6 +221,34 @@
   <url>
     <loc>https://nodejs-errors.dev/ERR_INVALID_PACKAGE_CONFIG/</loc>
     <lastmod>2026-05-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://nodejs-errors.dev/ERR_OSSL_EVP_UNSUPPORTED/</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://nodejs-errors.dev/UNABLE_TO_VERIFY_LEAF_SIGNATURE/</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://nodejs-errors.dev/ERR_INVALID_URL/</loc>
+    <lastmod>2026-07-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://nodejs-errors.dev/DEPTH_ZERO_SELF_SIGNED_CERT/</loc>
+    <lastmod>2026-07-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>

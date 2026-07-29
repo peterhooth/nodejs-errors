@@ -13,6 +13,7 @@ Each page covers the exact error message, root cause, step-by-step fixes, and co
 | Error | Page |
 |---|---|
 | `Error: Cannot find module` | [nodejs-errors.dev/MODULE_NOT_FOUND/](https://nodejs-errors.dev/MODULE_NOT_FOUND/) |
+| `Error [ERR_MODULE_NOT_FOUND]: Cannot find module` (ESM) | [nodejs-errors.dev/ERR_MODULE_NOT_FOUND/](https://nodejs-errors.dev/ERR_MODULE_NOT_FOUND/) |
 | `ERR_PACKAGE_PATH_NOT_EXPORTED` | [nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/](https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/) |
 | `ERR_REQUIRE_ESM` | [nodejs-errors.dev/ERR_REQUIRE_ESM/](https://nodejs-errors.dev/ERR_REQUIRE_ESM/) |
 | `ERR_REQUIRE_ASYNC_MODULE` | [nodejs-errors.dev/ERR_REQUIRE_ASYNC_MODULE/](https://nodejs-errors.dev/ERR_REQUIRE_ASYNC_MODULE/) |
@@ -43,6 +44,7 @@ Each page covers the exact error message, root cause, step-by-step fixes, and co
 | `Error: connect ETIMEDOUT` | [nodejs-errors.dev/ETIMEDOUT/](https://nodejs-errors.dev/ETIMEDOUT/) |
 | `Error: getaddrinfo ENOTFOUND` | [nodejs-errors.dev/ENOTFOUND/](https://nodejs-errors.dev/ENOTFOUND/) |
 | `Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client` | [nodejs-errors.dev/ERR_HTTP_HEADERS_SENT/](https://nodejs-errors.dev/ERR_HTTP_HEADERS_SENT/) |
+| `TypeError [ERR_INVALID_URL]: Invalid URL` | [nodejs-errors.dev/ERR_INVALID_URL/](https://nodejs-errors.dev/ERR_INVALID_URL/) |
 
 ### Streams
 
@@ -62,6 +64,14 @@ Each page covers the exact error message, root cause, step-by-step fixes, and co
 | `UnhandledPromiseRejection` | [nodejs-errors.dev/UnhandledPromiseRejection/](https://nodejs-errors.dev/UnhandledPromiseRejection/) |
 | `RangeError: Maximum call stack size exceeded` | [nodejs-errors.dev/RangeError-Maximum-call-stack-size-exceeded/](https://nodejs-errors.dev/RangeError-Maximum-call-stack-size-exceeded/) |
 | `FATAL ERROR: JavaScript heap out of memory` | [nodejs-errors.dev/JavaScript-heap-out-of-memory/](https://nodejs-errors.dev/JavaScript-heap-out-of-memory/) |
+
+### OpenSSL / Build Tools
+
+| Error | Page |
+|---|---|
+| `Error: error:0308010C:digital envelope routines::unsupported` (`ERR_OSSL_EVP_UNSUPPORTED`) | [nodejs-errors.dev/ERR_OSSL_EVP_UNSUPPORTED/](https://nodejs-errors.dev/ERR_OSSL_EVP_UNSUPPORTED/) |
+| `Error: unable to verify the first certificate` (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`) | [nodejs-errors.dev/UNABLE_TO_VERIFY_LEAF_SIGNATURE/](https://nodejs-errors.dev/UNABLE_TO_VERIFY_LEAF_SIGNATURE/) |
+| `Error: self-signed certificate` (`DEPTH_ZERO_SELF_SIGNED_CERT`) | [nodejs-errors.dev/DEPTH_ZERO_SELF_SIGNED_CERT/](https://nodejs-errors.dev/DEPTH_ZERO_SELF_SIGNED_CERT/) |
 
 ---
 
@@ -89,9 +99,13 @@ nodejs-errors.dev/
 ├── llms.txt                                               # AI crawler manifest
 ├── MODULE_NOT_FOUND/
 │   └── index.html
+├── ERR_MODULE_NOT_FOUND/
+│   └── index.html
 ├── ERR_PACKAGE_PATH_NOT_EXPORTED/
 │   └── index.html
 ├── ERR_REQUIRE_ESM/
+│   └── index.html
+├── ERR_REQUIRE_ASYNC_MODULE/
 │   └── index.html
 ├── SyntaxError-Cannot-use-import-statement/
 │   └── index.html
@@ -143,6 +157,14 @@ nodejs-errors.dev/
 │   └── index.html
 ├── ERR_UNKNOWN_FILE_EXTENSION/
 │   └── index.html
-└── ERR_INVALID_PACKAGE_CONFIG/
+├── ERR_INVALID_PACKAGE_CONFIG/
+│   └── index.html
+├── ERR_OSSL_EVP_UNSUPPORTED/
+│   └── index.html
+├── UNABLE_TO_VERIFY_LEAF_SIGNATURE/
+│   └── index.html
+├── ERR_INVALID_URL/
+│   └── index.html
+└── DEPTH_ZERO_SELF_SIGNED_CERT/
     └── index.html
 ```

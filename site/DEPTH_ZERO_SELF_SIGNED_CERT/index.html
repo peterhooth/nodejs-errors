@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Error: self-signed certificate (DEPTH_ZERO_SELF_SIGNED_CERT) – Node.js Fix</title>
+  <meta name="description" content="Node.js throws 'Error: self-signed certificate' with code DEPTH_ZERO_SELF_SIGNED_CERT when the server presents a certificate it signed itself. Fix with NODE_EXTRA_CA_CERTS or https.Agent({ ca: ... }) — never with rejectUnauthorized: false in production." />
+  <link rel="canonical" href="https://nodejs-errors.dev/DEPTH_ZERO_SELF_SIGNED_CERT/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Error: self-signed certificate (DEPTH_ZERO_SELF_SIGNED_CERT) – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws 'Error: self-signed certificate' with code DEPTH_ZERO_SELF_SIGNED_CERT when the server presents a certificate it signed itself. Fix with NODE_EXTRA_CA_CERTS or https.Agent({ ca: ... }) — never with rejectUnauthorized: false in production." />
+  <meta property="og:url" content="https://nodejs-errors.dev/DEPTH_ZERO_SELF_SIGNED_CERT/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Error: self-signed certificate (DEPTH_ZERO_SELF_SIGNED_CERT) – Node.js Fix",
+    "description": "Node.js throws 'Error: self-signed certificate' with code DEPTH_ZERO_SELF_SIGNED_CERT during TLS/HTTPS requests when the server presents a self-signed certificate — one where the issuer equals the subject and there is no CA chain. The server itself is untrusted, not just missing intermediates. Correct fixes: NODE_EXTRA_CA_CERTS environment variable pointing to the self-signed cert itself, https.Agent with ca: option, axios httpsAgent, node-fetch agent, undici dispatcher. Covers local HTTPS dev servers, npm behind corporate proxy, Docker internal microservices, generating self-signed certs with openssl and mkcert, why rejectUnauthorized: false and NODE_TLS_REJECT_UNAUTHORIZED=0 are dangerous in production, and how this differs from UNABLE_TO_VERIFY_LEAF_SIGNATURE.",
+    "url": "https://nodejs-errors.dev/DEPTH_ZERO_SELF_SIGNED_CERT/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-07-29",
+    "dateModified": "2026-07-29"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What causes DEPTH_ZERO_SELF_SIGNED_CERT in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The server sent a TLS certificate whose issuer field equals its own subject field — it signed itself, so there is no Certificate Authority chain at all. 'Depth zero' means the certificate at position zero in the chain (the server certificate itself) is self-signed. Node.js does not trust self-signed certificates by default because any server can generate one without any identity verification. Common scenarios: a local HTTPS development server (Vite, webpack-dev-server, mkcert-less setup), an internal microservice in Docker, npm configured behind a corporate proxy that uses a self-signed root CA, or a private API endpoint with a self-generated certificate."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix DEPTH_ZERO_SELF_SIGNED_CERT in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The correct fix is to supply the self-signed certificate itself as a trusted CA. Use NODE_EXTRA_CA_CERTS=/path/to/server-cert.pem before starting Node.js — this extends the built-in root store and applies to all HTTPS clients without code changes. Alternatively, create an https.Agent({ ca: fs.readFileSync('server-cert.pem') }) and pass it to every HTTPS request. Do NOT set rejectUnauthorized: false or NODE_TLS_REJECT_UNAUTHORIZED=0 in production — this disables all TLS verification and exposes you to man-in-the-middle attacks."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is DEPTH_ZERO_SELF_SIGNED_CERT different from UNABLE_TO_VERIFY_LEAF_SIGNATURE?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "DEPTH_ZERO_SELF_SIGNED_CERT: the server certificate is self-signed — its issuer equals its own subject, there is no CA at all. The certificate itself is the root. To trust it you must supply the certificate itself as the trusted CA: https.Agent({ ca: fs.readFileSync('server-cert.pem') }). UNABLE_TO_VERIFY_LEAF_SIGNATURE: the server certificate was signed by a real CA, but the CA's intermediate certificate was not included in the TLS handshake. Node.js has the leaf but cannot build the chain. The fix is to supply the intermediate CA certificate. The key distinction: DEPTH_ZERO_SELF_SIGNED_CERT means the server itself is the trust anchor; UNABLE_TO_VERIFY_LEAF_SIGNATURE means the chain is incomplete."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix DEPTH_ZERO_SELF_SIGNED_CERT with axios?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Create an https.Agent with the ca option pointing to the self-signed certificate PEM file, then pass it as httpsAgent: const httpsAgent = new https.Agent({ ca: fs.readFileSync('./server-cert.pem') }); const client = axios.create({ httpsAgent }); const { data } = await client.get('https://internal.example.com/api'). Or set NODE_EXTRA_CA_CERTS before the process starts — no code changes needed."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix DEPTH_ZERO_SELF_SIGNED_CERT with node-fetch or built-in fetch?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "For node-fetch v2/v3: fetch(url, { agent: new https.Agent({ ca: fs.readFileSync('server-cert.pem') }) }). For built-in fetch (Node.js 18+, powered by undici): use NODE_EXTRA_CA_CERTS (recommended), or set a global dispatcher via setGlobalDispatcher(new Agent({ connect: { ca: fs.readFileSync('server-cert.pem') } })) from undici. The built-in fetch does not accept an https.Agent directly."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is it safe to use rejectUnauthorized: false or NODE_TLS_REJECT_UNAUTHORIZED=0?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Both disable all TLS certificate verification for the affected scope. Any server — including a malicious one performing a man-in-the-middle attack — can present any certificate and your code will accept it silently. API keys, credentials, and data transmitted over the connection are fully exposed. It is acceptable only in a completely isolated local development environment with no sensitive data. Always add a hard guard: if (process.env.NODE_ENV !== 'development') throw new Error('rejectUnauthorized:false is not allowed outside local dev'). Never commit code with NODE_TLS_REJECT_UNAUTHORIZED=0 in a .env file that reaches staging or production."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does DEPTH_ZERO_SELF_SIGNED_CERT happen in Docker but not locally?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Several reasons: (1) The service inside the Docker network uses a self-signed certificate and the container making the request does not have that certificate in its trusted store. (2) You disabled certificate checking locally (NODE_TLS_REJECT_UNAUTHORIZED=0 in a .env file) but the container environment does not have that variable set. (3) npm is configured to reach a private registry or proxy with a self-signed certificate — npm itself in the container does not have CAFILE or NODE_EXTRA_CA_CERTS set. Fix by copying the self-signed certificate into the Docker image and setting NODE_EXTRA_CA_CERTS."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix DEPTH_ZERO_SELF_SIGNED_CERT with npm behind a corporate proxy?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "npm uses its own TLS stack independently of NODE_EXTRA_CA_CERTS. For npm, use: npm config set cafile /path/to/corporate-ca.pem — this is the npm-specific equivalent of NODE_EXTRA_CA_CERTS. Alternatively, set the NODE_EXTRA_CA_CERTS environment variable before running npm; recent npm versions (v9+) respect it. Never use npm config set strict-ssl false — it is the npm equivalent of rejectUnauthorized:false and disables all certificate checking for all npm registry requests."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I generate a self-signed certificate for local development that Node.js trusts?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Use mkcert — it creates a local CA, installs it into the OS/browser trust store, and issues certificates trusted locally. Run: mkcert -install && mkcert localhost 127.0.0.1. The generated localhost.pem / localhost-key.pem are trusted by your browser. For Node.js processes, set NODE_EXTRA_CA_CERTS=$(mkcert -CAROOT)/rootCA.pem so Node.js also trusts the mkcert CA. This is far better than a raw openssl self-signed certificate because browsers and Node.js both trust it without rejectUnauthorized:false."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "DEPTH_ZERO_SELF_SIGNED_CERT", "item": "https://nodejs-errors.dev/DEPTH_ZERO_SELF_SIGNED_CERT/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix Error: self-signed certificate (DEPTH_ZERO_SELF_SIGNED_CERT) in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Confirm the certificate is self-signed", "text": "Run openssl s_client -connect hostname:port -showcerts. Look at the first certificate block. If the 'Issuer' line matches the 'Subject' line exactly, the certificate is self-signed. There will be exactly one BEGIN CERTIFICATE block and 'Verify return code: 18 (self signed certificate)'." },
+      { "@type": "HowToStep", "position": 2, "name": "Extract the self-signed certificate as a PEM file", "text": "Run: openssl s_client -connect hostname:port 2>/dev/null </dev/null | openssl x509 -out server-cert.pem. This saves the server's public certificate (not the private key) to server-cert.pem. This file is safe to commit and distribute — it contains only the public certificate." },
+      { "@type": "HowToStep", "position": 3, "name": "Use NODE_EXTRA_CA_CERTS for a process-wide fix", "text": "Set NODE_EXTRA_CA_CERTS=./server-cert.pem before starting Node.js. This extends the built-in trust store with the self-signed certificate and applies to all HTTPS clients (https, axios, node-fetch, undici, got) without any code changes. The variable is read once at process startup." },
+      { "@type": "HowToStep", "position": 4, "name": "Use https.Agent with the ca option for per-request control", "text": "Create an https.Agent({ ca: fs.readFileSync('./server-cert.pem') }) and pass it to your HTTPS requests. For axios: httpsAgent option. For node-fetch v2/v3: agent option. For raw https.request/https.get: agent option. The ca option replaces the default CA store for that agent — include the certificate of the server you want to trust." },
+      { "@type": "HowToStep", "position": 5, "name": "For npm behind a self-signed proxy, set cafile", "text": "npm manages its own certificate trust separately. Run: npm config set cafile /path/to/server-cert.pem. For environment-level config, NODE_EXTRA_CA_CERTS also works with npm v9+. Never use npm config set strict-ssl false." },
+      { "@type": "HowToStep", "position": 6, "name": "For local HTTPS development, prefer mkcert over raw self-signed certs", "text": "Install mkcert (brew install mkcert on macOS, choco install mkcert on Windows). Run mkcert -install to create and trust a local CA. Run mkcert localhost 127.0.0.1 to issue a trusted certificate. Point NODE_EXTRA_CA_CERTS to $(mkcert -CAROOT)/rootCA.pem so Node.js trusts it too. This eliminates DEPTH_ZERO_SELF_SIGNED_CERT entirely for local dev." },
+      { "@type": "HowToStep", "position": 7, "name": "Never use rejectUnauthorized: false in production", "text": "rejectUnauthorized: false and NODE_TLS_REJECT_UNAUTHORIZED=0 disable all TLS certificate verification. Any server can present any certificate and your code will accept it — including a malicious man-in-the-middle attacker. Add a hard environment guard if you must use it locally: if (process.env.NODE_ENV !== 'development') throw new Error('rejectUnauthorized:false is forbidden outside local dev')." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code, td code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">DEPTH_ZERO_SELF_SIGNED_CERT</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js TLS Error</span>
+  <h1>Error: self-signed certificate</h1>
+  <span class="error-code">error code: <code>DEPTH_ZERO_SELF_SIGNED_CERT</code> &nbsp;·&nbsp; also: <code>Error: self signed certificate</code> &nbsp;·&nbsp; <code>self-signed certificate in certificate chain</code></span>
+  <p>Complete reference — root cause (server presents a self-signed cert Node.js's CA store doesn't trust), correct fix with <code>NODE_EXTRA_CA_CERTS</code> and <code>https.Agent({ ca: ... })</code>, axios / node-fetch / undici specifics, npm corporate proxy, Docker microservice scenarios, mkcert for local HTTPS dev, and why <code>rejectUnauthorized: false</code> must never be used in production.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> The server's TLS certificate is self-signed — its issuer equals its own subject, so there is no Certificate Authority chain. Node.js rejects it because it has no way to verify the server's identity. Fix by supplying the self-signed certificate itself as a trusted CA: <code>NODE_EXTRA_CA_CERTS=./server-cert.pem</code> (process-wide, zero code changes) or <code>https.Agent({ ca: fs.readFileSync('server-cert.pem') })</code>. <strong>Never</strong> set <code>rejectUnauthorized: false</code> or <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code> in production — that disables all TLS security.
+  </div>
+
+  <h2>What is DEPTH_ZERO_SELF_SIGNED_CERT?</h2>
+  <p>
+    <strong>DEPTH_ZERO_SELF_SIGNED_CERT</strong> is an OpenSSL error code that Node.js surfaces during
+    a TLS handshake when the server presents a certificate where the <code>Issuer</code> field
+    is identical to the <code>Subject</code> field — the certificate signed itself, with no Certificate
+    Authority involved.
+  </p>
+  <p>
+    "Depth zero" refers to the position in the certificate chain. Position zero is always the server's
+    own certificate (the leaf). A depth-zero self-signed cert means the very first certificate in the
+    chain — the server's own — is self-signed. There is no chain to build; no CA exists.
+  </p>
+  <p>
+    Node.js validates TLS certificates against its built-in root CA store (sourced from the Mozilla CA
+    bundle). A self-signed certificate is never in that store. Node.js therefore cannot establish that
+    the server is who it claims to be and throws this error. This is by design — it is not a Node.js
+    bug, and it is not caused by your code being wrong.
+  </p>
+  <p>
+    Despite being one of the most common TLS errors developers encounter — especially during local HTTPS
+    development, internal microservices, or npm behind a corporate proxy — it is not documented in the
+    <a href="https://nodejs.org/api/errors.html" rel="noopener noreferrer">official Node.js error reference</a>.
+    This page fills that gap.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error strings you will see in the terminal:</strong><br>
+    <code>Error: self-signed certificate</code><br>
+    <code>Error: self signed certificate</code><br>
+    <code>FetchError: request to https://... failed, reason: self-signed certificate</code><br>
+    <code>AxiosError: self-signed certificate</code><br>
+    <code>RequestError: self-signed certificate</code><br>
+    <code>TypeError: fetch failed</code> (with <code>cause.code: 'DEPTH_ZERO_SELF_SIGNED_CERT'</code>)
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>Error: self-signed certificate
+    at TLSSocket.onConnectEnd (_tls_wrap.js:1509:19)
+    at Object.onceWrapper (events.js:422:26)
+    at TLSSocket.emit (events.js:327:22)
+    at TLSSocket._finishInit (_tls_wrap.js:944:8)
+    at TLSWrap.ssl.onhandshakedone (_tls_wrap.js:718:12) {
+  code: 'DEPTH_ZERO_SELF_SIGNED_CERT'
+}</code></pre>
+
+  <p>Using the built-in <code>fetch</code> (Node.js 18+):</p>
+  <pre><code>TypeError: fetch failed
+    at Object.fetch (node:internal/deps/undici/undici:11372:11)
+    at process.processTicksAndQueues (node:internal/process/task_queues:95:5) {
+  [cause]: Error: self-signed certificate
+      at TLSSocket.onConnectEnd (node:_tls_wrap:1564:19) {
+    code: 'DEPTH_ZERO_SELF_SIGNED_CERT'
+  }
+}</code></pre>
+
+  <p>With axios:</p>
+  <pre><code>AxiosError: self-signed certificate
+    at RedirectableRequest._currentRequest.emit (.../node_modules/follow-redirects/index.js:657:22)
+    at TLSSocket.socketErrorListener (node:_http_client:481:9) {
+  errno: -60,
+  code: 'DEPTH_ZERO_SELF_SIGNED_CERT',
+  config: { url: 'https://internal.example.com/api', ... },
+  request: &lt;ref *1&gt; ClientRequest { ... }
+}</code></pre>
+
+  <h2>Diagnostic Fields</h2>
+  <table>
+    <thead><tr><th>Property</th><th>Value</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>err.code</code></td><td><code>'DEPTH_ZERO_SELF_SIGNED_CERT'</code></td><td>OpenSSL error: server certificate at depth 0 is self-signed and not trusted</td></tr>
+      <tr><td><code>err.message</code></td><td><code>'self-signed certificate'</code></td><td>Human-readable OpenSSL reason string</td></tr>
+      <tr><td><code>err.library</code></td><td><code>'SSL routines'</code></td><td>OpenSSL subsystem that raised the error</td></tr>
+      <tr><td><code>err.reason</code></td><td><code>'self signed certificate'</code></td><td>Same as message; set on older OpenSSL builds</td></tr>
+      <tr><td><code>err.syscall</code></td><td><code>'connect'</code></td><td>Failed during TLS handshake, not during data transfer</td></tr>
+      <tr><td><code>err.host</code></td><td>e.g. <code>'internal.corp.com'</code></td><td>Hostname of the server that presented the self-signed cert</td></tr>
+    </tbody>
+  </table>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Symptom / Context</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Local HTTPS development server (Vite, webpack-dev-server, Next.js)</td>
+        <td>Dev server generates a self-signed cert automatically for <code>localhost</code>. Browser warns you and lets you proceed; Node.js rejects it outright.</td>
+        <td>Use <code>mkcert</code> to issue a locally-trusted cert, or set <code>NODE_EXTRA_CA_CERTS</code> to the dev server's self-signed cert.</td>
+      </tr>
+      <tr>
+        <td>Internal microservice or Docker service with a self-signed cert</td>
+        <td>A backend service in the same Docker Compose network uses HTTPS with a self-generated certificate. The calling service throws this error.</td>
+        <td>Copy the self-signed cert into the calling container's image; set <code>NODE_EXTRA_CA_CERTS</code> to its path.</td>
+      </tr>
+      <tr>
+        <td>npm behind a corporate proxy with a self-signed root CA</td>
+        <td><code>npm install</code> fails with <code>DEPTH_ZERO_SELF_SIGNED_CERT</code>. The proxy re-signs all HTTPS traffic with its own certificate.</td>
+        <td><code>npm config set cafile /path/to/corporate-ca.pem</code>. Also set <code>NODE_EXTRA_CA_CERTS</code> for Node.js code.</td>
+      </tr>
+      <tr>
+        <td>Private API or staging endpoint with a self-generated certificate</td>
+        <td>An internal staging API, monitoring endpoint, or private registry uses a self-signed cert for convenience.</td>
+        <td>Set <code>NODE_EXTRA_CA_CERTS</code> to the API's certificate. For shared teams, distribute the cert via a secrets manager or Docker build arg.</td>
+      </tr>
+      <tr>
+        <td>Kubernetes internal service with TLS but no cert-manager</td>
+        <td>A service inside a Kubernetes cluster is accessed via HTTPS using a self-signed cert created manually without cert-manager or Let's Encrypt.</td>
+        <td>Set <code>NODE_EXTRA_CA_CERTS</code> in the Pod spec via a ConfigMap or Secret. Long-term: use cert-manager with Let's Encrypt or a private CA.</td>
+      </tr>
+      <tr>
+        <td><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code> removed in production but forgotten locally</td>
+        <td>Works locally because <code>.env</code> disables TLS checking. Fails in CI/Docker because the env var is absent — the real error surfaces for the first time.</td>
+        <td>Do not suppress the error with <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code>. Supply the certificate instead. Audit all <code>.env</code> files for this variable.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Server Presents a Self-Signed Certificate</h2>
+  <p>
+    A self-signed certificate is one where the entity that issued the certificate is the same entity
+    the certificate belongs to. In X.509 terms: <code>Issuer == Subject</code>. There is no Certificate
+    Authority involved — the server generated a key pair and signed its own certificate with its own
+    private key.
+  </p>
+  <p>
+    This is the typical setup for local HTTPS development servers, test environments, internal tools,
+    and any service where "just get HTTPS working" was the goal. The certificate provides encryption
+    (nobody can eavesdrop on the wire) but provides no identity verification (you cannot confirm the
+    server is who it claims to be from the certificate alone).
+  </p>
+  <p>
+    Node.js's TLS implementation (powered by OpenSSL) performs both encryption <em>and</em> identity
+    verification during the handshake. It checks whether the certificate was signed by a CA in its
+    built-in root store. A self-signed certificate fails this check immediately — OpenSSL returns
+    error code 18 (<code>X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT</code>), which Node.js exposes as
+    <code>DEPTH_ZERO_SELF_SIGNED_CERT</code>.
+  </p>
+
+  <h3>Confirm with openssl s_client</h3>
+  <pre><code># Inspect the certificate the server sends
+openssl s_client -connect localhost:3000 -showcerts
+
+# Look for:
+# Verify return code: 18 (self signed certificate)
+# AND: Issuer and Subject lines that are identical
+
+# Quick one-liner check:
+echo | openssl s_client -connect localhost:3000 2>/dev/null | grep -E "Issuer:|Subject:|Verify return code"
+
+# Expected output for a self-signed cert:
+# subject=CN = localhost
+# issuer=CN = localhost          ← same as subject = self-signed
+# Verify return code: 18 (self signed certificate)</code></pre>
+
+  <h3>Extract the self-signed certificate to a PEM file</h3>
+  <pre><code># Save the server's public certificate (safe to distribute — public key only)
+openssl s_client -connect localhost:3000 2>/dev/null &lt;/dev/null \
+  | openssl x509 -out server-cert.pem
+
+# Verify what you extracted:
+openssl x509 -in server-cert.pem -text -noout | grep -E "Issuer:|Subject:|Not After"
+
+# Expected: Issuer == Subject (confirms self-signed)</code></pre>
+
+  <h2>Cause 2 – Local HTTPS Dev Server (Vite, webpack-dev-server, Next.js)</h2>
+  <p>
+    Modern frontend tooling can serve HTTPS locally for testing service workers, mixed-content rules,
+    or cookie <code>Secure</code> flags. The easiest path is a self-signed certificate, which is what
+    many tools generate by default.
+  </p>
+  <p>
+    If your Node.js application (an API route test, a Playwright test, a script that calls
+    <code>https://localhost:5173</code>) makes an HTTPS request to this dev server, it hits
+    <code>DEPTH_ZERO_SELF_SIGNED_CERT</code>.
+  </p>
+
+  <div class="callout">
+    <strong>The better solution for local HTTPS: mkcert.</strong> mkcert creates a real local CA,
+    installs it into the OS trust store (so browsers trust it too), and issues certificates signed
+    by that CA. Node.js processes that set <code>NODE_EXTRA_CA_CERTS</code> to the mkcert CA root
+    also trust those certificates — without any <code>rejectUnauthorized: false</code> anywhere.
+  </div>
+
+  <pre><code># Install mkcert (macOS via Homebrew)
+brew install mkcert
+
+# Install mkcert (Windows via Chocolatey)
+choco install mkcert
+
+# Install mkcert (Linux)
+# see https://github.com/FiloSottile/mkcert for distro-specific instructions
+
+# Create and trust the local CA (run once per machine)
+mkcert -install
+
+# Issue a certificate for localhost and 127.0.0.1
+mkcert localhost 127.0.0.1
+# Creates: localhost+1.pem (certificate) and localhost+1-key.pem (private key)
+
+# Tell Node.js processes to trust the mkcert CA
+export NODE_EXTRA_CA_CERTS="$(mkcert -CAROOT)/rootCA.pem"
+# Or in .env (loaded before any TLS calls):
+# NODE_EXTRA_CA_CERTS=/Users/you/Library/Application Support/mkcert/rootCA.pem
+
+# Windows PowerShell
+$env:NODE_EXTRA_CA_CERTS = "$(mkcert -CAROOT)\rootCA.pem"</code></pre>
+
+  <h2>Cause 3 – Docker Internal Services and Microservices</h2>
+  <p>
+    In Docker Compose or Kubernetes, services communicate over an internal network. If a service
+    (database admin panel, internal API, message queue dashboard) uses HTTPS with a self-signed
+    certificate, any Node.js container that calls it over HTTPS will encounter
+    <code>DEPTH_ZERO_SELF_SIGNED_CERT</code>.
+  </p>
+  <p>
+    The certificate needs to be distributed to all consuming containers and trusted at the Node.js
+    level via <code>NODE_EXTRA_CA_CERTS</code>.
+  </p>
+
+  <pre><code># Dockerfile for the consuming service
+FROM node:22-alpine
+
+# Install system CA tools (needed if you also want OS-level trust)
+RUN apk add --no-cache ca-certificates
+
+# Copy the self-signed cert from the internal service
+# (typically obtained during image build from a shared certs/ directory)
+COPY certs/internal-api-cert.pem /app/certs/internal-api-cert.pem
+
+# Tell Node.js to trust it
+ENV NODE_EXTRA_CA_CERTS=/app/certs/internal-api-cert.pem
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+CMD ["node", "dist/server.js"]</code></pre>
+
+  <pre><code># docker-compose.yml — pass the cert as an environment variable
+services:
+  api-consumer:
+    build: .
+    environment:
+      - NODE_EXTRA_CA_CERTS=/app/certs/internal-api-cert.pem
+    volumes:
+      - ./certs:/app/certs:ro   # mount the certs directory read-only
+
+  internal-api:
+    image: my-internal-api
+    # ... uses self-signed cert at startup</code></pre>
+
+  <pre><code># Kubernetes Pod spec — inject the cert via a ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: internal-ca-certs
+data:
+  internal-api-cert.pem: |
+    -----BEGIN CERTIFICATE-----
+    MIIDXTCCAkWgAwIBAgIJANOUXUaLRPXZMA0GCSqGSIb3DQEBCwUAMEUxCzAJBgNV
+    ... (your cert contents here)
+    -----END CERTIFICATE-----
+---
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+        - name: api-consumer
+          env:
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/certs/internal-api-cert.pem
+          volumeMounts:
+            - name: ca-certs
+              mountPath: /etc/certs
+      volumes:
+        - name: ca-certs
+          configMap:
+            name: internal-ca-certs</code></pre>
+
+  <h2>Cause 4 – npm Behind a Corporate Proxy with a Self-Signed CA</h2>
+  <p>
+    Corporate networks often route all HTTPS traffic through an inspection proxy that re-signs
+    connections with the company's own root CA certificate. This root CA is not in Node.js's
+    built-in store.
+  </p>
+  <p>
+    When the proxy uses a self-signed root CA (rather than one signed by a trusted external CA),
+    <code>npm install</code> and any HTTPS request from Node.js will fail with
+    <code>DEPTH_ZERO_SELF_SIGNED_CERT</code>.
+  </p>
+  <p>
+    <strong>Important:</strong> npm has its own certificate configuration separate from
+    <code>NODE_EXTRA_CA_CERTS</code>. You need to fix both independently.
+  </p>
+
+  <pre><code># Fix npm — set the cafile npm config option (persists in ~/.npmrc)
+npm config set cafile /path/to/corporate-ca.pem
+
+# Verify it was set:
+npm config get cafile
+
+# Fix Node.js code — set NODE_EXTRA_CA_CERTS
+export NODE_EXTRA_CA_CERTS=/path/to/corporate-ca.pem
+
+# Both can be set together in a .npmrc file at the project root:
+# cafile=/path/to/corporate-ca.pem
+# NODE_EXTRA_CA_CERTS is an env var, not an npmrc key — set it in your shell profile
+
+# Windows PowerShell
+npm config set cafile C:\certs\corporate-ca.pem
+$env:NODE_EXTRA_CA_CERTS = "C:\certs\corporate-ca.pem"</code></pre>
+
+  <div class="callout warn">
+    <strong>Never use <code>npm config set strict-ssl false</code>.</strong> This is the npm
+    equivalent of <code>rejectUnauthorized: false</code> — it disables all TLS certificate
+    verification for every npm registry request. An attacker on the same network could serve
+    malicious packages and npm would accept them silently.
+  </div>
+
+  <h2>Fix 1 – NODE_EXTRA_CA_CERTS (Recommended: Process-Wide, Zero Code Change)</h2>
+  <p>
+    <code>NODE_EXTRA_CA_CERTS</code> is the cleanest fix. It extends Node.js's built-in root CA
+    store with additional certificates. For self-signed certs, you supply the self-signed certificate
+    itself — because there is no separate CA, the certificate <em>is</em> the CA.
+  </p>
+  <p>
+    The variable must be set <strong>before the process starts</strong>. Setting
+    <code>process.env.NODE_EXTRA_CA_CERTS</code> inside running code has no effect.
+  </p>
+
+  <pre><code># Shell — one-off invocation
+NODE_EXTRA_CA_CERTS=./server-cert.pem node app.js
+
+# Shell — export for the session
+export NODE_EXTRA_CA_CERTS=/home/user/certs/internal-service.pem
+npm run dev
+
+# npm script (package.json) — cross-platform with cross-env
+{
+  "scripts": {
+    "dev":   "cross-env NODE_EXTRA_CA_CERTS=./certs/server-cert.pem nodemon src/index.ts",
+    "start": "cross-env NODE_EXTRA_CA_CERTS=./certs/server-cert.pem node dist/server.js"
+  }
+}
+
+# .env file — works when dotenv is the very first require/import in your entry point
+NODE_EXTRA_CA_CERTS=./certs/server-cert.pem
+
+# Dockerfile
+COPY certs/server-cert.pem /app/certs/server-cert.pem
+ENV NODE_EXTRA_CA_CERTS=/app/certs/server-cert.pem
+
+# Docker Compose environment section
+environment:
+  - NODE_EXTRA_CA_CERTS=/app/certs/server-cert.pem
+
+# GitHub Actions
+env:
+  NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/certs/server-cert.pem
+
+# Windows PowerShell
+$env:NODE_EXTRA_CA_CERTS = "C:\repos\myapp\certs\server-cert.pem"
+node app.js</code></pre>
+
+  <div class="callout">
+    <strong>Multiple certificates:</strong> <code>NODE_EXTRA_CA_CERTS</code> accepts a single PEM
+    file. To trust multiple self-signed certs, concatenate them into one file:
+    <code>cat cert-a.pem cert-b.pem &gt; combined-ca.pem</code>. Each <code>-----BEGIN CERTIFICATE-----</code>
+    ... <code>-----END CERTIFICATE-----</code> block is loaded as a separate trusted CA.
+  </div>
+
+  <h2>Fix 2 – https.Agent with ca: Option (Per-Request / Per-Client Control)</h2>
+  <p>
+    When you need to trust a specific self-signed certificate only for certain requests (for example,
+    one internal service while all other requests use the standard CA store), create a custom
+    <code>https.Agent</code> with the <code>ca</code> option.
+  </p>
+
+  <h3>Raw https module (CJS)</h3>
+  <pre><code>const https = require('https');
+const fs    = require('fs');
+
+// The self-signed certificate IS the CA — supply it directly
+const selfSignedCert = fs.readFileSync('./certs/internal-service-cert.pem');
+
+const agent = new https.Agent({ ca: selfSignedCert });
+
+https.get(
+  { hostname: 'internal.corp.com', port: 8443, path: '/health', agent },
+  (res) => {
+    let body = '';
+    res.on('data', (chunk) => { body += chunk; });
+    res.on('end', () => console.log(body));
+  }
+).on('error', console.error);</code></pre>
+
+  <h3>Raw https module (ESM)</h3>
+  <pre><code">import https from 'node:https';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const selfSignedCert = readFileSync(join(__dirname, 'certs', 'internal-service-cert.pem'));
+
+const agent = new https.Agent({ ca: selfSignedCert });
+
+const res = await new Promise((resolve, reject) => {
+  const req = https.get(
+    { hostname: 'internal.corp.com', port: 8443, path: '/health', agent },
+    resolve
+  );
+  req.on('error', reject);
+});
+
+console.log(res.statusCode);</code></pre>
+
+  <div class="callout">
+    <strong>ca: replaces, not extends:</strong> The <code>ca</code> option in <code>https.Agent</code>
+    <em>replaces</em> the default Node.js CA store — it does not extend it. If you also need to
+    connect to public HTTPS servers through the same agent, you must include the standard root CAs:
+    <code>const agent = new https.Agent({ ca: [selfSignedCert, ...tls.rootCertificates] });</code>
+    For most use cases it is cleaner to create a separate agent per upstream service.
+  </div>
+
+  <h2>Fix 3 – axios with httpsAgent</h2>
+  <p>
+    Pass the custom <code>https.Agent</code> as <code>httpsAgent</code> when creating an axios
+    instance. All requests through that instance will use the self-signed certificate as a trusted CA.
+  </p>
+
+  <pre><code>// CJS
+const axios = require('axios');
+const https = require('https');
+const fs    = require('fs');
+
+const httpsAgent = new https.Agent({
+  ca: fs.readFileSync('./certs/internal-service-cert.pem'),
+});
+
+const internalClient = axios.create({
+  baseURL: 'https://internal.corp.com:8443',
+  httpsAgent,
+  timeout: 10_000,
+});
+
+const { data } = await internalClient.get('/api/v1/status');
+console.log(data);</code></pre>
+
+  <pre><code>// ESM
+import axios from 'axios';
+import https from 'node:https';
+import { readFileSync } from 'node:fs';
+
+const httpsAgent = new https.Agent({
+  ca: readFileSync(new URL('./certs/internal-service-cert.pem', import.meta.url)),
+});
+
+const internalClient = axios.create({
+  baseURL: 'https://internal.corp.com:8443',
+  httpsAgent,
+  timeout: 10_000,
+});
+
+const { data } = await internalClient.get('/api/v1/status');</code></pre>
+
+  <div class="callout">
+    <strong>Global axios default:</strong> To apply the agent to all axios calls including the default
+    instance, set <code>axios.defaults.httpsAgent = httpsAgent</code> before making any request.
+    This affects every <code>axios.get()</code>, <code>axios.post()</code>, etc. in the process.
+  </div>
+
+  <h2>Fix 4 – node-fetch (v2 and v3)</h2>
+  <pre><code>// node-fetch v2 — CJS
+const fetch = require('node-fetch');
+const https = require('https');
+const fs    = require('fs');
+
+const agent = new https.Agent({
+  ca: fs.readFileSync('./certs/internal-service-cert.pem'),
+});
+
+const res  = await fetch('https://internal.corp.com:8443/api/status', { agent });
+const data = await res.json();
+console.log(data);</code></pre>
+
+  <pre><code">// node-fetch v3 — ESM
+import fetch from 'node-fetch';
+import https from 'node:https';
+import { readFileSync } from 'node:fs';
+
+const agent = new https.Agent({
+  ca: readFileSync(new URL('./certs/internal-service-cert.pem', import.meta.url)),
+});
+
+const res  = await fetch('https://internal.corp.com:8443/api/status', { agent });
+const data = await res.json();</code></pre>
+
+  <h2>Fix 5 – Built-in fetch and undici (Node.js 18+)</h2>
+  <p>
+    The built-in <code>fetch</code> in Node.js 18+ is powered by <code>undici</code> and does not
+    accept an <code>agent</code> option in the same way as node-fetch. Use
+    <code>NODE_EXTRA_CA_CERTS</code> (recommended) or set a global undici dispatcher.
+  </p>
+
+  <pre><code">// undici global dispatcher — set once at startup before any fetch() calls
+import { Agent, setGlobalDispatcher } from 'undici';
+import { readFileSync } from 'node:fs';
+
+setGlobalDispatcher(new Agent({
+  connect: {
+    ca: readFileSync('./certs/internal-service-cert.pem'),
+  },
+}));
+
+// All subsequent fetch() calls use the custom CA automatically
+const res  = await fetch('https://internal.corp.com:8443/api/status');
+const data = await res.json();</code></pre>
+
+  <pre><code">// Per-request undici dispatcher (bypasses global dispatcher)
+import { fetch, Agent } from 'undici';
+import { readFileSync } from 'node:fs';
+
+const dispatcher = new Agent({
+  connect: { ca: readFileSync('./certs/internal-service-cert.pem') },
+});
+
+const res  = await fetch('https://internal.corp.com:8443/api/status', { dispatcher });
+const data = await res.json();</code></pre>
+
+  <h2>Why rejectUnauthorized: false Is Dangerous</h2>
+  <p>
+    <code>rejectUnauthorized: false</code> is the first result many developers find when searching
+    for this error. It makes the error go away immediately. It is also a serious security
+    vulnerability in any environment beyond an isolated local machine.
+  </p>
+
+  <pre><code>// DANGEROUS — disables ALL TLS certificate verification
+// An attacker can present any certificate and your code accepts it silently.
+const agent = new https.Agent({ rejectUnauthorized: false }); // ← NEVER in production
+const res = await fetch(url, { agent });
+
+// Equally dangerous — affects the ENTIRE process, all HTTPS requests:
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // ← NEVER in production
+
+// Also dangerous via environment (watch your .env files):
+// NODE_TLS_REJECT_UNAUTHORIZED=0</code></pre>
+
+  <p>
+    With verification disabled, any server — including one controlled by an attacker performing a
+    man-in-the-middle attack via ARP spoofing, DNS poisoning, or a compromised network — can present
+    any certificate and your application will complete the handshake. The connection appears encrypted
+    but the attacker reads and modifies every byte. API keys, session tokens, database credentials,
+    and user data transmitted over the "secure" connection are fully exposed.
+  </p>
+
+  <p>
+    If you absolutely must use it during local development (not recommended — use mkcert instead),
+    add a hard guard that prevents it from reaching any other environment:
+  </p>
+
+  <pre><code>// Safe local-development-only pattern with hard guard
+if (process.env.NODE_ENV !== 'development') {
+  throw new Error(
+    'rejectUnauthorized: false is only permitted in NODE_ENV=development. ' +
+    'Supply the server certificate via NODE_EXTRA_CA_CERTS instead.'
+  );
+}
+
+const agent = new https.Agent({ rejectUnauthorized: false });
+
+// Prefer mkcert instead — then you never need rejectUnauthorized: false at all.</code></pre>
+
+  <h2>Generating a Self-Signed Certificate for Internal Use</h2>
+  <p>
+    If you control the server side and need to generate a self-signed certificate for a new internal
+    service, use <code>openssl</code> or the recommended <code>mkcert</code> approach.
+  </p>
+
+  <h3>openssl — minimal self-signed cert (90 days, localhost)</h3>
+  <pre><code># Generate a private key and self-signed certificate in one command
+openssl req -x509 -newkey rsa:4096 -keyout server-key.pem -out server-cert.pem \
+  -sha256 -days 90 -nodes \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+
+# server-cert.pem — distribute to all clients that need to trust this server
+# server-key.pem  — keep private, used by the server only
+
+# On Node.js server side:
+const https = require('https');
+const fs    = require('fs');
+
+https.createServer(
+  {
+    key:  fs.readFileSync('./server-key.pem'),
+    cert: fs.readFileSync('./server-cert.pem'),
+  },
+  (req, res) => res.end('Hello over HTTPS!')
+).listen(3000);</code></pre>
+
+  <h3>mkcert — trusted local certificate (recommended for local dev)</h3>
+  <pre><code"># mkcert creates a local CA and issues certs trusted by OS/browsers/Node.js
+mkcert -install          # installs the local CA into OS trust store (run once)
+mkcert localhost 127.0.0.1 ::1
+
+# Outputs: localhost+2.pem and localhost+2-key.pem
+# These certs are trusted by Chrome, Firefox, Safari, and curl (which uses OS store)
+
+# For Node.js to also trust them, set NODE_EXTRA_CA_CERTS:
+export NODE_EXTRA_CA_CERTS="$(mkcert -CAROOT)/rootCA.pem"
+
+# Use in the server:
+const https = require('https');
+const fs    = require('fs');
+
+https.createServer(
+  {
+    key:  fs.readFileSync('./localhost+2-key.pem'),
+    cert: fs.readFileSync('./localhost+2.pem'),
+  },
+  (req, res) => res.end('Hello — no certificate errors!')
+).listen(3000);
+
+// Any Node.js client with NODE_EXTRA_CA_CERTS set can now connect without errors:
+const res = await fetch('https://localhost:3000');
+console.log(await res.text()); // 'Hello — no certificate errors!'</code></pre>
+
+  <h2>DEPTH_ZERO_SELF_SIGNED_CERT vs UNABLE_TO_VERIFY_LEAF_SIGNATURE</h2>
+  <table>
+    <thead>
+      <tr><th>Error Code</th><th>What It Means</th><th>What to Supply as CA</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>DEPTH_ZERO_SELF_SIGNED_CERT</code></td>
+        <td>The server's own certificate is self-signed. <code>Issuer == Subject</code>. No CA chain exists at all. The server <em>is</em> the root.</td>
+        <td>Supply the <strong>server certificate itself</strong> as the trusted CA: <code>ca: fs.readFileSync('server-cert.pem')</code></td>
+      </tr>
+      <tr>
+        <td><code>UNABLE_TO_VERIFY_LEAF_SIGNATURE</code></td>
+        <td>The server sent a certificate signed by a real CA, but the intermediate CA's certificate was not included in the TLS handshake. Node.js cannot build the path to a trusted root.</td>
+        <td>Supply the <strong>intermediate CA certificate</strong> (not the server certificate itself): extract it from <code>openssl s_client -showcerts</code> output.</td>
+      </tr>
+      <tr>
+        <td><code>SELF_SIGNED_CERT_IN_CHAIN</code></td>
+        <td>The chain includes a self-signed certificate (typically the root CA) that is not in Node.js's trusted root store. Common with private/internal CAs.</td>
+        <td>Supply the <strong>root CA certificate</strong> of the internal/private CA that signed the chain.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>Quick diagnostic rule:</strong> Run <code>openssl s_client -connect host:port 2>/dev/null | grep -E "Issuer:|Subject:"</code>.
+    If Issuer == Subject → <code>DEPTH_ZERO_SELF_SIGNED_CERT</code> (supply the cert itself).
+    If Issuer != Subject but the chain is short → <code>UNABLE_TO_VERIFY_LEAF_SIGNATURE</code> (supply the intermediate CA).
+  </div>
+
+  <h2>Safe CA-Aware Request Patterns</h2>
+  <p>
+    Create a shared agent once at module load time. Read the PEM file once; reuse the agent across
+    all requests. Validate at startup so failures are immediate and obvious.
+  </p>
+
+  <h3>Shared internal client factory (CJS)</h3>
+  <pre><code">// lib/internal-https-client.js — create once, import everywhere
+const https = require('https');
+const fs    = require('fs');
+const path  = require('path');
+const axios = require('axios');
+
+const CERT_PATH = process.env.INTERNAL_SERVICE_CA
+  || path.join(__dirname, '../certs/internal-service-cert.pem');
+
+// Validate at startup — fail immediately rather than on first request
+if (!fs.existsSync(CERT_PATH)) {
+  throw new Error(
+    `[TLS] Certificate file not found: ${CERT_PATH}\n` +
+    `Set INTERNAL_SERVICE_CA to the path of the internal service's self-signed certificate.`
+  );
+}
+
+const caCert = fs.readFileSync(CERT_PATH);
+const pem    = caCert.toString('utf8');
+if (!pem.includes('-----BEGIN CERTIFICATE-----')) {
+  throw new Error(`[TLS] File at ${CERT_PATH} is not a valid PEM certificate.`);
+}
+
+console.log(`[TLS] Trusting internal CA from: ${CERT_PATH}`);
+
+const agent = new https.Agent({
+  ca: caCert,
+  keepAlive: true,
+  keepAliveMsecs: 10_000,
+});
+
+const internalClient = axios.create({
+  baseURL: process.env.INTERNAL_API_URL || 'https://internal.corp.com:8443',
+  httpsAgent: agent,
+  timeout: 10_000,
+});
+
+module.exports = { internalClient, agent };</code></pre>
+
+  <h3>Shared internal client factory (ESM)</h3>
+  <pre><code">// lib/internal-https-client.js (ESM)
+import https from 'node:https';
+import { readFileSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import axios from 'axios';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CERT_PATH = process.env.INTERNAL_SERVICE_CA
+  ?? join(__dirname, '../certs/internal-service-cert.pem');
+
+if (!existsSync(CERT_PATH)) {
+  throw new Error(
+    `[TLS] Certificate file not found: ${CERT_PATH}\n` +
+    `Set INTERNAL_SERVICE_CA to the path of the internal service's self-signed certificate.`
+  );
+}
+
+const caCert = readFileSync(CERT_PATH);
+console.log(`[TLS] Trusting internal CA from: ${CERT_PATH}`);
+
+export const agent = new https.Agent({
+  ca: caCert,
+  keepAlive: true,
+  keepAliveMsecs: 10_000,
+});
+
+export const internalClient = axios.create({
+  baseURL: process.env.INTERNAL_API_URL ?? 'https://internal.corp.com:8443',
+  httpsAgent: agent,
+  timeout: 10_000,
+});</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Run <code>openssl s_client -connect hostname:port -showcerts</code>. Check if "Issuer" equals "Subject" in the first certificate block — if so, it is self-signed and you need to trust that certificate specifically.</li>
+    <li>Check <code>openssl s_client</code>'s "Verify return code" line. Code <code>18</code> = self-signed certificate. Code <code>21</code> = unable to verify the first certificate (chain incomplete — different error).</li>
+    <li>Confirm <code>NODE_EXTRA_CA_CERTS</code> is set <em>before</em> the process starts. Print <code>process.env.NODE_EXTRA_CA_CERTS</code> at startup and verify the file exists and is readable.</li>
+    <li>Verify the PEM file contains a valid certificate block: <code>cat server-cert.pem | grep "BEGIN CERTIFICATE"</code>. A DER (binary) file will not work.</li>
+    <li>If using <code>https.Agent({ ca: ... })</code> — remember the <code>ca</code> option <em>replaces</em> the default CA store. If you also need to reach public HTTPS endpoints through the same agent, include <code>tls.rootCertificates</code>.</li>
+    <li>For Docker: run <code>docker exec &lt;container&gt; printenv NODE_EXTRA_CA_CERTS</code> and <code>docker exec &lt;container&gt; cat $NODE_EXTRA_CA_CERTS</code> to confirm the variable is set and the file is accessible inside the container.</li>
+    <li>For npm errors: check <code>npm config get cafile</code>. <code>NODE_EXTRA_CA_CERTS</code> fixes Node.js HTTPS code; for npm itself you also need <code>npm config set cafile</code>.</li>
+    <li>Enable TLS debug logging for the full handshake trace: <code>NODE_DEBUG=tls node app.js 2>&amp;1 | grep -E "(certificate|self.signed|DEPTH)"</code>.</li>
+    <li>Verify the Node.js root CA count to confirm your cert was added: <code>node -e "const tls=require('tls'); console.log(tls.rootCertificates.length)"</code> vs <code>NODE_EXTRA_CA_CERTS=./server-cert.pem node -e "..."</code> — the count should increase by 1.</li>
+    <li>Search your codebase and <code>.env</code> files for <code>NODE_TLS_REJECT_UNAUTHORIZED</code> and <code>rejectUnauthorized: false</code> — remove them and supply the certificate instead.</li>
+  </ol>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What causes DEPTH_ZERO_SELF_SIGNED_CERT in Node.js?</summary>
+    <div class="faq-answer">
+      <p>The server presented a TLS certificate that is self-signed — its Issuer and Subject fields are identical, meaning no Certificate Authority signed it. "Depth zero" refers to the server's own certificate (position 0 in the chain). Node.js cannot trust it because it is not in the built-in Mozilla root CA store, and there is no chain to a trusted root. This is intentional security behavior. Common scenarios: a local HTTPS development server, an internal microservice or Docker container running HTTPS with a generated certificate, npm behind a corporate proxy with a self-signed root CA, or a private API endpoint using a self-generated certificate.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix DEPTH_ZERO_SELF_SIGNED_CERT in Node.js?</summary>
+    <div class="faq-answer">
+      <p>The correct fix is to supply the self-signed certificate itself as a trusted CA. Because the certificate is both the server certificate and the root (it signed itself), you trust it by adding it to Node.js's CA store. The easiest approach: set <code>NODE_EXTRA_CA_CERTS=/path/to/server-cert.pem</code> before starting Node.js — applies to all HTTPS clients (axios, node-fetch, undici, got) without code changes. For per-request control: <code>new https.Agent({ ca: fs.readFileSync('server-cert.pem') })</code>. Never set <code>rejectUnauthorized: false</code> or <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code> in production.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How is DEPTH_ZERO_SELF_SIGNED_CERT different from UNABLE_TO_VERIFY_LEAF_SIGNATURE?</summary>
+    <div class="faq-answer">
+      <p><code>DEPTH_ZERO_SELF_SIGNED_CERT</code>: the server's own certificate is self-signed (Issuer == Subject). No CA chain exists. To trust it, supply the certificate itself as the CA: <code>ca: fs.readFileSync('server-cert.pem')</code>.</p>
+      <p><code>UNABLE_TO_VERIFY_LEAF_SIGNATURE</code>: the server certificate was signed by a real intermediate CA, but that intermediate CA's certificate was not included in the TLS handshake. Node.js cannot build the chain to a trusted root. To fix, supply the intermediate CA certificate — not the server certificate.</p>
+      <p>Quick diagnostic: run <code>openssl s_client -connect host:port</code>. If Issuer == Subject → <code>DEPTH_ZERO_SELF_SIGNED_CERT</code>. If Issuer differs from Subject and chain is short → <code>UNABLE_TO_VERIFY_LEAF_SIGNATURE</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does DEPTH_ZERO_SELF_SIGNED_CERT happen in Docker but not locally?</summary>
+    <div class="faq-answer">
+      <p>The most common reason: locally you have <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code> in a <code>.env</code> file that is not present in Docker, so the real error surfaces for the first time in Docker. Other causes: (1) The Docker container calls an internal service over HTTPS using a self-signed cert, but the container image does not have that cert configured. (2) The container runs in a different network where a corporate proxy intercepts HTTPS with a self-signed CA. (3) The container uses a minimal base image without the same OS-level certificates as your local machine. Fix by copying the certificate into the Docker image and setting <code>NODE_EXTRA_CA_CERTS</code> in the Dockerfile or Compose environment.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix DEPTH_ZERO_SELF_SIGNED_CERT with axios?</summary>
+    <div class="faq-answer">
+      <p>Create an <code>https.Agent</code> with the <code>ca</code> option pointing to the self-signed certificate PEM file, then pass it as <code>httpsAgent</code>:</p>
+      <pre><code>const httpsAgent = new require('https').Agent({
+  ca: require('fs').readFileSync('./certs/server-cert.pem'),
+});
+const client = require('axios').create({ httpsAgent });
+const { data } = await client.get('https://internal.example.com/api');</code></pre>
+      <p>Or set <code>NODE_EXTRA_CA_CERTS=./certs/server-cert.pem</code> before starting the process — no code changes needed.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix DEPTH_ZERO_SELF_SIGNED_CERT with node-fetch or built-in fetch?</summary>
+    <div class="faq-answer">
+      <p>For <code>node-fetch</code> v2/v3: <code>fetch(url, { agent: new https.Agent({ ca: fs.readFileSync('server-cert.pem') }) })</code>.</p>
+      <p>For built-in <code>fetch</code> (Node.js 18+, undici): use <code>NODE_EXTRA_CA_CERTS</code> (recommended, applies automatically), or use <code>setGlobalDispatcher(new Agent({ connect: { ca: fs.readFileSync('server-cert.pem') } }))</code> from the <code>undici</code> package, or use <code>undici.fetch(url, { dispatcher: new Agent({ connect: { ca: ... } }) })</code> for per-request control. The built-in <code>fetch</code> does not accept an <code>https.Agent</code> directly.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Is rejectUnauthorized: false safe to use?</summary>
+    <div class="faq-answer">
+      <p>No. <code>rejectUnauthorized: false</code> (or <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code>) disables all TLS certificate verification. Any server — including one performing a man-in-the-middle attack — can present any certificate and will be accepted. Your API credentials, tokens, and data are fully exposed to interception and modification even though the connection <em>appears</em> encrypted. Acceptable <em>only</em> in a completely isolated local development environment with no sensitive data, and <em>only</em> when you have explicitly verified no better alternative exists (mkcert is almost always a better alternative). Always guard with <code>if (process.env.NODE_ENV !== 'development') throw</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix npm DEPTH_ZERO_SELF_SIGNED_CERT behind a corporate proxy?</summary>
+    <div class="faq-answer">
+      <p>npm manages its own certificate trust separately from <code>NODE_EXTRA_CA_CERTS</code>. For npm, run: <code>npm config set cafile /path/to/corporate-ca.pem</code>. This persists in <code>~/.npmrc</code> and applies to all npm operations. You can also set it per-project in a <code>.npmrc</code> file: <code>cafile=/path/to/corporate-ca.pem</code>. Additionally set <code>NODE_EXTRA_CA_CERTS</code> for your Node.js application code. Never use <code>npm config set strict-ssl false</code> — it disables all TLS checking for npm, equivalent to <code>rejectUnauthorized: false</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I generate a self-signed certificate that Node.js can trust?</summary>
+    <div class="faq-answer">
+      <p>The recommended approach for local development is <code>mkcert</code>: <code>mkcert -install</code> (creates and installs a local CA), then <code>mkcert localhost 127.0.0.1</code> (issues a certificate). Set <code>NODE_EXTRA_CA_CERTS=$(mkcert -CAROOT)/rootCA.pem</code> for Node.js to trust it. For server-to-server internal services, use <code>openssl req -x509 -newkey rsa:4096 -keyout server-key.pem -out server-cert.pem -sha256 -days 365 -nodes -subj "/CN=internal-service.corp.com" -addext "subjectAltName=DNS:internal-service.corp.com"</code>. Distribute <code>server-cert.pem</code> (the public certificate) to all clients that need to trust this server, and set their <code>NODE_EXTRA_CA_CERTS</code> to point to it.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/UNABLE_TO_VERIFY_LEAF_SIGNATURE/"><code>UNABLE_TO_VERIFY_LEAF_SIGNATURE: unable to verify the first certificate</code></a> — the server sent a certificate signed by a real CA, but the intermediate CA certificate is missing from the chain; the complement to this error</li>
+    <li><a href="https://nodejs-errors.dev/ECONNRESET/"><code>ECONNRESET: connection reset by peer</code></a> — TLS handshake failures sometimes surface as ECONNRESET when the peer closes the connection mid-handshake</li>
+    <li><a href="https://nodejs-errors.dev/ECONNREFUSED/"><code>ECONNREFUSED: connection refused</code></a> — the connection never reached TLS; nothing was listening on the port</li>
+    <li><a href="https://nodejs-errors.dev/ETIMEDOUT/"><code>ETIMEDOUT: connection timed out</code></a> — the TLS handshake or connection attempt timed out before completing</li>
+    <li><a href="https://nodejs-errors.dev/ENOTFOUND/"><code>ENOTFOUND: getaddrinfo ENOTFOUND</code></a> — DNS resolution failed before the TLS connection could be attempted</li>
+    <li><a href="https://nodejs-errors.dev/ERR_OSSL_EVP_UNSUPPORTED/"><code>ERR_OSSL_EVP_UNSUPPORTED</code></a> — a different OpenSSL error; occurs when a cryptographic algorithm (MD4) was removed in OpenSSL 3.0 used by Node.js 17+</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-07-29 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/tls.html">Official Node.js TLS docs</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/cli.html#node_extra_ca_certsfile">NODE_EXTRA_CA_CERTS docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Error: error:0308010C:digital envelope routines::unsupported – Node.js Fix</title>
+  <meta name="description" content="Node.js throws ERR_OSSL_EVP_UNSUPPORTED as 'error:0308010C:digital envelope routines::unsupported' on Node.js 17+ with Webpack 4, Create React App, Angular CLI, or Vue CLI. Fix with NODE_OPTIONS=--openssl-legacy-provider (quick) or upgrade Webpack/react-scripts (proper)." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ERR_OSSL_EVP_UNSUPPORTED/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Error: error:0308010C:digital envelope routines::unsupported – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws ERR_OSSL_EVP_UNSUPPORTED as 'error:0308010C:digital envelope routines::unsupported' on Node.js 17+ with Webpack 4, Create React App, Angular CLI, or Vue CLI. Fix with NODE_OPTIONS=--openssl-legacy-provider (quick) or upgrade Webpack/react-scripts (proper)." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ERR_OSSL_EVP_UNSUPPORTED/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Error: error:0308010C:digital envelope routines::unsupported – Node.js Fix",
+    "description": "Node.js 17+ adopted OpenSSL 3.0, which removed the legacy MD4 hash provider that Webpack 4 and older build toolchains rely on. This page covers every cause, the quick NODE_OPTIONS=--openssl-legacy-provider workaround, cross-platform setup (Windows CMD, PowerShell, POSIX, cross-env, .npmrc), the proper long-term fix (Webpack 5, react-scripts v5, Angular 13+, Vue CLI), a decision tree, and Docker/CI specifics.",
+    "url": "https://nodejs-errors.dev/ERR_OSSL_EVP_UNSUPPORTED/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-07-29",
+    "dateModified": "2026-07-29"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ERR_OSSL_EVP_UNSUPPORTED in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_OSSL_EVP_UNSUPPORTED is thrown when Node.js's OpenSSL 3.0 layer rejects a cryptographic algorithm that was deprecated or removed. The full error message is 'Error: error:0308010C:digital envelope routines::unsupported'. It almost always fires because Webpack 4 (and older toolchains) ask OpenSSL to compute an MD4 hash — an algorithm OpenSSL 3.0 disabled by default — to generate module IDs and chunk names."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_OSSL_EVP_UNSUPPORTED only happen on Node.js 17 and later?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Node.js 17 was the first release to ship with OpenSSL 3.0. Prior versions (16 and below) used OpenSSL 1.1.1, which still supports MD4. When you upgrade from Node.js 16 to 17, 18, 20, or 22 without also upgrading your build toolchain, Webpack's default MD4 hash algorithm becomes unavailable."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_OSSL_EVP_UNSUPPORTED quickly without changing my project?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Set the NODE_OPTIONS environment variable before running your build or dev server: export NODE_OPTIONS=--openssl-legacy-provider (macOS/Linux), set NODE_OPTIONS=--openssl-legacy-provider (Windows CMD), or $env:NODE_OPTIONS='--openssl-legacy-provider' (PowerShell). This re-enables the legacy OpenSSL provider and unblocks Webpack 4 and other old toolchains. It is a temporary workaround, not a permanent fix."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_OSSL_EVP_UNSUPPORTED in a Create React App project?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The proper fix is upgrading react-scripts to v5.0.1 or higher: npm install --save-exact react-scripts@5.0.1. This version bundles Webpack 5, which implements MD4 in JavaScript and no longer depends on OpenSSL for it. If you cannot upgrade, add cross-env NODE_OPTIONS=--openssl-legacy-provider to your npm scripts using the cross-env package."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_OSSL_EVP_UNSUPPORTED in an Angular CLI project?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Angular CLI 13+ uses Webpack 5 and is not affected. If you are on Angular 11 or 12, either upgrade to Angular 13+ with ng update @angular/cli @angular/core, or apply the NODE_OPTIONS workaround in your package.json scripts: \"start\": \"cross-env NODE_OPTIONS=--openssl-legacy-provider ng serve\". Angular 13 dropped Webpack 4 entirely."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_OSSL_EVP_UNSUPPORTED in Docker or CI?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "In a Dockerfile, set the environment variable with ENV NODE_OPTIONS=--openssl-legacy-provider before your RUN npm start or RUN npm run build command. In GitHub Actions or other CI systems, add NODE_OPTIONS: --openssl-legacy-provider to your environment block, or run export NODE_OPTIONS=--openssl-legacy-provider before your build step. Long term, switch to a Node.js LTS Docker image that matches your toolchain: node:18-alpine works when paired with Webpack 5."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is it safe to use --openssl-legacy-provider in production?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The flag re-enables cryptographic algorithms (including MD4) that OpenSSL 3.0 disabled for security reasons. For build steps that run only at compile time (webpack, CRA, Vite, Angular CLI) and never handle user data or network requests, the security risk is negligible. Never set NODE_OPTIONS=--openssl-legacy-provider on a production Node.js server that handles HTTP requests or user-supplied data. Always treat it as a temporary workaround and plan an upgrade to Webpack 5 or a modern framework version."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does the error happen in production or CI but not locally?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Your local machine is likely running Node.js 16 or earlier, while CI/CD or production uses a newer Node.js image (18, 20, 22) that ships with OpenSSL 3.0. Once you upgrade Node.js locally — or pin your CI to the same version as your local machine — the error becomes consistent. The root fix is either the legacy provider flag or upgrading your build toolchain to Webpack 5."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "ERR_OSSL_EVP_UNSUPPORTED", "item": "https://nodejs-errors.dev/ERR_OSSL_EVP_UNSUPPORTED/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix Error: error:0308010C:digital envelope routines::unsupported in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Confirm the Node.js version", "text": "Run node --version. If the output is v17.0.0 or higher, OpenSSL 3.0 is active and this is the root cause. Node 16 and below use OpenSSL 1.1.1 and do not throw this error." },
+      { "@type": "HowToStep", "position": 2, "name": "Apply the quick workaround (any platform)", "text": "Set NODE_OPTIONS=--openssl-legacy-provider before running your dev server or build. On macOS/Linux: export NODE_OPTIONS=--openssl-legacy-provider && npm start. On Windows CMD: set NODE_OPTIONS=--openssl-legacy-provider && npm start. On PowerShell: $env:NODE_OPTIONS='--openssl-legacy-provider'; npm start." },
+      { "@type": "HowToStep", "position": 3, "name": "Make the workaround permanent in package.json", "text": "Install cross-env (npm install --save-dev cross-env) then update your scripts: \"start\": \"cross-env NODE_OPTIONS=--openssl-legacy-provider react-scripts start\". This works identically on Windows, macOS, and Linux without separate platform commands." },
+      { "@type": "HowToStep", "position": 4, "name": "Apply the proper fix for Create React App", "text": "Upgrade react-scripts to v5: npm install --save-exact react-scripts@5.0.1. This bundles Webpack 5, which no longer depends on OpenSSL's MD4 implementation. Delete node_modules and package-lock.json before reinstalling." },
+      { "@type": "HowToStep", "position": 5, "name": "Apply the proper fix for Angular CLI", "text": "Run ng update @angular/cli @angular/core to upgrade to Angular 13+, which uses Webpack 5 internally. Check the Angular update guide at update.angular.io for migration steps specific to your version." },
+      { "@type": "HowToStep", "position": 6, "name": "Apply the proper fix for plain Webpack projects", "text": "Upgrade webpack and webpack-cli: npm install --save-dev webpack@5 webpack-cli@5. Webpack 5 ships its own MD4 implementation in JavaScript (webpack/lib/util/Hash.js) and does not call OpenSSL for it. Review the Webpack 5 migration guide for breaking changes." },
+      { "@type": "HowToStep", "position": 7, "name": "Fix in Docker or CI", "text": "Add ENV NODE_OPTIONS=--openssl-legacy-provider to your Dockerfile, or set the environment variable in your CI YAML. Long term, switch your base image to node:20-alpine and upgrade your toolchain to Webpack 5 so the flag is no longer needed." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ERR_OSSL_EVP_UNSUPPORTED</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js Error</span>
+  <h1>Error: error:0308010C:digital envelope routines::unsupported</h1>
+  <span class="error-code">error code: <code>ERR_OSSL_EVP_UNSUPPORTED</code></span>
+  <p>Complete reference — OpenSSL 3.0 root cause, every fix, cross-platform setup, and framework-specific upgrade paths.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js 17+ ships with OpenSSL 3.0, which removed the MD4 hash algorithm used by Webpack 4 and older build toolchains. The one-line workaround is <code>NODE_OPTIONS=--openssl-legacy-provider npm start</code> (re-enables legacy algorithms). The permanent fix is upgrading to <strong>Webpack 5</strong>, <strong>react-scripts v5</strong> (Create React App), or <strong>Angular CLI 13+</strong> — all of which implement MD4 in JavaScript and no longer call OpenSSL for it.
+  </div>
+
+  <h2>What is ERR_OSSL_EVP_UNSUPPORTED?</h2>
+  <p>
+    <code>ERR_OSSL_EVP_UNSUPPORTED</code> is a Node.js error code that wraps an OpenSSL error.
+    The full string users see is:
+  </p>
+  <pre><code>Error: error:0308010C:digital envelope routines::unsupported</code></pre>
+  <p>
+    The hex code <code>0308010C</code> is an OpenSSL error identifier: library 3 (EVP — envelope
+    encryption), reason 0x10C (algorithm not supported). OpenSSL 3.0 introduced a new provider
+    architecture that disabled several legacy algorithms — including <strong>MD4</strong> — by
+    default. Webpack 4's default hash function for module IDs and chunk names is MD4. When
+    Webpack 4 calls Node.js's <code>crypto.createHash('md4')</code>, OpenSSL 3.0 refuses and
+    throws <code>ERR_OSSL_EVP_UNSUPPORTED</code>.
+  </p>
+  <p>
+    The error is documented in the
+    <a href="https://nodejs.org/api/errors.html#err_ossl_evp_unsupported" rel="noopener noreferrer">Node.js API errors reference</a>.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error strings you will see:</strong><br>
+    <code>Error: error:0308010C:digital envelope routines::unsupported</code><br>
+    <code>error:0308010c:digital envelope routines::unsupported</code><br>
+    <code>opensslErrorStack: [ 'error:03000086:digital envelope routines::initialization error' ]</code><br>
+    <code>ERR_OSSL_EVP_UNSUPPORTED</code><br>
+    <code>npm ERR! code ERR_OSSL_EVP_UNSUPPORTED</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>$ npm start
+
+> my-react-app@0.1.0 start
+> react-scripts start
+
+node:internal/crypto/hash:71
+  this[kHandle] = new Hash(algorithm, xofLen);
+                  ^
+
+Error: error:0308010C:digital envelope routines::unsupported
+    at new Hash (node:internal/crypto/hash:71:19)
+    at Object.createHash (node:crypto:130:10)
+    at module.exports (/project/node_modules/webpack/lib/util/createHash.js:135:53)
+    at NormalModule._initBuildHash (/project/node_modules/webpack/lib/NormalModule.js:417:16)
+    at handleParseError (/project/node_modules/webpack/lib/NormalModule.js:471:10)
+    at /project/node_modules/webpack/lib/NormalModule.js:503:5
+    at /project/node_modules/webpack/lib/NormalModule.js:358:12
+    at /project/node_modules/loader-runner/lib/LoaderRunner.js:373:3 {
+  opensslErrorStack: [ 'error:03000086:digital envelope routines::initialization error' ],
+  library: 'digital envelope routines',
+  reason: 'unsupported',
+  code: 'ERR_OSSL_EVP_UNSUPPORTED'
+}</code></pre>
+
+  <p>The error object includes these diagnostic fields:</p>
+  <table>
+    <thead><tr><th>Field</th><th>Value</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>code</code></td><td><code>'ERR_OSSL_EVP_UNSUPPORTED'</code></td><td>The Node.js error code wrapping the OpenSSL failure</td></tr>
+      <tr><td><code>library</code></td><td><code>'digital envelope routines'</code></td><td>The OpenSSL subsystem that rejected the algorithm</td></tr>
+      <tr><td><code>reason</code></td><td><code>'unsupported'</code></td><td>OpenSSL 3.0 does not support the requested algorithm in its default provider</td></tr>
+      <tr><td><code>opensslErrorStack</code></td><td><code>['error:03000086:...']</code></td><td>The inner OpenSSL initialization failure that caused the outer error</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Node.js Version Matrix</h2>
+  <table>
+    <thead><tr><th>Node.js version</th><th>OpenSSL version</th><th>MD4 available by default?</th><th>ERR_OSSL_EVP_UNSUPPORTED possible?</th></tr></thead>
+    <tbody>
+      <tr><td>Node.js 14.x (LTS until Apr 2023)</td><td>OpenSSL 1.1.1</td><td>Yes</td><td>No</td></tr>
+      <tr><td>Node.js 16.x (LTS until Sep 2023)</td><td>OpenSSL 1.1.1</td><td>Yes</td><td>No</td></tr>
+      <tr><td>Node.js 17.x (Current, EOL)</td><td>OpenSSL 3.0</td><td>No</td><td><strong>Yes</strong></td></tr>
+      <tr><td>Node.js 18.x (LTS until Apr 2025)</td><td>OpenSSL 3.0</td><td>No</td><td><strong>Yes</strong></td></tr>
+      <tr><td>Node.js 20.x (LTS until Apr 2026)</td><td>OpenSSL 3.0</td><td>No</td><td><strong>Yes</strong></td></tr>
+      <tr><td>Node.js 22.x (LTS, current)</td><td>OpenSSL 3.0</td><td>No</td><td><strong>Yes</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Typical symptom</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>Webpack 4 default MD4 hash on Node.js 17+</td><td><code>npm start</code> / <code>npm run build</code> crashes immediately</td><td><code>--openssl-legacy-provider</code> or upgrade to Webpack 5</td></tr>
+      <tr><td>Create React App with react-scripts &lt; 5</td><td>CRA dev server or build fails on Node.js 17+</td><td>Upgrade <code>react-scripts</code> to v5.0.1+</td></tr>
+      <tr><td>Angular CLI 11–12 (Webpack 4 internally)</td><td><code>ng serve</code> or <code>ng build</code> crashes</td><td>Upgrade to Angular 13+ or use <code>--openssl-legacy-provider</code></td></tr>
+      <tr><td>Vue CLI with Webpack 4</td><td><code>vue-cli-service serve</code> crashes</td><td><code>--openssl-legacy-provider</code> or migrate to Vite</td></tr>
+      <tr><td>Storybook &lt; 7 with Webpack 4</td><td><code>npm run storybook</code> crashes</td><td>Upgrade Storybook to v7+ or use <code>--openssl-legacy-provider</code></td></tr>
+      <tr><td>node-sass (libsass bindings)</td><td>Sass compilation step throws the error</td><td>Replace <code>node-sass</code> with <code>sass</code> (Dart Sass)</td></tr>
+      <tr><td>Custom <code>crypto.createHash('md4')</code> call</td><td>App-level code throws at the hash call</td><td>Replace with <code>'sha256'</code> or another supported algorithm</td></tr>
+      <tr><td>CI/Docker on new Node.js base image</td><td>Works locally (Node 16), fails in CI (Node 18+)</td><td>Align Node.js versions or add <code>NODE_OPTIONS</code> to CI env</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Webpack 4 Default MD4 Hash</h2>
+  <p>
+    Webpack 4 uses MD4 as its default hash algorithm for generating module IDs, chunk names, and
+    content hashes. The call originates deep inside Webpack's <code>createHash.js</code> utility,
+    which delegates to Node.js's built-in <code>crypto.createHash('md4')</code>. On Node.js 17+
+    with OpenSSL 3.0, this call fails immediately.
+  </p>
+  <p>
+    Webpack 5 (released October 2020) replaced this by shipping its own MD4 implementation in
+    pure JavaScript (<code>webpack/lib/util/Hash.js</code>). It never calls
+    <code>crypto.createHash('md4')</code>, so OpenSSL 3.0 is never involved.
+  </p>
+  <pre><code># The call chain that throws:
+# webpack/lib/util/createHash.js  →  crypto.createHash('md4')  →  OpenSSL 3.0 rejects it
+
+# Verify which webpack version you have:
+npx webpack --version
+# or
+cat node_modules/webpack/package.json | grep '"version"'</code></pre>
+
+  <h2>Cause 2 – Create React App with react-scripts &lt; 5</h2>
+  <p>
+    Create React App pins its internal Webpack version. <code>react-scripts</code> versions 1–4
+    all use Webpack 4, so any CRA project not yet upgraded to <code>react-scripts@5</code> will
+    throw <code>ERR_OSSL_EVP_UNSUPPORTED</code> on Node.js 17+.
+  </p>
+  <pre><code># Check your current react-scripts version:
+cat node_modules/react-scripts/package.json | grep '"version"'
+
+# Affected: react-scripts 1.x, 2.x, 3.x, 4.x (all use Webpack 4)
+# Safe: react-scripts 5.0.0+ (uses Webpack 5)</code></pre>
+
+  <h2>Cause 3 – Angular CLI 11 or 12</h2>
+  <p>
+    Angular CLI switched from Webpack 4 to Webpack 5 in Angular 13 (November 2021).
+    Projects on Angular 11 or 12 use Webpack 4 internally and hit this error on Node.js 17+.
+    Angular 13+ is fully unaffected.
+  </p>
+  <pre><code># Check Angular CLI version:
+ng version
+
+# Affected: @angular/cli 11.x, 12.x (Webpack 4)
+# Safe: @angular/cli 13.x and above (Webpack 5)</code></pre>
+
+  <h2>Cause 4 – Vue CLI with Webpack 4 (vue-cli-service)</h2>
+  <p>
+    Vue CLI projects created with <code>@vue/cli</code> before the Vue 3 / Vite era use
+    Webpack 4 via <code>vue-cli-service</code>. Running <code>npm run serve</code> or
+    <code>npm run build</code> on Node.js 17+ throws <code>ERR_OSSL_EVP_UNSUPPORTED</code>.
+  </p>
+  <pre><code># Check vue-cli-service webpack version:
+cat node_modules/@vue/cli-service/package.json | grep '"webpack"'
+
+# If webpack: "^4.x.x" — you are affected. Apply the workaround or migrate to Vite.</code></pre>
+
+  <h2>Cause 5 – Storybook &lt; 7 / Other Webpack 4 Tools</h2>
+  <p>
+    Any tool that vendor-bundles Webpack 4 is affected: Storybook 5–6, Gatsby v3 and earlier,
+    Next.js v10 and earlier, and custom Webpack 4 configs. Storybook v7+ and Gatsby v4+ all
+    moved to Webpack 5.
+  </p>
+  <pre><code># Storybook version check:
+cat node_modules/@storybook/core/package.json | grep '"version"'
+
+# Gatsby version check:
+cat node_modules/gatsby/package.json | grep '"version"'</code></pre>
+
+  <h2>Fix 1 – Quick Workaround: NODE_OPTIONS=--openssl-legacy-provider</h2>
+  <p>
+    The <code>--openssl-legacy-provider</code> flag tells OpenSSL 3.0 to load its legacy provider,
+    which re-enables MD4 and other deprecated algorithms. This unblocks Webpack 4 immediately
+    without any code changes.
+  </p>
+
+  <h3>macOS / Linux (bash/zsh — single session)</h3>
+  <pre><code>export NODE_OPTIONS=--openssl-legacy-provider
+npm start
+# or in one line:
+NODE_OPTIONS=--openssl-legacy-provider npm start</code></pre>
+
+  <h3>Windows Command Prompt (CMD)</h3>
+  <pre><code>set NODE_OPTIONS=--openssl-legacy-provider
+npm start</code></pre>
+
+  <h3>Windows PowerShell</h3>
+  <pre><code>$env:NODE_OPTIONS="--openssl-legacy-provider"
+npm start</code></pre>
+
+  <h3>Cross-platform: add to package.json scripts with cross-env (recommended)</h3>
+  <pre><code># Install cross-env once:
+npm install --save-dev cross-env
+
+# Then update package.json scripts:
+{
+  "scripts": {
+    "start":       "cross-env NODE_OPTIONS=--openssl-legacy-provider react-scripts start",
+    "build":       "cross-env NODE_OPTIONS=--openssl-legacy-provider react-scripts build",
+    "test":        "cross-env NODE_OPTIONS=--openssl-legacy-provider react-scripts test",
+    "storybook":   "cross-env NODE_OPTIONS=--openssl-legacy-provider start-storybook -p 6006",
+    "ng":          "cross-env NODE_OPTIONS=--openssl-legacy-provider ng"
+  }
+}</code></pre>
+
+  <h3>Persist via .npmrc (applies to all npm commands in the project)</h3>
+  <pre><code># Create or edit .npmrc in the project root:
+node-options=--openssl-legacy-provider
+
+# This is equivalent to setting NODE_OPTIONS for every npm run command.
+# Commit this file to source control so all contributors get the same behavior.</code></pre>
+
+  <div class="callout warn">
+    <strong>Security note:</strong> <code>--openssl-legacy-provider</code> re-enables MD4 and other
+    cryptographic algorithms that OpenSSL 3.0 disabled because they are considered weak. Apply this
+    flag <strong>only to build/dev scripts</strong>, never to a production Node.js server that
+    handles HTTP requests or user data. Use it as a temporary bridge while you plan the upgrade to
+    Webpack 5.
+  </div>
+
+  <h2>Fix 2 – Proper Fix for Create React App: Upgrade react-scripts to v5</h2>
+  <p>
+    <code>react-scripts@5.0.0</code> (January 2022) upgraded CRA's internal Webpack from 4 to 5.
+    This is the recommended permanent fix for all CRA projects.
+  </p>
+  <pre><code># Step 1: update react-scripts
+npm install --save-exact react-scripts@5.0.1
+
+# Step 2: clean install to avoid stale Webpack 4 packages in node_modules
+rm -rf node_modules package-lock.json
+npm install
+
+# Step 3: verify — npm start should now work on Node.js 18/20/22 without NODE_OPTIONS
+npm start</code></pre>
+
+  <div class="callout">
+    <strong>Note:</strong> After upgrading to <code>react-scripts@5</code>, you may see new ESLint
+    warnings or TypeScript errors. The Webpack 5 upgrade also changed how some environment
+    variables and polyfills work. Review the
+    <a href="https://github.com/facebook/create-react-app/blob/main/CHANGELOG.md" rel="noopener noreferrer">CRA v5 changelog</a>
+    for breaking changes. Also remove any <code>NODE_OPTIONS=--openssl-legacy-provider</code> from
+    your scripts after the upgrade — it is no longer needed.
+  </div>
+
+  <h2>Fix 3 – Proper Fix for Angular: Upgrade to Angular 13+</h2>
+  <p>
+    Angular CLI 13 (November 2021) migrated to Webpack 5. The Angular team provides
+    <code>ng update</code> to automate the migration across major versions.
+  </p>
+  <pre><code># From Angular 12 to 13 (do one major version at a time):
+ng update @angular/cli@13 @angular/core@13
+
+# Verify the migration succeeded — ng serve should work without NODE_OPTIONS:
+ng serve
+
+# If you are on Angular 11, first update to 12, then to 13:
+ng update @angular/cli@12 @angular/core@12
+ng update @angular/cli@13 @angular/core@13</code></pre>
+
+  <p>
+    Consult the official Angular update guide at
+    <a href="https://update.angular.io/" rel="noopener noreferrer">update.angular.io</a>
+    for a step-by-step checklist tailored to your specific version jump.
+  </p>
+
+  <h2>Fix 4 – Proper Fix for Plain Webpack Projects: Upgrade to Webpack 5</h2>
+  <p>
+    If your project uses Webpack directly (not via CRA or Angular CLI), upgrade
+    <code>webpack</code> and <code>webpack-cli</code> to v5. Webpack 5 made many breaking changes
+    — review the
+    <a href="https://webpack.js.org/migrate/5/" rel="noopener noreferrer">official Webpack 5 migration guide</a>.
+  </p>
+  <pre><code># Install Webpack 5:
+npm install --save-dev webpack@5 webpack-cli@5
+
+# Key Webpack 5 breaking changes to check:
+# 1. Node.js core module polyfills removed — add them explicitly if needed
+# 2. Module Federation is now built in
+# 3. Output.hashFunction defaults to 'xxhash64' (not md4) on Node.js 17+
+# 4. Asset modules replace file-loader, url-loader, raw-loader
+
+# If you need to keep md4 compatible hashes (e.g. deterministic chunk names):
+# webpack.config.js
+module.exports = {
+  output: {
+    hashFunction: 'sha256',  // or 'xxhash64' for speed
+  },
+};
+
+# Verify:
+npx webpack --version
+# Expected: webpack 5.x.x</code></pre>
+
+  <h2>Fix 5 – Vue CLI Projects: Use --openssl-legacy-provider or Migrate to Vite</h2>
+  <p>
+    Vue CLI does not have a built-in path to Webpack 5 as clean as CRA or Angular CLI. The
+    recommended modern approach for new Vue 3 projects is Vite. For existing Vue CLI projects,
+    use the <code>cross-env</code> workaround until a Vite migration is feasible.
+  </p>
+  <pre><code># Short-term: add cross-env to vue-cli scripts
+# package.json
+{
+  "scripts": {
+    "serve": "cross-env NODE_OPTIONS=--openssl-legacy-provider vue-cli-service serve",
+    "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider vue-cli-service build"
+  }
+}
+
+# Long-term: migrate to Vite
+# https://vitejs.dev/guide/migration-from-v2.html</code></pre>
+
+  <h2>Fix 6 – Replace node-sass with sass (Dart Sass)</h2>
+  <p>
+    <code>node-sass</code> (libsass bindings) is deprecated and also triggers
+    <code>ERR_OSSL_EVP_UNSUPPORTED</code> via its native gyp build pipeline on newer Node.js.
+    Replace it with <code>sass</code> (Dart Sass), which is the actively maintained successor.
+  </p>
+  <pre><code># Remove node-sass:
+npm uninstall node-sass
+
+# Install sass (Dart Sass — pure JS, no native bindings):
+npm install --save-dev sass
+
+# In CRA: sass is all you need; react-scripts automatically picks it up.
+# In Webpack: update sass-loader to use 'sass' instead of 'node-sass':
+# webpack.config.js
+{
+  loader: 'sass-loader',
+  options: {
+    implementation: require('sass'),  // or omit — sass-loader auto-detects
+  }
+}</code></pre>
+
+  <h2>Fix 7 – App Code Using crypto.createHash('md4') Directly</h2>
+  <p>
+    If the stack trace points to your own application code (not Webpack internals), you have a
+    direct call to <code>crypto.createHash('md4')</code>. Replace it with a supported algorithm.
+  </p>
+  <pre><code>// Wrong — MD4 is not available in OpenSSL 3.0 without the legacy provider
+const crypto = require('crypto');
+const hash = crypto.createHash('md4').update(data).digest('hex');
+
+// Fix — use SHA-256 (strongly recommended for security) or SHA-1 (if you need short hashes)
+const hash256 = crypto.createHash('sha256').update(data).digest('hex');
+const hash1   = crypto.createHash('sha1').update(data).digest('hex');
+
+// If you must maintain MD4 output for legacy compatibility, use a pure-JS implementation:
+// npm install md4  (or  npm install spark-md5)
+const SparkMD4 = require('spark-md5');
+const md4hash = SparkMD4.hash(data);</code></pre>
+
+  <h2>Fix 8 – Docker and CI Environments</h2>
+  <p>
+    CI/CD pipelines and Docker images frequently use the latest Node.js LTS base image, which
+    ships with OpenSSL 3.0. This is why the error appears in CI but not on a developer's
+    machine running Node.js 16.
+  </p>
+
+  <h3>Dockerfile — short-term workaround</h3>
+  <pre><code>FROM node:20-alpine
+WORKDIR /app
+
+# Set legacy provider for the build step only
+ENV NODE_OPTIONS=--openssl-legacy-provider
+
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# For the runtime stage, do NOT carry NODE_OPTIONS into production
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=0 /app/build ./build
+COPY --from=0 /app/node_modules ./node_modules
+# NODE_OPTIONS is not set here — good
+CMD ["node", "server.js"]</code></pre>
+
+  <h3>GitHub Actions</h3>
+  <pre><code># .github/workflows/build.yml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --openssl-legacy-provider   # workaround for Webpack 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run build</code></pre>
+
+  <h3>GitLab CI</h3>
+  <pre><code># .gitlab-ci.yml
+build:
+  image: node:20-alpine
+  variables:
+    NODE_OPTIONS: "--openssl-legacy-provider"
+  script:
+    - npm ci
+    - npm run build</code></pre>
+
+  <h2>Decision Tree: Quick Fix vs. Upgrade</h2>
+  <table>
+    <thead><tr><th>Situation</th><th>Recommended action</th></tr></thead>
+    <tbody>
+      <tr><td>Need to unblock a legacy project immediately</td><td>Add <code>cross-env NODE_OPTIONS=--openssl-legacy-provider</code> to npm scripts</td></tr>
+      <tr><td>Long-lived project, time to invest 1–2 hours</td><td>Upgrade Webpack 4 → 5 or react-scripts → v5</td></tr>
+      <tr><td>CRA project</td><td><code>npm install --save-exact react-scripts@5.0.1</code> then clean reinstall</td></tr>
+      <tr><td>Angular 11 or 12 project</td><td><code>ng update @angular/cli@13 @angular/core@13</code></td></tr>
+      <tr><td>Vue CLI project</td><td>Workaround short-term; migrate to Vite long-term</td></tr>
+      <tr><td>Storybook 5–6</td><td>Upgrade to Storybook 7+ (<code>npx storybook@latest upgrade</code>)</td></tr>
+      <tr><td>Custom Webpack 4 config</td><td>Follow the Webpack 5 migration guide, ~2–4 hours for an average project</td></tr>
+      <tr><td>App code calling <code>createHash('md4')</code></td><td>Replace with <code>'sha256'</code> or a pure-JS MD4 package</td></tr>
+      <tr><td>Docker/CI only, local machine fine</td><td>Pin Node.js version in CI to match local, or add <code>NODE_OPTIONS</code> to CI env</td></tr>
+      <tr><td>Production server (not just build)</td><td>Do NOT use <code>--openssl-legacy-provider</code>; upgrade the toolchain</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Safe Patterns After Upgrading to Webpack 5</h2>
+
+  <h3>Verify Webpack 5 hash algorithm (webpack.config.js)</h3>
+  <pre><code>// webpack.config.js — Webpack 5 default is 'xxhash64' on Node 17+
+// Both are fully supported without --openssl-legacy-provider
+module.exports = {
+  output: {
+    // 'xxhash64' is the default and fastest option in Webpack 5
+    // 'sha256' if you want a well-known cryptographic hash
+    hashFunction: 'xxhash64',
+  },
+  // No special OpenSSL flags needed
+};</code></pre>
+
+  <h3>Using Node.js crypto with supported algorithms (Node.js 17+)</h3>
+  <pre><code>const crypto = require('crypto');
+
+// These algorithms are all supported in OpenSSL 3.0 without the legacy provider:
+const sha256 = crypto.createHash('sha256').update('hello').digest('hex');
+const sha512 = crypto.createHash('sha512').update('hello').digest('hex');
+const sha1   = crypto.createHash('sha1').update('hello').digest('hex');
+
+// List all available algorithms on your Node.js version:
+console.log(crypto.getHashes());
+// Note: 'md4' will NOT appear in the list on Node.js 17+ without --openssl-legacy-provider</code></pre>
+
+  <h3>Verify the fix worked — check crypto.getHashes()</h3>
+  <pre><code>// Run this snippet to check if MD4 is available in your environment:
+const crypto = require('crypto');
+const hashes = crypto.getHashes();
+
+if (hashes.includes('md4')) {
+  console.log('MD4 is available (Node.js 16 or --openssl-legacy-provider is active)');
+} else {
+  console.log('MD4 is NOT available — Webpack 4 will fail on this Node.js version');
+  console.log('Use Webpack 5 or set NODE_OPTIONS=--openssl-legacy-provider');
+}</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Run <code>node --version</code>. If it is v17 or higher, OpenSSL 3.0 is the cause.</li>
+    <li>Check the stack trace for <code>webpack/lib/util/createHash.js</code> — this confirms Webpack 4 is the caller.</li>
+    <li>Run <code>npx webpack --version</code> or check <code>node_modules/webpack/package.json</code> for the version.</li>
+    <li>For CRA, check <code>node_modules/react-scripts/package.json</code> version — if it is &lt; 5.0.0, upgrade it.</li>
+    <li>For Angular, run <code>ng version</code> — if <code>@angular/cli</code> is 11 or 12, upgrade to 13.</li>
+    <li>Apply the quick fix (<code>NODE_OPTIONS=--openssl-legacy-provider</code>) to unblock yourself while you plan the proper upgrade.</li>
+    <li>After upgrading to Webpack 5, run <code>node -e "require('crypto').createHash('sha256')"</code> to confirm crypto works.</li>
+    <li>In CI, verify the <code>node-version</code> input in your workflow file matches your local Node.js version, or add <code>NODE_OPTIONS</code> to the CI environment.</li>
+    <li>Remove all <code>NODE_OPTIONS=--openssl-legacy-provider</code> references from scripts after completing the Webpack 5 upgrade.</li>
+    <li>If using <code>node-sass</code>, replace it with <code>sass</code> (Dart Sass) as a separate fix.</li>
+  </ol>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ERR_OSSL_EVP_UNSUPPORTED in Node.js?</summary>
+    <div class="faq-answer">
+      <p>
+        <code>ERR_OSSL_EVP_UNSUPPORTED</code> is thrown when Node.js's OpenSSL 3.0 layer rejects a
+        cryptographic algorithm that was deprecated or removed. The full error is
+        <code>Error: error:0308010C:digital envelope routines::unsupported</code>.
+        It almost always fires because Webpack 4 calls <code>crypto.createHash('md4')</code> — an
+        algorithm OpenSSL 3.0 disabled by default — to generate module IDs and chunk hashes.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_OSSL_EVP_UNSUPPORTED only happen on Node.js 17 and later?</summary>
+    <div class="faq-answer">
+      <p>
+        Node.js 17 was the first release to ship with OpenSSL 3.0. Node.js 14 and 16 used
+        OpenSSL 1.1.1, which still supports MD4 by default. When you upgrade from Node.js 16 to
+        any newer version (17, 18, 20, 22), MD4 becomes unavailable without the legacy provider
+        flag, breaking any toolchain that relies on it.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_OSSL_EVP_UNSUPPORTED quickly without changing my project?</summary>
+    <div class="faq-answer">
+      <p>Set <code>NODE_OPTIONS=--openssl-legacy-provider</code> before running your build or dev server:</p>
+      <ul>
+        <li>macOS/Linux: <code>export NODE_OPTIONS=--openssl-legacy-provider &amp;&amp; npm start</code></li>
+        <li>Windows CMD: <code>set NODE_OPTIONS=--openssl-legacy-provider &amp;&amp; npm start</code></li>
+        <li>PowerShell: <code>$env:NODE_OPTIONS='--openssl-legacy-provider'; npm start</code></li>
+        <li>package.json (cross-platform): <code>"start": "cross-env NODE_OPTIONS=--openssl-legacy-provider react-scripts start"</code></li>
+      </ul>
+      <p>This is a temporary workaround. Plan an upgrade to Webpack 5 or react-scripts v5 as the permanent fix.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_OSSL_EVP_UNSUPPORTED in a Create React App project?</summary>
+    <div class="faq-answer">
+      <p>
+        The permanent fix is upgrading react-scripts to v5.0.1+:
+      </p>
+      <pre style="margin: 0.5rem 0"><code>npm install --save-exact react-scripts@5.0.1
+rm -rf node_modules package-lock.json
+npm install</code></pre>
+      <p>
+        <code>react-scripts@5</code> bundles Webpack 5, which implements MD4 in pure JavaScript
+        and never calls OpenSSL for it. If you cannot upgrade yet, use
+        <code>cross-env NODE_OPTIONS=--openssl-legacy-provider</code> in your npm scripts.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_OSSL_EVP_UNSUPPORTED in an Angular CLI project?</summary>
+    <div class="faq-answer">
+      <p>
+        Angular CLI 13+ uses Webpack 5 and is not affected. If you are on Angular 11 or 12,
+        upgrade with:
+      </p>
+      <pre style="margin: 0.5rem 0"><code>ng update @angular/cli@13 @angular/core@13</code></pre>
+      <p>
+        If you cannot upgrade immediately, add the workaround to your package.json scripts:
+      </p>
+      <pre style="margin: 0.5rem 0"><code>"start": "cross-env NODE_OPTIONS=--openssl-legacy-provider ng serve",
+"build": "cross-env NODE_OPTIONS=--openssl-legacy-provider ng build"</code></pre>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_OSSL_EVP_UNSUPPORTED in Docker or CI?</summary>
+    <div class="faq-answer">
+      <p>In a Dockerfile, add the environment variable before your build step:</p>
+      <pre style="margin: 0.5rem 0"><code>ENV NODE_OPTIONS=--openssl-legacy-provider</code></pre>
+      <p>In GitHub Actions, add it to the <code>env</code> block of your job or step:</p>
+      <pre style="margin: 0.5rem 0"><code>env:
+  NODE_OPTIONS: --openssl-legacy-provider</code></pre>
+      <p>
+        Long-term, switch your base image to a modern Node.js version and upgrade your build
+        toolchain to Webpack 5, removing the need for the flag entirely.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Is it safe to use --openssl-legacy-provider in production?</summary>
+    <div class="faq-answer">
+      <p>
+        Only for <strong>build-time tools</strong> (Webpack, CRA, Angular CLI) — not for
+        production Node.js servers. The flag re-enables weak cryptographic algorithms including
+        MD4. A production server handling HTTP requests or user data should never run with
+        <code>--openssl-legacy-provider</code>. Use multi-stage Docker builds to ensure the flag
+        is present only in the build stage and not the runtime stage.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_OSSL_EVP_UNSUPPORTED happen in production or CI but not locally?</summary>
+    <div class="faq-answer">
+      <p>
+        Your local machine is likely running Node.js 16 or earlier (OpenSSL 1.1.1), while your
+        CI pipeline or Docker base image uses Node.js 18, 20, or 22 (OpenSSL 3.0). The fix is to
+        either align Node.js versions across environments (pin your CI to Node.js 16 temporarily),
+        add <code>NODE_OPTIONS=--openssl-legacy-provider</code> to CI, or — best — upgrade your
+        build toolchain to Webpack 5 so it works on all Node.js versions.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Can I downgrade Node.js to fix ERR_OSSL_EVP_UNSUPPORTED?</summary>
+    <div class="faq-answer">
+      <p>
+        Yes — downgrading to Node.js 16 (which uses OpenSSL 1.1.1) eliminates the error. Use
+        <code>nvm</code> to manage versions:
+      </p>
+      <pre style="margin: 0.5rem 0"><code>nvm install 16
+nvm use 16
+node --version  # v16.x.x</code></pre>
+      <p>
+        However, Node.js 16 reached end-of-life in September 2023. Treat downgrading as a
+        last resort and plan the Webpack 5 upgrade instead. Running an EOL Node.js version
+        in production is a security risk.
+      </p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/JavaScript-heap-out-of-memory/"><code>FATAL ERROR: JavaScript heap out of memory</code></a> — another build-time fatal error, often from Webpack on large codebases; fix with <code>--max-old-space-size</code></li>
+    <li><a href="https://nodejs-errors.dev/ERR_DLOPEN_FAILED/"><code>ERR_DLOPEN_FAILED</code></a> — native addon ABI mismatch after a Node.js upgrade; similar "upgrade broke my build" pattern</li>
+    <li><a href="https://nodejs-errors.dev/MODULE_NOT_FOUND/"><code>Error: Cannot find module</code></a> — another common build-time error; missing <code>npm install</code> or broken node_modules</li>
+    <li><a href="https://nodejs-errors.dev/ENOSPC/"><code>ENOSPC: System limit for number of file watchers reached</code></a> — another Webpack dev server failure, caused by inotify limits on Linux</li>
+    <li><a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/"><code>ERR_REQUIRE_ESM</code></a> — a different Node.js compatibility break triggered by upgrading packages that dropped CommonJS</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-07-29 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/errors.html#err_ossl_evp_unsupported">Official Node.js docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

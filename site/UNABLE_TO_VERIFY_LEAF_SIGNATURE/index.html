@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Error: unable to verify the first certificate (UNABLE_TO_VERIFY_LEAF_SIGNATURE) – Node.js Fix</title>
+  <meta name="description" content="Node.js throws 'Error: unable to verify the first certificate' with code UNABLE_TO_VERIFY_LEAF_SIGNATURE when the server sends an incomplete TLS certificate chain. Fix with NODE_EXTRA_CA_CERTS, https.Agent ca: option, or openssl s_client diagnostics — never with rejectUnauthorized: false in production." />
+  <link rel="canonical" href="https://nodejs-errors.dev/UNABLE_TO_VERIFY_LEAF_SIGNATURE/" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Error: unable to verify the first certificate (UNABLE_TO_VERIFY_LEAF_SIGNATURE) – Node.js Fix" />
+  <meta property="og:description" content="Node.js throws 'Error: unable to verify the first certificate' with code UNABLE_TO_VERIFY_LEAF_SIGNATURE when the server sends an incomplete TLS certificate chain. Fix with NODE_EXTRA_CA_CERTS, https.Agent ca: option, or openssl s_client diagnostics — never with rejectUnauthorized: false in production." />
+  <meta property="og:url" content="https://nodejs-errors.dev/UNABLE_TO_VERIFY_LEAF_SIGNATURE/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Error: unable to verify the first certificate (UNABLE_TO_VERIFY_LEAF_SIGNATURE) – Node.js Fix",
+    "description": "Node.js throws 'Error: unable to verify the first certificate' with code UNABLE_TO_VERIFY_LEAF_SIGNATURE during TLS/HTTPS requests when the server sends an incomplete certificate chain — missing intermediate CA certificates that bridge the leaf certificate to a trusted root. Correct fixes: NODE_EXTRA_CA_CERTS environment variable, https.Agent with ca: option, axios httpsAgent, node-fetch agent, undici dispatcher. Corporate proxy and MITM certificate scenarios. Diagnostic with openssl s_client. Why rejectUnauthorized: false is dangerous and must never be used in production.",
+    "url": "https://nodejs-errors.dev/UNABLE_TO_VERIFY_LEAF_SIGNATURE/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-07-29",
+    "dateModified": "2026-07-29"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What causes UNABLE_TO_VERIFY_LEAF_SIGNATURE in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The server sent only its leaf (end-entity) certificate without the intermediate CA certificates needed to build a chain to a trusted root. Node.js's TLS implementation (using OpenSSL) cannot verify the leaf certificate because it has no path to a trusted root CA. This is an incomplete certificate chain on the server side — not a Node.js bug. It also occurs with corporate HTTPS proxies or MITM inspection proxies that present their own certificate signed by an internal CA that Node.js does not have in its built-in root store."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix UNABLE_TO_VERIFY_LEAF_SIGNATURE in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The correct fix is to supply the missing CA certificate(s). Use NODE_EXTRA_CA_CERTS=/path/to/ca-bundle.pem before starting Node.js — this extends the built-in root store without replacing it. Alternatively, create an https.Agent({ ca: fs.readFileSync('ca-bundle.pem') }) and pass it to every HTTPS request. Do NOT set rejectUnauthorized: false or NODE_TLS_REJECT_UNAUTHORIZED=0 in production — this disables all certificate verification and exposes you to MITM attacks."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is UNABLE_TO_VERIFY_LEAF_SIGNATURE different from DEPTH_ZERO_SELF_SIGNED_CERT?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "UNABLE_TO_VERIFY_LEAF_SIGNATURE means the server sent a certificate signed by an intermediate CA, but that intermediate CA's certificate was not included in the chain — Node.js cannot build the path to a root. DEPTH_ZERO_SELF_SIGNED_CERT means the server sent a certificate that is signed by itself (issuer = subject) with no CA chain at all. Both require supplying the relevant CA certificate, but the diagnostic approach differs: UNABLE_TO_VERIFY_LEAF_SIGNATURE means the intermediate CA is missing; DEPTH_ZERO_SELF_SIGNED_CERT means the self-signed certificate itself must be trusted as a CA."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does the error happen in production but not locally?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Several scenarios: (1) Your local machine or browser has cached the intermediate certificate from a previous visit, while Node.js builds its chain from scratch on each TLS handshake and requires the server to send all intermediates. (2) A corporate HTTPS proxy or VPN is active in production that performs TLS inspection and presents its own certificate signed by an internal CA. (3) The server's TLS configuration was changed between environments — for example, a load balancer in production strips intermediate certificates. (4) Different Node.js versions bundle different root CA stores; an older Node.js version may be missing recently added roots."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix UNABLE_TO_VERIFY_LEAF_SIGNATURE with axios?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Create an https.Agent with the ca option pointing to your PEM file, then pass it as httpsAgent in the axios configuration: const agent = new https.Agent({ ca: fs.readFileSync('ca-bundle.pem') }); const client = axios.create({ httpsAgent: agent }). Alternatively, set NODE_EXTRA_CA_CERTS before starting the process — this works for all HTTPS clients including axios without any code changes."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix UNABLE_TO_VERIFY_LEAF_SIGNATURE with node-fetch or the built-in fetch?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "For node-fetch v2/v3, pass an https.Agent with the ca option in the fetch options object: fetch(url, { agent: new https.Agent({ ca: fs.readFileSync('ca.pem') }) }). For the built-in fetch (Node.js 18+, powered by undici), use NODE_EXTRA_CA_CERTS — undici does not currently accept a custom Agent via fetch options the same way as node-fetch. Alternatively, set a global undici dispatcher with a custom CA via setGlobalDispatcher."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is it safe to use rejectUnauthorized: false to fix this error?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Setting rejectUnauthorized: false or NODE_TLS_REJECT_UNAUTHORIZED=0 disables all TLS certificate verification. Any server, including a malicious one performing a man-in-the-middle attack, can present any certificate and your code will accept it. This exposes API keys, credentials, and sensitive data transmitted over what you believe to be a secure connection. It is acceptable only in a local development environment with no sensitive data — never in staging or production. The correct fix is always to supply the missing CA certificate."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I get the CA certificate I need to fix this?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Run openssl s_client -connect hostname:443 -showcerts to see all certificates the server sends. Save the intermediate CA certificate (the PEM block that is NOT the leaf/server certificate) to a .pem file. In corporate environments, the IT/security team provides the root CA certificate for the inspection proxy — often distributed via OS certificate stores as well. On Linux you can export the system CA bundle with: cp /etc/ssl/certs/ca-certificates.crt ./system-ca.pem. On macOS: security find-certificate -a -p /System/Library/Keychains/SystemRootCertificates.keychain > system-ca.pem"
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "nodejs-errors.dev", "item": "https://nodejs-errors.dev/" },
+      { "@type": "ListItem", "position": 2, "name": "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "item": "https://nodejs-errors.dev/UNABLE_TO_VERIFY_LEAF_SIGNATURE/" }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix Error: unable to verify the first certificate (UNABLE_TO_VERIFY_LEAF_SIGNATURE) in Node.js",
+    "step": [
+      { "@type": "HowToStep", "position": 1, "name": "Confirm the error with openssl s_client", "text": "Run openssl s_client -connect hostname:443 -showcerts and inspect the output. If only the leaf certificate is shown (one BEGIN CERTIFICATE block), the server is sending an incomplete chain. If you see 'Verify return code: 0 (ok)' in the openssl output but Node.js still throws, you have a corporate proxy or a Node.js root store issue." },
+      { "@type": "HowToStep", "position": 2, "name": "Obtain the missing intermediate or root CA certificate", "text": "Copy the intermediate CA PEM block from the openssl s_client output (the certificate that signed the leaf, NOT the leaf itself). In a corporate/proxy scenario, ask IT for the proxy root CA certificate in PEM format, or export it from the OS certificate store." },
+      { "@type": "HowToStep", "position": 3, "name": "Use NODE_EXTRA_CA_CERTS for a process-wide fix", "text": "Set the NODE_EXTRA_CA_CERTS environment variable to the path of your PEM file before starting Node.js: NODE_EXTRA_CA_CERTS=./ca-bundle.pem node app.js. This extends the built-in root store and applies to all HTTPS clients (https, axios, node-fetch, undici) without any code changes. The variable is read once at startup." },
+      { "@type": "HowToStep", "position": 4, "name": "Use https.Agent with the ca option for per-request control", "text": "Create an https.Agent({ ca: fs.readFileSync('./ca-bundle.pem') }) and pass it to your HTTPS requests. For axios, set httpsAgent on the client config. For node-fetch v2/v3, pass it as the agent option. For raw https.request/https.get, pass it as the agent option." },
+      { "@type": "HowToStep", "position": 5, "name": "For undici / built-in fetch (Node.js 18+), set a global dispatcher", "text": "Use setGlobalDispatcher(new Agent({ connect: { ca: fs.readFileSync('./ca-bundle.pem') } })) from 'undici' before making fetch calls, or fall back to NODE_EXTRA_CA_CERTS which also applies to undici's TLS layer." },
+      { "@type": "HowToStep", "position": 6, "name": "Never use rejectUnauthorized: false in production", "text": "Disabling certificate verification bypasses all TLS security checks. Any server — including a malicious MITM attacker — can present any certificate and your code will accept it. Use it only in local dev with no sensitive data, and add a hard guard (if (process.env.NODE_ENV === 'production') throw) to prevent it reaching production." }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; color: #1a1a1a; background: #fff; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge { display: inline-block; background: #d63031; color: #fff; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 3px; margin-bottom: 0.5rem; text-transform: uppercase; }
+    header .error-code { display: block; font-size: 0.85rem; color: #888; margin-top: 0.4rem; }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; margin: 0.5rem 0 1rem; }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code, td code { background: #f0f0f0; padding: 0.15em 0.35em; border-radius: 3px; font-size: 0.9em; }
+    .quick-answer { background: #f0fff4; border-left: 4px solid #00b894; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0 0 2rem; font-size: 0.95rem; }
+    .callout { border-left: 4px solid #0984e3; background: #f0f7ff; padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0; }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">UNABLE_TO_VERIFY_LEAF_SIGNATURE</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js TLS Error</span>
+  <h1>Error: unable to verify the first certificate</h1>
+  <span class="error-code">error code: <code>UNABLE_TO_VERIFY_LEAF_SIGNATURE</code> &nbsp;·&nbsp; also: <code>Error: certificate chain incomplete</code> &nbsp;·&nbsp; <code>self signed certificate in certificate chain</code></span>
+  <p>Complete reference — root cause (incomplete chain from server), correct fix with <code>NODE_EXTRA_CA_CERTS</code> and <code>https.Agent ca:</code>, axios / node-fetch / undici specifics, corporate proxy and MITM scenarios, <code>openssl s_client</code> diagnostics, and why <code>rejectUnauthorized: false</code> must never be used in production.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> The server sent its certificate without the intermediate CA certificates needed to reach a trusted root. Node.js rejects it because it cannot build the trust chain. Fix with <code>NODE_EXTRA_CA_CERTS=/path/to/ca-bundle.pem</code> (process-wide, zero code changes) or an <code>https.Agent({ ca: fs.readFileSync('ca-bundle.pem') })</code> passed to your HTTP client. <strong>Never</strong> set <code>rejectUnauthorized: false</code> or <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code> in production — that disables all TLS security.
+  </div>
+
+  <h2>What is UNABLE_TO_VERIFY_LEAF_SIGNATURE?</h2>
+  <p>
+    <strong>UNABLE_TO_VERIFY_LEAF_SIGNATURE</strong> is an OpenSSL error code surfaced by Node.js's TLS
+    implementation when it receives a server certificate (the "leaf" certificate) but cannot verify it
+    against any trusted Certificate Authority because the intermediate CA certificates required to
+    build the chain are absent.
+  </p>
+  <p>
+    Despite being one of the most common TLS errors Node.js developers encounter — particularly when
+    hitting internal services, corporate proxies, or recently configured servers — it is
+    <strong>not documented in the official Node.js error reference</strong>
+    (see <a href="https://github.com/nodejs/node/issues/33705" rel="noopener noreferrer">nodejs/node#33705</a>
+    and <a href="https://github.com/nodejs/node/issues/52582" rel="noopener noreferrer">nodejs/node#52582</a>).
+    This page fills that gap.
+  </p>
+  <p>
+    The error surfaces in the Node.js <code>tls</code> module as an <code>Error</code> object with
+    <code>code: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'</code>. It has nothing to do with your Node.js code
+    being wrong — it is a server-side certificate chain configuration problem (or a corporate proxy
+    inserting its own certificate).
+  </p>
+
+  <div class="callout">
+    <strong>Exact error strings you will see in the terminal:</strong><br>
+    <code>Error: unable to verify the first certificate</code><br>
+    <code>Error: certificate chain incomplete</code><br>
+    <code>FetchError: request to https://... failed, reason: unable to verify the first certificate</code><br>
+    <code>AxiosError: unable to verify the first certificate</code><br>
+    <code>RequestError: unable to verify the first certificate</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>Error: unable to verify the first certificate
+    at TLSSocket.onConnectEnd (_tls_wrap.js:1509:19)
+    at Object.onceWrapper (events.js:422:26)
+    at TLSSocket.emit (events.js:327:22)
+    at TLSSocket._finishInit (_tls_wrap.js:944:8)
+    at TLSWrap.ssl.onhandshakedone (_tls_wrap.js:718:12) {
+  code: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+}</code></pre>
+
+  <p>Using the built-in <code>fetch</code> (Node.js 18+) or <code>node-fetch</code>:</p>
+  <pre><code>TypeError: fetch failed
+    at Object.fetch (node:internal/deps/undici/undici:11372:11)
+    at process.processTicksAndQueues (node:internal/process/task_queues:95:5) {
+  [cause]: Error: unable to verify the first certificate
+      at TLSSocket.onConnectEnd (node:_tls_wrap:1564:19) {
+    code: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+  }
+}</code></pre>
+
+  <p>With axios:</p>
+  <pre><code>AxiosError: unable to verify the first certificate
+    at RedirectableRequest._currentRequest.emit (.../node_modules/follow-redirects/index.js:657:22)
+    at TLSSocket.socketErrorListener (node:_http_client:481:9) {
+  code: 'ERR_TLS_CERT_ALTNAME_INVALID',       // sometimes seen alongside
+  errno: -72,
+  config: { ... },
+  request: <ref *1> ClientRequest { ... }
+}</code></pre>
+
+  <h2>Diagnostic Fields</h2>
+  <table>
+    <thead><tr><th>Property</th><th>Value</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>err.code</code></td><td><code>'UNABLE_TO_VERIFY_LEAF_SIGNATURE'</code></td><td>OpenSSL error: leaf certificate cannot be verified (no valid chain to a trusted root)</td></tr>
+      <tr><td><code>err.message</code></td><td><code>'unable to verify the first certificate'</code></td><td>Human-readable OpenSSL reason string</td></tr>
+      <tr><td><code>err.library</code></td><td><code>'SSL routines'</code></td><td>OpenSSL subsystem that raised the error</td></tr>
+      <tr><td><code>err.reason</code></td><td><code>'unable to verify the first certificate'</code></td><td>Same as message; set on older OpenSSL builds</td></tr>
+      <tr><td><code>err.syscall</code></td><td><code>'connect'</code></td><td>Failed during TLS handshake, not data transfer</td></tr>
+    </tbody>
+  </table>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead><tr><th>Cause</th><th>Symptom / Context</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Server sends leaf certificate only (no intermediates)</td>
+        <td>All environments; most common cause. <code>openssl s_client</code> shows only one certificate in the chain.</td>
+        <td><code>NODE_EXTRA_CA_CERTS</code> pointing to the intermediate CA, or fix server config to include the full chain.</td>
+      </tr>
+      <tr>
+        <td>Corporate HTTPS inspection proxy</td>
+        <td>Works outside corporate network; fails behind VPN or office network. The proxy re-signs traffic with its own root CA.</td>
+        <td>Obtain the corporate root CA certificate from IT; set <code>NODE_EXTRA_CA_CERTS</code> to it.</td>
+      </tr>
+      <tr>
+        <td>MITM / SSL-inspection firewall (Zscaler, Palo Alto, Cisco Umbrella, etc.)</td>
+        <td>Intercepts all HTTPS; certificate CN shows the proxy, not the real server. Common in CI/CD runners on managed corporate infrastructure.</td>
+        <td>Export the proxy root CA from the OS store; set <code>NODE_EXTRA_CA_CERTS</code> or <code>ca:</code> in agent.</td>
+      </tr>
+      <tr>
+        <td>Load balancer / CDN strips intermediate certificates</td>
+        <td>Works from a browser (which caches intermediates) but not from a fresh Node.js process. Common with misconfigured nginx, HAProxy, or Cloudflare custom origins.</td>
+        <td>Fix the server/load-balancer TLS config to include the full chain. Short-term: supply intermediate via <code>NODE_EXTRA_CA_CERTS</code>.</td>
+      </tr>
+      <tr>
+        <td>Self-signed certificate on internal service</td>
+        <td>Internal API or dev/staging endpoint signed with a company-internal CA not in Node.js's built-in root store.</td>
+        <td>Set <code>NODE_EXTRA_CA_CERTS</code> to the internal CA certificate. Never use <code>rejectUnauthorized: false</code> in shared/staging environments.</td>
+      </tr>
+      <tr>
+        <td>Node.js version with outdated root CA bundle</td>
+        <td>Error on Node.js 12–14 but not on 18+. The server uses a newer root CA that older Node.js versions do not include.</td>
+        <td>Upgrade Node.js. Short-term: manually add the newer root CA via <code>NODE_EXTRA_CA_CERTS</code>.</td>
+      </tr>
+      <tr>
+        <td>Docker container with no system CA bundle</td>
+        <td>Works locally; fails in a minimal Docker image (e.g., <code>node:alpine</code> without <code>ca-certificates</code> installed).</td>
+        <td>Add <code>RUN apk add --no-cache ca-certificates</code> to the Dockerfile, or copy your CA bundle and set <code>NODE_EXTRA_CA_CERTS</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Incomplete Certificate Chain (Server-Side)</h2>
+  <p>
+    A TLS certificate chain works like a chain of trust: <em>root CA → intermediate CA → leaf certificate</em>.
+    Browsers and operating systems cache intermediate CA certificates from previous visits; Node.js does not.
+    Node.js requires the server to send the complete chain in the TLS handshake. If the server omits
+    the intermediate CA certificate, Node.js has no path from the leaf to a trusted root and throws
+    <code>UNABLE_TO_VERIFY_LEAF_SIGNATURE</code>.
+  </p>
+  <p>
+    This is the most common cause and is a server misconfiguration, not a Node.js bug. The fix has
+    two parts: a server-side fix (the permanent solution) and a client-side workaround if you do not
+    control the server.
+  </p>
+
+  <h3>Diagnose with openssl s_client</h3>
+  <pre><code># Show all certificates the server sends during the TLS handshake
+openssl s_client -connect api.example.com:443 -showcerts
+
+# For a server on a non-standard port or requiring SNI:
+openssl s_client -connect internal-api.corp.com:8443 -servername internal-api.corp.com -showcerts
+
+# Quick check — if the verify return code is not 0, the chain is broken:
+echo | openssl s_client -connect api.example.com:443 2>/dev/null | grep "Verify return code"
+# Good output: Verify return code: 0 (ok)
+# Bad output:  Verify return code: 21 (unable to verify the first certificate)</code></pre>
+
+  <p>
+    If the output shows only <strong>one</strong> <code>BEGIN CERTIFICATE</code> / <code>END CERTIFICATE</code>
+    block before the server certificate details, the server is sending only the leaf certificate.
+    You need the intermediate CA certificate — it is the certificate that signed the leaf but is not
+    itself the root CA.
+  </p>
+
+  <h3>Extract the intermediate CA certificate</h3>
+  <pre><code># Run with -showcerts and save ALL certificates to a file
+openssl s_client -connect api.example.com:443 -showcerts 2>/dev/null &lt; /dev/null | \
+  awk '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/' > all-certs.pem
+
+# The file now contains the leaf + any intermediates in order.
+# The LAST certificate block is typically the highest intermediate (closest to root).
+# Keep only the intermediate CA block(s) — not the first block (which is the leaf).
+
+# Verify what you extracted:
+openssl x509 -in intermediate-ca.pem -text -noout | grep -E "Subject:|Issuer:|CA:"</code></pre>
+
+  <h2>Cause 2 – Corporate HTTPS Proxy / MITM Inspection</h2>
+  <p>
+    Enterprise networks commonly route HTTPS traffic through an inspection proxy
+    (Zscaler, Palo Alto Prisma, Cisco Umbrella, Blue Coat, etc.). The proxy terminates your TLS
+    connection, inspects the traffic, and re-encrypts it with a certificate signed by the corporate
+    root CA. Operating systems and browsers have this corporate root CA pre-installed; Node.js does not.
+  </p>
+  <p>
+    This is the most common reason the error appears in CI/CD pipelines (GitHub Actions, Jenkins,
+    GitLab CI on a corporate runner) but not in local development outside the network, or vice versa.
+  </p>
+
+  <div class="callout">
+    <strong>Identifying a proxy:</strong> If <code>openssl s_client -connect api.github.com:443 -showcerts</code>
+    shows a certificate whose CN is something like <code>Zscaler Root CA</code> or your company's name
+    rather than <code>github.com</code>, you are behind an MITM inspection proxy.
+    Ask your IT/security team for the root CA certificate in PEM format.
+  </div>
+
+  <h3>Export the corporate CA from the OS store</h3>
+  <pre><code># Linux (Debian/Ubuntu) — copy the full system bundle
+cp /etc/ssl/certs/ca-certificates.crt ./system-ca.pem
+
+# Linux (RHEL/CentOS/Fedora)
+cp /etc/pki/tls/certs/ca-bundle.crt ./system-ca.pem
+
+# macOS — export all system root CAs
+security find-certificate -a -p /System/Library/Keychains/SystemRootCertificates.keychain \
+  > system-ca.pem
+# Also include user-added CAs (corporate installs go here):
+security find-certificate -a -p ~/Library/Keychains/login.keychain >> system-ca.pem
+
+# Windows (PowerShell) — export corporate CAs from the Windows certificate store
+Get-ChildItem Cert:\LocalMachine\Root | ForEach-Object {
+  [System.IO.File]::AppendAllText("C:\certs\corporate-ca.pem",
+    "-----BEGIN CERTIFICATE-----`n" +
+    [Convert]::ToBase64String($_.RawData, 'InsertLineBreaks') +
+    "`n-----END CERTIFICATE-----`n")
+}</code></pre>
+
+  <h2>Fix 1 – NODE_EXTRA_CA_CERTS (Recommended: Process-Wide, Zero Code Change)</h2>
+  <p>
+    <code>NODE_EXTRA_CA_CERTS</code> is a Node.js environment variable that extends the built-in
+    root CA store with additional PEM-encoded certificates. It applies to all HTTPS requests made
+    by the process — <code>https</code>, <code>axios</code>, <code>node-fetch</code>, <code>undici</code>,
+    <code>got</code>, and any other library that uses Node.js's TLS stack. No code changes required.
+  </p>
+  <p>
+    The variable must be set <strong>before the process starts</strong>. Changing it at runtime
+    has no effect because TLS initialization reads it once during startup.
+  </p>
+
+  <pre><code># Shell — one-off invocation
+NODE_EXTRA_CA_CERTS=./ca-bundle.pem node app.js
+
+# Shell — export for all subsequent commands in the session
+export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/corporate-ca.pem
+npm run dev
+
+# npm script in package.json
+{
+  "scripts": {
+    "start": "NODE_EXTRA_CA_CERTS=./certs/ca-bundle.pem node dist/server.js",
+    "dev":   "NODE_EXTRA_CA_CERTS=./certs/ca-bundle.pem nodemon src/index.ts"
+  }
+}
+
+# .env file (loaded by dotenv at startup — works because dotenv sets process.env BEFORE
+# any TLS connection is made, as long as it's the first require in your entry point)
+NODE_EXTRA_CA_CERTS=./certs/ca-bundle.pem
+
+# Docker — in Dockerfile
+COPY certs/corporate-ca.pem /app/certs/corporate-ca.pem
+ENV NODE_EXTRA_CA_CERTS=/app/certs/corporate-ca.pem
+
+# Docker Compose — in docker-compose.yml
+environment:
+  - NODE_EXTRA_CA_CERTS=/app/certs/corporate-ca.pem
+
+# GitHub Actions — set as an environment variable in the job
+env:
+  NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/certs/ca-bundle.pem
+
+# Windows PowerShell
+$env:NODE_EXTRA_CA_CERTS = "C:\certs\corporate-ca.pem"
+node app.js</code></pre>
+
+  <div class="callout">
+    <strong>PEM file format:</strong> The file pointed to by <code>NODE_EXTRA_CA_CERTS</code> can
+    contain multiple certificates — just concatenate them. Each block must be a valid PEM:
+    <code>-----BEGIN CERTIFICATE-----</code> ... <code>-----END CERTIFICATE-----</code>.
+    DER/binary format is not accepted.
+  </div>
+
+  <h2>Fix 2 – https.Agent with ca: Option (Per-Request / Per-Client Control)</h2>
+  <p>
+    When you need finer-grained control — for example, different CA certificates for different
+    upstream services — create a custom <code>https.Agent</code> with the <code>ca</code> option
+    and pass it to your HTTP client.
+  </p>
+
+  <h3>Raw https module (CJS)</h3>
+  <pre><code>const https = require('https');
+const fs    = require('fs');
+
+// Load the CA certificate (can be a chain / bundle with multiple PEM blocks)
+const caCert = fs.readFileSync('./certs/ca-bundle.pem');
+
+const agent = new https.Agent({ ca: caCert });
+
+https.get(
+  { hostname: 'internal-api.corp.com', path: '/health', agent },
+  (res) => {
+    let body = '';
+    res.on('data', (chunk) => { body += chunk; });
+    res.on('end', () => console.log(body));
+  }
+).on('error', console.error);</code></pre>
+
+  <h3>Raw https module (ESM)</h3>
+  <pre><code>import https from 'node:https';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const caCert    = readFileSync(join(__dirname, 'certs', 'ca-bundle.pem'));
+
+const agent = new https.Agent({ ca: caCert });
+
+const res = await new Promise((resolve, reject) => {
+  const req = https.get(
+    { hostname: 'internal-api.corp.com', path: '/health', agent },
+    resolve
+  );
+  req.on('error', reject);
+});
+
+console.log(res.statusCode);</code></pre>
+
+  <h2>Fix 3 – axios with httpsAgent</h2>
+  <p>
+    Pass the custom <code>https.Agent</code> as <code>httpsAgent</code> when creating an axios
+    instance. All requests made through that instance will use the custom CA.
+  </p>
+
+  <pre><code>// CJS
+const axios = require('axios');
+const https = require('https');
+const fs    = require('fs');
+
+const httpsAgent = new https.Agent({
+  ca: fs.readFileSync('./certs/ca-bundle.pem'),
+});
+
+const client = axios.create({ httpsAgent });
+
+const { data } = await client.get('https://internal-api.corp.com/api/v1/users');
+console.log(data);</code></pre>
+
+  <pre><code>// ESM
+import axios from 'axios';
+import https from 'node:https';
+import { readFileSync } from 'node:fs';
+
+const httpsAgent = new https.Agent({
+  ca: readFileSync(new URL('./certs/ca-bundle.pem', import.meta.url)),
+});
+
+const client = axios.create({ httpsAgent });
+
+const { data } = await client.get('https://internal-api.corp.com/api/v1/users');</code></pre>
+
+  <div class="callout">
+    <strong>axios default instance:</strong> To apply the agent to every axios call globally
+    (including <code>axios.get()</code>, <code>axios.post()</code>, etc. on the default instance),
+    set <code>axios.defaults.httpsAgent = httpsAgent</code> before any request is made.
+  </div>
+
+  <h2>Fix 4 – node-fetch (v2 and v3)</h2>
+  <p>
+    Pass the agent directly in the fetch options. The API is the same for node-fetch v2 (CJS)
+    and v3 (ESM).
+  </p>
+
+  <pre><code>// node-fetch v2 — CJS
+const fetch = require('node-fetch');
+const https = require('https');
+const fs    = require('fs');
+
+const agent = new https.Agent({
+  ca: fs.readFileSync('./certs/ca-bundle.pem'),
+});
+
+const res  = await fetch('https://internal-api.corp.com/data', { agent });
+const data = await res.json();
+console.log(data);</code></pre>
+
+  <pre><code>// node-fetch v3 — ESM
+import fetch from 'node-fetch';
+import https from 'node:https';
+import { readFileSync } from 'node:fs';
+
+const agent = new https.Agent({
+  ca: readFileSync(new URL('./certs/ca-bundle.pem', import.meta.url)),
+});
+
+const res  = await fetch('https://internal-api.corp.com/data', { agent });
+const data = await res.json();</code></pre>
+
+  <h2>Fix 5 – Built-in fetch and undici (Node.js 18+)</h2>
+  <p>
+    The built-in <code>fetch</code> in Node.js 18+ is powered by <code>undici</code>. It does not
+    accept an <code>agent</code> option in the same way as node-fetch. The recommended approach is
+    either <code>NODE_EXTRA_CA_CERTS</code> (applies globally, recommended) or setting a custom
+    global dispatcher via <code>undici.setGlobalDispatcher</code>.
+  </p>
+
+  <pre><code>// undici dispatcher approach (Node.js 18+ with undici installed separately or via node:)
+import { Agent, setGlobalDispatcher } from 'undici';
+import { readFileSync } from 'node:fs';
+
+// Set once at application startup, before any fetch() calls
+setGlobalDispatcher(new Agent({
+  connect: {
+    ca: readFileSync('./certs/ca-bundle.pem'),
+  },
+}));
+
+// All subsequent fetch() calls use the custom CA automatically
+const res  = await fetch('https://internal-api.corp.com/data');
+const data = await res.json();</code></pre>
+
+  <pre><code>// Per-request approach with undici.fetch (bypasses global dispatcher)
+import { fetch, Agent } from 'undici';
+import { readFileSync } from 'node:fs';
+
+const dispatcher = new Agent({
+  connect: { ca: readFileSync('./certs/ca-bundle.pem') },
+});
+
+const res  = await fetch('https://internal-api.corp.com/data', { dispatcher });
+const data = await res.json();</code></pre>
+
+  <h2>Fix 6 – Docker and CI Environments</h2>
+  <p>
+    Minimal Docker images (especially Alpine-based) often lack a full CA bundle. Add the
+    <code>ca-certificates</code> package and, if needed, install your corporate CA.
+  </p>
+
+  <pre><code># Dockerfile — Alpine (node:alpine, node:22-alpine, etc.)
+FROM node:22-alpine
+
+# Install system CA certificates
+RUN apk add --no-cache ca-certificates
+
+# If you have a corporate CA, copy it and update the system bundle
+COPY certs/corporate-ca.pem /usr/local/share/ca-certificates/corporate-ca.crt
+RUN update-ca-certificates
+
+# Tell Node.js to use it (covers the Node.js TLS stack separately from OS)
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/corporate-ca.crt
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+CMD ["node", "dist/server.js"]</code></pre>
+
+  <pre><code># Dockerfile — Debian/Ubuntu (node:22, node:22-slim, etc.)
+FROM node:22-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Corporate CA
+COPY certs/corporate-ca.pem /usr/local/share/ca-certificates/corporate-ca.crt
+RUN update-ca-certificates
+
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/corporate-ca.crt
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+CMD ["node", "dist/server.js"]</code></pre>
+
+  <pre><code># GitHub Actions — inject the CA cert from a secret
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NODE_EXTRA_CA_CERTS: /tmp/corporate-ca.pem
+    steps:
+      - name: Write corporate CA certificate
+        run: echo "${{ secrets.CORPORATE_CA_PEM }}" > /tmp/corporate-ca.pem
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm ci
+      - run: npm test</code></pre>
+
+  <h2>Why rejectUnauthorized: false Is Dangerous</h2>
+  <p>
+    <strong>Do not use this in production under any circumstances:</strong>
+  </p>
+
+  <pre><code>// DANGEROUS — disables ALL TLS certificate verification
+// A malicious server or MITM attacker can present any certificate
+// and your code will accept it silently.
+const agent = new https.Agent({ rejectUnauthorized: false }); // ← NEVER in production
+const res = await fetch(url, { agent });
+
+// Equally dangerous:
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // ← NEVER in production</code></pre>
+
+  <p>
+    With <code>rejectUnauthorized: false</code>, an attacker positioned between your Node.js
+    process and the server (for example, on the same network segment, or via DNS spoofing) can
+    present any certificate — including a self-signed one — and your code will complete the TLS
+    handshake without error. The connection <em>appears</em> encrypted, but the attacker can read
+    and modify every byte. API keys, authentication tokens, and sensitive data are all exposed.
+  </p>
+  <p>
+    If you absolutely must use it during local development (for example, against a dev server with
+    a self-signed cert), add a hard guard that prevents it from reaching other environments:
+  </p>
+
+  <pre><code>// Safe local-development-only pattern — crashes if attempted in any other environment
+if (process.env.NODE_ENV !== 'development') {
+  throw new Error(
+    'rejectUnauthorized: false is only allowed in NODE_ENV=development. ' +
+    'Set NODE_EXTRA_CA_CERTS instead.'
+  );
+}
+
+const agent = new https.Agent({ rejectUnauthorized: false });</code></pre>
+
+  <h2>UNABLE_TO_VERIFY_LEAF_SIGNATURE vs DEPTH_ZERO_SELF_SIGNED_CERT</h2>
+  <table>
+    <thead>
+      <tr><th>Error Code</th><th>What It Means</th><th>Fix</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>UNABLE_TO_VERIFY_LEAF_SIGNATURE</code></td>
+        <td>The server sent a certificate signed by an intermediate CA, but that intermediate CA's certificate was <strong>not included</strong> in the TLS handshake. Node.js has the leaf but cannot build the chain to a root.</td>
+        <td>Supply the intermediate CA certificate via <code>NODE_EXTRA_CA_CERTS</code> or <code>https.Agent ca:</code>. Fix the server TLS config to send the full chain.</td>
+      </tr>
+      <tr>
+        <td><code>DEPTH_ZERO_SELF_SIGNED_CERT</code></td>
+        <td>The server sent a certificate that is its own issuer (self-signed — no CA at all). There is no chain to build.</td>
+        <td>Supply the self-signed certificate itself as the trusted CA via <code>NODE_EXTRA_CA_CERTS</code> or <code>https.Agent ca:</code>. Useful for internal dev services and private APIs.</td>
+      </tr>
+      <tr>
+        <td><code>SELF_SIGNED_CERT_IN_CHAIN</code></td>
+        <td>One of the certificates in the chain (typically the root) is self-signed and not in Node.js's trusted root store.</td>
+        <td>Add the root CA certificate to <code>NODE_EXTRA_CA_CERTS</code> — same approach as above.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Safe CA-Aware Request Patterns</h2>
+  <p>
+    The pattern below creates a single shared agent and client instance at module level, so the
+    PEM file is read once and reused across all requests. This is the recommended production approach.
+  </p>
+
+  <h3>Shared agent factory (CJS)</h3>
+  <pre><code>// lib/https-client.js — create once, reuse everywhere
+const https = require('https');
+const fs    = require('fs');
+const path  = require('path');
+const axios = require('axios');
+
+const CA_PATH = process.env.INTERNAL_CA_PATH
+  || path.join(__dirname, '../certs/ca-bundle.pem');
+
+let _agent;
+function getAgent() {
+  if (!_agent) {
+    _agent = new https.Agent({
+      ca: fs.readFileSync(CA_PATH),
+      keepAlive: true,          // reuse connections for performance
+      keepAliveMsecs: 10_000,
+    });
+  }
+  return _agent;
+}
+
+const internalClient = axios.create({
+  baseURL: process.env.INTERNAL_API_URL,
+  httpsAgent: getAgent(),
+  timeout: 10_000,
+});
+
+module.exports = { internalClient, getAgent };</code></pre>
+
+  <h3>Shared agent factory (ESM)</h3>
+  <pre><code">// lib/https-client.js (ESM)
+import https from 'node:https';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import axios from 'axios';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CA_PATH   = process.env.INTERNAL_CA_PATH
+  ?? join(__dirname, '../certs/ca-bundle.pem');
+
+const agent = new https.Agent({
+  ca: readFileSync(CA_PATH),
+  keepAlive: true,
+  keepAliveMsecs: 10_000,
+});
+
+export const internalClient = axios.create({
+  baseURL: process.env.INTERNAL_API_URL,
+  httpsAgent: agent,
+  timeout: 10_000,
+});
+
+export { agent };</code></pre>
+
+  <h3>Startup validation</h3>
+  <pre><code">// Validate the CA file is readable at startup rather than failing on first request
+import { readFileSync, existsSync } from 'node:fs';
+
+const CA_PATH = process.env.NODE_EXTRA_CA_CERTS;
+if (CA_PATH) {
+  if (!existsSync(CA_PATH)) {
+    throw new Error(
+      `NODE_EXTRA_CA_CERTS is set to "${CA_PATH}" but the file does not exist.`
+    );
+  }
+  // Test that it's valid PEM by parsing it
+  const pem = readFileSync(CA_PATH, 'utf8');
+  if (!pem.includes('-----BEGIN CERTIFICATE-----')) {
+    throw new Error(
+      `NODE_EXTRA_CA_CERTS file "${CA_PATH}" does not contain a valid PEM certificate.`
+    );
+  }
+  console.log(`[TLS] Using extra CA certificates from: ${CA_PATH}`);
+}</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Run <code>openssl s_client -connect hostname:443 -showcerts</code>. Count the certificate blocks. If only one, the server is sending an incomplete chain.</li>
+    <li>Check <code>openssl s_client</code>'s "Verify return code" line. Code <code>21</code> = unable to verify the first certificate. Code <code>0</code> = OK from OpenSSL's perspective (OpenSSL has the intermediate cached — run from a fresh environment).</li>
+    <li>If the CN in <code>openssl s_client</code> output is your proxy vendor (Zscaler, Palo Alto, etc.) rather than the actual server, you are behind an MITM inspection proxy. Contact IT for the root CA certificate.</li>
+    <li>Check if the error appears only in CI/CD or Docker but not locally — this almost always indicates a corporate proxy or a missing CA bundle in the container image.</li>
+    <li>Verify <code>NODE_EXTRA_CA_CERTS</code> is set before the process starts, and the path is correct relative to the working directory. Print <code>process.env.NODE_EXTRA_CA_CERTS</code> at startup to confirm.</li>
+    <li>Confirm the CA file is PEM format (ASCII text starting with <code>-----BEGIN CERTIFICATE-----</code>), not DER (binary).</li>
+    <li>For Docker: run <code>docker exec &lt;container&gt; printenv NODE_EXTRA_CA_CERTS</code> and <code>docker exec &lt;container&gt; cat $NODE_EXTRA_CA_CERTS</code> to confirm the file is accessible inside the container.</li>
+    <li>Check the Node.js version. Node.js 12 and 14 have older root CA bundles. Upgrade to Node.js 18 LTS or 22 LTS if a newer root CA is needed.</li>
+    <li>Enable TLS debug output: <code>NODE_DEBUG=tls node app.js</code> — this prints the full handshake including which certificates are received and which verification step fails.</li>
+  </ol>
+
+  <pre><code># Debug TLS handshake and certificate verification
+NODE_DEBUG=tls node app.js 2>&amp;1 | grep -E "(certificate|verify|UNABLE|chain)"
+
+# Show which root CAs Node.js trusts (useful to confirm your CA was added)
+node -e "const tls = require('tls'); console.log(tls.rootCertificates.length, 'root CAs loaded');"
+
+# After setting NODE_EXTRA_CA_CERTS, verify the count increases:
+NODE_EXTRA_CA_CERTS=./ca-bundle.pem node -e \
+  "const tls = require('tls'); console.log(tls.rootCertificates.length, 'root CAs loaded');"</code></pre>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What causes UNABLE_TO_VERIFY_LEAF_SIGNATURE in Node.js?</summary>
+    <div class="faq-answer">
+      <p>The server sent only its leaf (end-entity) TLS certificate without the intermediate CA certificates needed to build a trust chain to a recognized root CA. Node.js's TLS implementation requires the full chain at handshake time and cannot verify the leaf in isolation. This is a server-side misconfiguration in the most common case, but it also occurs when a corporate HTTPS inspection proxy (Zscaler, Palo Alto, Cisco Umbrella, etc.) inserts its own certificate signed by a private root CA that is not in Node.js's built-in root store.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix UNABLE_TO_VERIFY_LEAF_SIGNATURE in Node.js?</summary>
+    <div class="faq-answer">
+      <p>The correct fix is to provide the missing CA certificate(s). The easiest approach is to set <code>NODE_EXTRA_CA_CERTS=/path/to/ca-bundle.pem</code> before starting Node.js — this extends the built-in root store without replacing it and applies to all HTTPS clients (axios, node-fetch, undici, got, etc.) without code changes. For per-request control, create an <code>https.Agent({ ca: fs.readFileSync('ca-bundle.pem') })</code> and pass it as <code>httpsAgent</code> (axios), <code>agent</code> (node-fetch), or <code>dispatcher</code> (undici). Never use <code>rejectUnauthorized: false</code> in production.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does the error happen in production but not locally?</summary>
+    <div class="faq-answer">
+      <p>The most common reasons: (1) A corporate HTTPS inspection proxy is active in production (CI/CD runner, VPN, office network) but not in your local environment. (2) Your browser has cached the intermediate CA from a previous visit; Node.js builds the chain from scratch every time and requires the server to send all intermediates. (3) A load balancer in production strips intermediate certificates that are present in a local dev server. (4) A Docker container in CI uses a minimal image without a full CA bundle. Run <code>openssl s_client -connect hostname:443 -showcerts</code> from inside the failing environment to see exactly what certificates the server is sending.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How is UNABLE_TO_VERIFY_LEAF_SIGNATURE different from DEPTH_ZERO_SELF_SIGNED_CERT?</summary>
+    <div class="faq-answer">
+      <p><code>UNABLE_TO_VERIFY_LEAF_SIGNATURE</code>: the leaf certificate is signed by a CA, but the CA's certificate was not provided in the chain — Node.js cannot build the trust path. The server needs to send intermediate certificates, or you need to supply them via <code>NODE_EXTRA_CA_CERTS</code>.</p>
+      <p><code>DEPTH_ZERO_SELF_SIGNED_CERT</code>: the server sent a certificate that is its own signer (issuer = subject). There is no CA chain at all. To trust it, supply the certificate itself as the CA: <code>https.Agent({ ca: fs.readFileSync('server-cert.pem') })</code>.</p>
+      <p>The fix method is the same for both (supply the relevant certificate as a trusted CA), but the certificate to supply differs: an intermediate CA for <code>UNABLE_TO_VERIFY_LEAF_SIGNATURE</code>, or the self-signed cert itself for <code>DEPTH_ZERO_SELF_SIGNED_CERT</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix UNABLE_TO_VERIFY_LEAF_SIGNATURE with axios?</summary>
+    <div class="faq-answer">
+      <p>Create an <code>https.Agent</code> with the <code>ca</code> option and pass it as <code>httpsAgent</code> to your axios instance:</p>
+      <pre><code>const httpsAgent = new require('https').Agent({
+  ca: require('fs').readFileSync('./certs/ca-bundle.pem'),
+});
+const client = require('axios').create({ httpsAgent });
+const { data } = await client.get('https://internal-api.corp.com/...');</code></pre>
+      <p>Or set <code>NODE_EXTRA_CA_CERTS</code> before starting the process — no code changes needed.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix UNABLE_TO_VERIFY_LEAF_SIGNATURE with node-fetch or built-in fetch?</summary>
+    <div class="faq-answer">
+      <p>For <code>node-fetch</code> v2/v3: <code>fetch(url, { agent: new https.Agent({ ca: fs.readFileSync('ca.pem') }) })</code>.</p>
+      <p>For built-in <code>fetch</code> (Node.js 18+, undici): use <code>NODE_EXTRA_CA_CERTS</code> (recommended), or use <code>setGlobalDispatcher(new Agent({ connect: { ca: fs.readFileSync('ca.pem') } }))</code> from the <code>undici</code> package, or use <code>undici.fetch(url, { dispatcher: new Agent({ connect: { ca: ... } }) })</code> for per-request control.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Is rejectUnauthorized: false safe to use?</summary>
+    <div class="faq-answer">
+      <p>No. <code>rejectUnauthorized: false</code> (or <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code>) disables every certificate check — server identity, expiry, revocation, and chain validation. Any server, including one performing a man-in-the-middle attack, will be accepted. Your API credentials, tokens, and data are transmitted over a connection you believe is encrypted, but an attacker can read and modify everything. Use <code>rejectUnauthorized: false</code> only in isolated local development with no sensitive data, always behind a guard like <code>if (process.env.NODE_ENV !== 'development') throw</code>.</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I get the CA certificate to use with NODE_EXTRA_CA_CERTS?</summary>
+    <div class="faq-answer">
+      <p>Run <code>openssl s_client -connect hostname:443 -showcerts 2>/dev/null &lt; /dev/null</code> and save the non-leaf certificate blocks (everything after the first <code>END CERTIFICATE</code>) to a <code>.pem</code> file. For corporate MITM proxies, ask your IT/security team for the root CA certificate in PEM format, or export it from the OS certificate store (Linux: <code>/etc/ssl/certs/ca-certificates.crt</code>; macOS: <code>security find-certificate</code>; Windows: PowerShell <code>Get-ChildItem Cert:\LocalMachine\Root</code>).</p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does NODE_EXTRA_CA_CERTS not work when I set it inside my code?</summary>
+    <div class="faq-answer">
+      <p><code>NODE_EXTRA_CA_CERTS</code> is read once when the Node.js TLS subsystem initializes — setting <code>process.env.NODE_EXTRA_CA_CERTS</code> programmatically inside your application after the process has started has no effect on TLS connections. You must set the variable in the process environment <em>before</em> the Node.js process starts: in the shell, in a <code>.env</code> file loaded by dotenv as the very first operation in the entry point, in the Docker <code>ENV</code> directive, or in the CI environment variable settings.</p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/ECONNRESET/"><code>ECONNRESET: connection reset by peer</code></a> — TLS handshake failures (including certificate issues) sometimes surface as ECONNRESET when the remote peer closes the connection during the handshake</li>
+    <li><a href="https://nodejs-errors.dev/ECONNREFUSED/"><code>ECONNREFUSED: connection refused</code></a> — the connection never reached TLS; nothing was listening on the port</li>
+    <li><a href="https://nodejs-errors.dev/ETIMEDOUT/"><code>ETIMEDOUT: connection timed out</code></a> — the TLS handshake or connection attempt timed out before completing</li>
+    <li><a href="https://nodejs-errors.dev/ENOTFOUND/"><code>ENOTFOUND: getaddrinfo ENOTFOUND</code></a> — DNS resolution failed before the TLS connection could be attempted</li>
+    <li><a href="https://nodejs-errors.dev/ERR_OSSL_EVP_UNSUPPORTED/"><code>ERR_OSSL_EVP_UNSUPPORTED</code></a> — a different OpenSSL error; occurs when a cryptographic algorithm (MD4) was removed in OpenSSL 3.0 used by Node.js 17+</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-07-29 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/tls.html">Official Node.js TLS docs</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/cli.html#node_extra_ca_certsfile">NODE_EXTRA_CA_CERTS docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>

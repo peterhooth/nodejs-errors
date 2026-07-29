@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>Error [ERR_MODULE_NOT_FOUND]: Cannot find module – Node.js ESM Fix</title>
+  <meta name="description" content="Node.js throws Error [ERR_MODULE_NOT_FOUND]: Cannot find module when the ESM loader cannot resolve an import. Covers missing .js extensions, TypeScript moduleResolution nodenext/bundler, 'type':'module', package exports maps, and dual CJS/ESM issues — with every fix." />
+  <link rel="canonical" href="https://nodejs-errors.dev/ERR_MODULE_NOT_FOUND/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Error [ERR_MODULE_NOT_FOUND]: Cannot find module – Node.js ESM Fix" />
+  <meta property="og:description" content="Fix Error [ERR_MODULE_NOT_FOUND]: Cannot find module. Covers missing .js file extensions in ESM imports, TypeScript nodenext/bundler moduleResolution, 'type':'module', package exports maps, ts-node/tsx, and Docker/CI." />
+  <meta property="og:url" content="https://nodejs-errors.dev/ERR_MODULE_NOT_FOUND/" />
+  <meta property="og:site_name" content="nodejs-errors.dev" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Error [ERR_MODULE_NOT_FOUND]: Cannot find module – Node.js ESM Fix",
+    "description": "Node.js throws ERR_MODULE_NOT_FOUND when the ESM import loader cannot resolve a module specifier. Root causes: missing mandatory .js extension in relative imports, wrong or missing 'type':'module' in package.json, TypeScript compiled output retaining bare specifiers (moduleResolution must be node16/nodenext/bundler), missing package exports map entry, directory import without explicit index.js, case-sensitivity mismatch on Linux, package not installed, and misconfigured ts-node or tsx runner. Fixes: add .js extension to every relative import, set module+moduleResolution to Node16/NodeNext in tsconfig.json, use tsx or --experimental-strip-types for TypeScript ESM, add exports map entries, check the package.json type field.",
+    "url": "https://nodejs-errors.dev/ERR_MODULE_NOT_FOUND/",
+    "author": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "publisher": { "@type": "Organization", "name": "nodejs-errors.dev", "url": "https://nodejs-errors.dev/" },
+    "datePublished": "2026-07-29",
+    "dateModified": "2026-07-29"
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is ERR_MODULE_NOT_FOUND in Node.js?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ERR_MODULE_NOT_FOUND is the error code thrown by Node.js's native ESM loader when an import statement cannot be resolved. It is the ESM counterpart to the CommonJS MODULE_NOT_FOUND code. The full message reads: Error [ERR_MODULE_NOT_FOUND]: Cannot find module './utils' imported from /app/index.js. Unlike the CJS loader, the ESM loader does not automatically try adding .js, .json, or /index.js — every specifier must be exact."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_MODULE_NOT_FOUND happen even when the file exists?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The ESM loader requires exact specifiers. If the file exists as utils.js but your import says './utils' (no extension), the loader looks for a file literally named 'utils' — which does not exist. Add the .js extension: import { helper } from './utils.js'. This is mandatory in ESM regardless of Node.js version."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_MODULE_NOT_FOUND in a TypeScript project?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Set 'module' and 'moduleResolution' to 'Node16' or 'NodeNext' in tsconfig.json. TypeScript will then enforce .js extensions at compile time. In your .ts source files, write import { helper } from './utils.js' even though the source file is utils.ts — the .js extension refers to the compiled output. If using a bundler (Vite, esbuild, webpack), use moduleResolution: 'bundler' which relaxes the extension requirement."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does ERR_MODULE_NOT_FOUND happen in production but not locally with ts-node?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ts-node (without --esm flag) transpiles TypeScript and runs it through the CJS loader, which silently resolves extensions. In production, Node.js runs the compiled .js output through the strict ESM loader, which requires explicit extensions. Fix: compile with tsc, then ensure all imports in source have .js extensions (with moduleResolution: Node16/NodeNext), or switch to tsx which handles this transparently."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between ERR_MODULE_NOT_FOUND and MODULE_NOT_FOUND?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "MODULE_NOT_FOUND is thrown by the CommonJS require() loader. ERR_MODULE_NOT_FOUND is thrown by the native ESM import loader. The ESM error message includes 'imported from /path/to/file.js' indicating the importing file. The CJS error includes a 'requireStack' array. The ESM loader is stricter: it does not try alternative extensions or index.js files automatically."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_MODULE_NOT_FOUND for a package that does not have an ESM build?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Use createRequire to load CJS packages from an ESM context: import { createRequire } from 'module'; const require = createRequire(import.meta.url); const pkg = require('legacy-cjs-package');. Alternatively, check if a newer version of the package has an ESM build, or wrap the package import in a separate .cjs helper file."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does importing a directory cause ERR_MODULE_NOT_FOUND in ESM?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "ESM does not support directory imports. import './utils' cannot resolve to './utils/index.js' automatically — that is a CJS-only behavior. Fix: import the file explicitly with import './utils/index.js', or add a package.json with an 'exports' or 'main' field inside the utils directory."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I fix ERR_MODULE_NOT_FOUND in a Docker or CI environment?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "In Docker/CI, ERR_MODULE_NOT_FOUND for a package usually means node_modules was not installed inside the container. Run npm install inside the container in the Dockerfile before copying source. For ESM extension errors in CI, the cause is the same as local: missing .js extensions or wrong tsconfig settings. The strict ESM loader behaves identically everywhere."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "nodejs-errors.dev",
+        "item": "https://nodejs-errors.dev/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "ERR_MODULE_NOT_FOUND",
+        "item": "https://nodejs-errors.dev/ERR_MODULE_NOT_FOUND/"
+      }
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    "name": "How to fix Error [ERR_MODULE_NOT_FOUND]: Cannot find module in Node.js ESM",
+    "step": [
+      {
+        "@type": "HowToStep",
+        "position": 1,
+        "name": "Add .js extension to every relative import",
+        "text": "Change import { x } from './utils' to import { x } from './utils.js'. The ESM loader never adds extensions automatically — the specifier must exactly match the file on disk."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 2,
+        "name": "Set 'type': 'module' in package.json",
+        "text": "Without 'type':'module', .js files are treated as CommonJS and import statements cause SyntaxError. Add this field to enable ESM for the whole package."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 3,
+        "name": "Set module and moduleResolution to Node16 or NodeNext in tsconfig.json",
+        "text": "For TypeScript ESM projects, set both 'module' and 'moduleResolution' to 'Node16' or 'NodeNext'. TypeScript will then enforce .js extensions on relative imports at compile time, preventing runtime ERR_MODULE_NOT_FOUND."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 4,
+        "name": "Use .js extension in TypeScript source imports despite the source being .ts",
+        "text": "In TypeScript + Node16/NodeNext, write import { helper } from './utils.js' in .ts files. TypeScript resolves './utils.js' to './utils.ts' during compilation, and the compiled output retains the correct .js extension."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 5,
+        "name": "Replace directory imports with explicit file paths",
+        "text": "Change import './models' to import './models/index.js'. ESM forbids directory imports; there is no automatic /index.js resolution."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 6,
+        "name": "Add or fix the package exports map",
+        "text": "If importing a subpath from an installed package, ensure that path is listed under 'exports' in the package's package.json with an 'import' condition pointing to a valid file."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 7,
+        "name": "Use createRequire for CJS-only packages inside ESM",
+        "text": "import { createRequire } from 'module'; const require = createRequire(import.meta.url); const pkg = require('legacy-package'); — this loads a CJS module from an ESM file without converting the whole project."
+      },
+      {
+        "@type": "HowToStep",
+        "position": 8,
+        "name": "Run npm install inside Docker containers",
+        "text": "If ERR_MODULE_NOT_FOUND appears for an installed package in Docker, the container is missing node_modules. Copy package.json first, run npm install inside the container, then copy source."
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.7;
+      color: #1a1a1a;
+      background: #fff;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+    nav.breadcrumb { font-size: 0.82rem; color: #888; margin-bottom: 1.5rem; }
+    nav.breadcrumb a { color: #888; text-decoration: none; }
+    nav.breadcrumb a:hover { text-decoration: underline; }
+    nav.breadcrumb span { margin: 0 0.35rem; }
+    header { border-bottom: 3px solid #d63031; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header .error-badge {
+      display: inline-block;
+      background: #d63031;
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 0.2rem 0.6rem;
+      border-radius: 3px;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+    }
+    header .error-code {
+      display: block;
+      font-size: 0.85rem;
+      color: #888;
+      margin-top: 0.4rem;
+    }
+    h1 { font-size: 2rem; font-weight: 800; line-height: 1.2; color: #d63031; word-break: break-all; }
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.5rem; color: #111; }
+    h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.25rem; color: #333; }
+    p { margin-bottom: 0.85rem; }
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 0.875rem;
+      margin: 0.5rem 0 1rem;
+    }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    p code, li code {
+      background: #f0f0f0;
+      padding: 0.15em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    .quick-answer {
+      background: #f0fff4;
+      border-left: 4px solid #00b894;
+      padding: 0.75rem 1rem;
+      border-radius: 0 6px 6px 0;
+      margin: 0 0 2rem;
+      font-size: 0.95rem;
+    }
+    .callout {
+      border-left: 4px solid #0984e3;
+      background: #f0f7ff;
+      padding: 0.75rem 1rem;
+      border-radius: 0 6px 6px 0;
+      margin: 1rem 0;
+    }
+    .callout.warn { border-color: #e17055; background: #fff5f3; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th { background: #f5f5f5; text-align: left; padding: 0.5rem 0.75rem; border: 1px solid #ddd; }
+    td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; vertical-align: top; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.8rem; color: #888; }
+    .faq-item { border: 1px solid #e8e8e8; border-radius: 6px; margin-bottom: 0.75rem; }
+    .faq-item summary { font-weight: 700; padding: 0.75rem 1rem; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .faq-item summary::after { content: "+"; font-size: 1.25rem; color: #d63031; }
+    .faq-item[open] summary::after { content: "−"; }
+    .faq-item .faq-answer { padding: 0 1rem 0.75rem; color: #333; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a>
+  <span aria-hidden="true">›</span>
+  <span aria-current="page">ERR_MODULE_NOT_FOUND</span>
+</nav>
+
+<header>
+  <span class="error-badge">Node.js ESM Error</span>
+  <h1>Error [ERR_MODULE_NOT_FOUND]: Cannot find module</h1>
+  <span class="error-code">error code: <code>ERR_MODULE_NOT_FOUND</code> &nbsp;·&nbsp; loader: ESM (<code>import</code>)</span>
+  <p>Complete reference — what it means, every cause unique to ESM resolution, and how to fix it.</p>
+</header>
+
+<main>
+
+  <div class="quick-answer">
+    <strong>Quick Answer:</strong> Node.js throws <code>Error [ERR_MODULE_NOT_FOUND]: Cannot find module './utils' imported from /app/index.js</code> when the <strong>ESM loader</strong> cannot resolve an <code>import</code> specifier. The #1 cause is a <strong>missing <code>.js</code> extension</strong> in a relative import — ESM never adds extensions automatically. Fix: change <code>import { x } from './utils'</code> to <code>import { x } from './utils.js'</code>. In TypeScript, set <code>"module": "Node16"</code> and <code>"moduleResolution": "Node16"</code> in <code>tsconfig.json</code> so the compiler enforces this for you.
+  </div>
+
+  <h2>What is ERR_MODULE_NOT_FOUND?</h2>
+  <p>
+    <code>ERR_MODULE_NOT_FOUND</code> is thrown exclusively by Node.js's native
+    <a href="https://nodejs.org/api/esm.html" rel="noopener noreferrer">ES module (ESM) loader</a>
+    when an <code>import</code> statement or <code>import()</code> call cannot be resolved to a file
+    or package. It is the ESM counterpart to the CommonJS
+    <a href="https://nodejs-errors.dev/MODULE_NOT_FOUND/"><code>MODULE_NOT_FOUND</code></a> code.
+  </p>
+  <p>
+    The critical difference: <strong>the ESM loader is strict</strong>. It does not automatically try
+    adding <code>.js</code>, look for <code>/index.js</code> in directories, or fall back to other
+    extensions. Every specifier must exactly name a resolvable file.
+  </p>
+
+  <div class="callout">
+    <strong>Exact error messages you will see:</strong><br>
+    <code>Error [ERR_MODULE_NOT_FOUND]: Cannot find module './utils' imported from /app/index.js</code><br>
+    <code>Error [ERR_MODULE_NOT_FOUND]: Cannot find module './helpers/format' imported from /app/src/index.js</code><br>
+    <code>Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'some-package' imported from /app/index.js</code><br>
+    <code>Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/app/dist/utils' imported from /app/dist/index.js</code>
+  </div>
+
+  <h2>Full Error Example</h2>
+  <pre><code>node:internal/modules/esm/resolve:838
+  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);
+  ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module './utils' imported from /app/index.js
+Did you mean to import ./utils.js?
+    at packageResolve (node:internal/modules/esm/resolve:838:9)
+    at moduleResolve (node:internal/modules/esm/resolve:907:20)
+    at defaultResolve (node:internal/modules/esm/resolve:1038:11)
+    at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:557:12)
+    at ModuleLoader.resolve (node:internal/modules/esm/loader:530:38)
+    at ModuleLoader.getModuleJob (node:internal/modules/esm/loader:246:38)
+    at ModuleWrap.&lt;anonymous&gt; (node:internal/modules/esm/module_job:87:39) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///app/utils'
+}</code></pre>
+
+  <p>
+    Since Node.js 18, the error message sometimes includes a hint: <em>"Did you mean to import
+    ./utils.js?"</em> — a strong signal that a missing extension is the root cause.
+    The error object also carries a <code>url</code> field containing the unresolved specifier as a
+    <code>file://</code> URL.
+  </p>
+
+  <h2>ERR_MODULE_NOT_FOUND vs MODULE_NOT_FOUND</h2>
+  <table>
+    <thead>
+      <tr><th>Property</th><th>ERR_MODULE_NOT_FOUND (ESM)</th><th>MODULE_NOT_FOUND (CJS)</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Loader</td>
+        <td>Native ESM (<code>import</code>)</td>
+        <td>CommonJS (<code>require()</code>)</td>
+      </tr>
+      <tr>
+        <td>Triggered by</td>
+        <td><code>import</code> statements, <code>import()</code></td>
+        <td><code>require()</code> calls</td>
+      </tr>
+      <tr>
+        <td>Message format</td>
+        <td><code>Cannot find module '...' imported from /path/to/file.js</code></td>
+        <td><code>Cannot find module '...'</code> + <code>requireStack</code></td>
+      </tr>
+      <tr>
+        <td>Automatic extension resolution</td>
+        <td>No — specifier must be exact</td>
+        <td>Yes — tries <code>.js</code>, <code>.json</code>, <code>.node</code></td>
+      </tr>
+      <tr>
+        <td>Automatic index.js lookup</td>
+        <td>No — directory imports are forbidden</td>
+        <td>Yes — <code>require('./dir')</code> tries <code>./dir/index.js</code></td>
+      </tr>
+      <tr>
+        <td>When it fires</td>
+        <td>Package has <code>"type":"module"</code> or file is <code>.mjs</code></td>
+        <td>File is <code>.js</code> without <code>"type":"module"</code> or is <code>.cjs</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>All Causes at a Glance</h2>
+  <table>
+    <thead>
+      <tr><th>Cause</th><th>Typical symptom</th><th>Quick fix</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Missing <code>.js</code> extension in relative import</td>
+        <td><code>Cannot find module './utils'</code> — file <code>utils.js</code> exists</td>
+        <td>Change to <code>import ... from './utils.js'</code></td>
+      </tr>
+      <tr>
+        <td>TypeScript source — wrong <code>moduleResolution</code></td>
+        <td>Compiled output has bare imports; fails at runtime</td>
+        <td>Set <code>module + moduleResolution: Node16</code> in tsconfig</td>
+      </tr>
+      <tr>
+        <td>Missing <code>"type":"module"</code> in package.json</td>
+        <td>ESM syntax in <code>.js</code> → CJS loader → different errors</td>
+        <td>Add <code>"type":"module"</code> to <code>package.json</code></td>
+      </tr>
+      <tr>
+        <td>Directory import (no index.js auto-resolution)</td>
+        <td><code>Cannot find module './models'</code> — directory exists</td>
+        <td>Import <code>./models/index.js</code> explicitly</td>
+      </tr>
+      <tr>
+        <td>Package not installed</td>
+        <td><code>Cannot find package 'express'</code></td>
+        <td><code>npm install express</code></td>
+      </tr>
+      <tr>
+        <td>Missing package <code>exports</code> map entry</td>
+        <td><code>Cannot find module 'pkg/internal'</code></td>
+        <td>Use a public export path or <code>createRequire</code></td>
+      </tr>
+      <tr>
+        <td>CJS-only package without ESM interop</td>
+        <td><code>Cannot find package 'legacy-pkg'</code></td>
+        <td>Use <code>createRequire(import.meta.url)</code></td>
+      </tr>
+      <tr>
+        <td>Case sensitivity on Linux/CI</td>
+        <td>Works on macOS/Windows, fails on Linux</td>
+        <td>Match filename case exactly in import path</td>
+      </tr>
+      <tr>
+        <td>ts-node without ESM mode</td>
+        <td>Fails with extensions at compile time or at runtime after tsc</td>
+        <td>Use <code>tsx</code> or configure <code>ts-node</code> ESM mode</td>
+      </tr>
+      <tr>
+        <td>Wrong relative path level</td>
+        <td><code>Cannot find module '../utils'</code> when it's <code>'../../utils'</code></td>
+        <td>Verify path relative to current file, not project root</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Cause 1 – Missing <code>.js</code> Extension in Relative Import</h2>
+  <p>
+    This is the single most common cause. The ESM specification requires that relative specifiers
+    include the full file extension — there is no fallback resolution. Node.js will not try
+    <code>./utils.js</code> just because <code>./utils</code> was requested.
+  </p>
+
+  <h3>CommonJS vs ESM resolution side by side</h3>
+  <pre><code>// CommonJS (require) — extension is optional
+const utils = require('./utils');   // Node.js tries utils.js, utils.json, utils/index.js
+const utils = require('./utils.js'); // also works
+
+// ESM (import) — extension is MANDATORY for relative specifiers
+import { helper } from './utils';    // ERR_MODULE_NOT_FOUND: Cannot find module './utils'
+import { helper } from './utils.js'; // correct</code></pre>
+
+  <h3>Common patterns that need updating</h3>
+  <pre><code>// Before (worked in CJS, fails in ESM)
+import { formatDate } from './helpers/format';
+import config from '../config';
+import * as db from './db/index';
+
+// After (ESM-compliant)
+import { formatDate } from './helpers/format.js';
+import config from '../config.js';
+import * as db from './db/index.js';</code></pre>
+
+  <div class="callout warn">
+    <strong>JSON imports also need an extension and an import assertion (Node.js 18+):</strong><br>
+    <code>import data from './data.json' with { type: 'json' };</code><br>
+    Without the <code>with { type: 'json' }</code> assertion, Node.js throws
+    <code>ERR_IMPORT_ASSERTION_TYPE_MISSING</code> in some versions.
+  </div>
+
+  <h2>Cause 2 – TypeScript: Wrong <code>moduleResolution</code> Setting</h2>
+  <p>
+    This is the #1 TypeScript ESM pain point. TypeScript does <strong>not rewrite import paths</strong>
+    during compilation — whatever you write in the <code>.ts</code> source is emitted verbatim into the
+    compiled <code>.js</code> output. If you wrote <code>import { x } from './utils'</code> (no
+    extension), the compiled output also has no extension, and Node.js's ESM loader throws
+    <code>ERR_MODULE_NOT_FOUND</code>.
+  </p>
+
+  <h3>The three moduleResolution options and what they mean for ESM</h3>
+  <table>
+    <thead>
+      <tr><th>moduleResolution</th><th>Enforces <code>.js</code> extension?</th><th>Use with</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>node</code> (legacy)</td>
+        <td>No — TypeScript won't warn about missing extensions</td>
+        <td>CJS projects only</td>
+        <td>Compiled output fails at runtime in ESM mode</td>
+      </tr>
+      <tr>
+        <td><code>node16</code> / <code>nodenext</code></td>
+        <td>Yes — TypeScript errors at compile time if extension is missing</td>
+        <td>Node.js ESM (<code>type: module</code>)</td>
+        <td>Mirrors actual Node.js ESM resolution rules exactly</td>
+      </tr>
+      <tr>
+        <td><code>bundler</code></td>
+        <td>No — extensions are optional</td>
+        <td>Vite, esbuild, webpack, tsup</td>
+        <td>Bundler rewrites paths; do not use for Node.js ESM without a bundler</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Correct tsconfig.json for Node.js ESM</h3>
+  <pre><code>// tsconfig.json — recommended for Node.js ESM projects
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",          // or "NodeNext"
+    "moduleResolution": "Node16", // or "NodeNext" — must match module
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}</code></pre>
+
+  <h3>TypeScript source file — use <code>.js</code> extension even though source is <code>.ts</code></h3>
+  <pre><code>// src/index.ts
+// Import uses .js extension — TypeScript resolves this to src/utils.ts at compile time
+// The compiled dist/index.js will contain: import { helper } from './utils.js'
+// which correctly references dist/utils.js at runtime
+
+import { helper } from './utils.js';   // correct — .js refers to the compiled output
+import { helper } from './utils.ts';   // wrong — TypeScript rejects this
+import { helper } from './utils';      // wrong — ERR_MODULE_NOT_FOUND at runtime</code></pre>
+
+  <div class="callout">
+    <strong>TypeScript tip:</strong> With <code>moduleResolution: "Node16"</code>, TypeScript will
+    show a compile-time error <em>"Relative import paths need explicit file extensions..."</em> if you
+    forget <code>.js</code>. This converts a runtime <code>ERR_MODULE_NOT_FOUND</code> into a
+    compile-time type error — catch it before shipping.
+  </div>
+
+  <h3>Correct tsconfig.json for bundler-based projects (Vite, esbuild, tsup)</h3>
+  <pre><code>// tsconfig.json — for projects where a bundler handles resolution
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",  // bundler handles extensions, not Node.js
+    "outDir": "./dist",
+    "strict": true
+  }
+}</code></pre>
+
+  <h2>Cause 3 – Missing <code>"type": "module"</code> in package.json</h2>
+  <p>
+    Without <code>"type": "module"</code>, Node.js treats <code>.js</code> files as CommonJS. An
+    <code>import</code> statement in a CJS file throws <code>SyntaxError: Cannot use import statement
+    outside a module</code>, not <code>ERR_MODULE_NOT_FOUND</code>. However, the missing field is
+    still a common root cause that puts the whole project on the wrong loader path.
+  </p>
+  <pre><code>// package.json — required for ESM
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "type": "module",   // ← enables ESM for all .js files in this package
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  }
+}</code></pre>
+  <p>
+    Without <code>"type": "module"</code>, use <code>.mjs</code> extension for individual ESM files
+    instead of <code>.js</code>. The <code>.mjs</code> extension always forces ESM regardless of the
+    <code>type</code> field.
+  </p>
+  <pre><code>// Option 1: use "type": "module" in package.json → all .js files are ESM
+// Option 2: rename individual files to .mjs → those files are ESM
+// Option 3: keep CJS and use dynamic import() for ESM packages
+
+// Mixing .mjs and .cjs in one project
+import { esm } from './helper.mjs';          // forced ESM
+const cjs = require('./legacy.cjs');          // forced CJS (inside a .cjs file)
+const esmPkg = await import('./utils.mjs');   // dynamic import from CJS file</code></pre>
+
+  <h2>Cause 4 – Directory Import (No Automatic <code>index.js</code> in ESM)</h2>
+  <p>
+    In CommonJS, <code>require('./models')</code> automatically resolves to <code>./models/index.js</code>
+    if <code>models</code> is a directory. The ESM loader does not do this —
+    <a href="https://nodejs-errors.dev/ERR_UNSUPPORTED_DIR_IMPORT/"><code>ERR_UNSUPPORTED_DIR_IMPORT</code></a>
+    is thrown instead (or <code>ERR_MODULE_NOT_FOUND</code> if the directory itself doesn't exist).
+  </p>
+  <pre><code>// Wrong — ESM does not resolve directories to index.js
+import * as models from './models';
+import * as models from './models/';
+
+// Correct — explicit file path
+import * as models from './models/index.js';
+
+// Also correct — add a package.json inside the directory
+// models/package.json:
+// { "type": "module", "exports": { ".": "./index.js" } }
+// Then: import * as models from './models'; works via exports map</code></pre>
+
+  <h2>Cause 5 – Package Not Installed</h2>
+  <p>
+    When importing a third-party package and the package is not installed, the ESM loader throws
+    <code>Cannot find package 'package-name'</code>. This behaves identically to the CJS case.
+  </p>
+  <pre><code># The error
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /app/index.js
+
+# Fix
+npm install express
+# or
+yarn add express
+# or
+pnpm add express</code></pre>
+  <pre><code>// After installing, the ESM import works normally
+import express from 'express';
+import { Router } from 'express';</code></pre>
+
+  <div class="callout">
+    <strong>Note on bare package specifiers:</strong> Node.js resolves bare specifiers
+    (no <code>./</code> prefix) by looking in <code>node_modules</code>. For bare package specifiers
+    in ESM, <strong>no file extension is required</strong> — the extension requirement only applies
+    to relative (<code>./</code>, <code>../</code>) and absolute (<code>/</code>) specifiers.
+    <code>import express from 'express'</code> is always valid once the package is installed.
+  </div>
+
+  <h2>Cause 6 – Missing or Incomplete Package <code>exports</code> Map</h2>
+  <p>
+    Modern packages use the <code>"exports"</code> field in <code>package.json</code> to declare
+    which subpaths can be imported. If you try to import a path not listed in <code>exports</code>,
+    the ESM loader throws <code>ERR_MODULE_NOT_FOUND</code> (or
+    <a href="https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/"><code>ERR_PACKAGE_PATH_NOT_EXPORTED</code></a>
+    if the package has an exports map but the specific path is missing).
+  </p>
+  <pre><code>// Error: Cannot find package 'some-pkg/internal/utils' imported from /app/index.js
+// because package.json exports does not include that path
+
+// package.json (in node_modules/some-pkg)
+{
+  "exports": {
+    ".": "./dist/index.js",
+    "./helpers": "./dist/helpers.js"
+    // "./internal/utils" is NOT listed — importing it throws ERR_MODULE_NOT_FOUND
+  }
+}
+
+// Fix option 1: use a public export path
+import { helper } from 'some-pkg/helpers';
+
+// Fix option 2: if you control the package, add the export
+{
+  "exports": {
+    ".": "./dist/index.js",
+    "./helpers": "./dist/helpers.js",
+    "./internal/utils": "./dist/internal/utils.js"  // added
+  }
+}
+
+// Fix option 3: use createRequire to bypass the exports map (CJS packages only)
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const utils = require('some-pkg/internal/utils');</code></pre>
+
+  <h2>Cause 7 – CJS-only Package Imported in ESM Context</h2>
+  <p>
+    Some older or niche packages are CommonJS-only and have no ESM export in their
+    <code>package.json</code>. Node.js's ESM loader can still load them — <strong>CJS packages
+    are interoperable with ESM</strong> via the default export. If the error fires, the package
+    is likely not installed, or its <code>"main"</code> field points to a non-existent file.
+  </p>
+  <pre><code>// CJS packages CAN be imported in ESM — no special handling needed in most cases
+import lodash from 'lodash';           // works — lodash is CJS
+import { merge } from 'lodash';        // also works (named imports from CJS default export)
+
+// If the package has no ESM build AND its main field is broken, use createRequire
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
+const legacyPkg = require('legacy-cjs-only-package');
+const { specificExport } = require('another-cjs-package/lib/specific');</code></pre>
+
+  <h2>Cause 8 – TypeScript with ts-node (CJS Hook Active)</h2>
+  <p>
+    By default, <code>ts-node</code> registers a CommonJS hook. When your project has
+    <code>"type": "module"</code>, <code>ts-node</code> may fail or fall back in unexpected ways.
+    The compiled or interpreted output then runs through the ESM loader with bare specifiers that were
+    fine under the CJS hook but fail under strict ESM.
+  </p>
+
+  <h3>Option A — Use tsx (recommended for development)</h3>
+  <pre><code># Install tsx
+npm install --save-dev tsx
+
+# Run TypeScript ESM files directly — no tsconfig tweaks needed
+npx tsx src/index.ts
+
+# Or add to package.json scripts
+{
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "dev:watch": "tsx watch src/index.ts"
+  }
+}</code></pre>
+
+  <h3>Option B — Use node --experimental-strip-types (Node.js 22.6+)</h3>
+  <pre><code># Node.js 22.6+ can strip TypeScript types natively (no compilation step)
+node --experimental-strip-types src/index.ts
+
+# Node.js 23.6+ — no flag needed
+node src/index.ts</code></pre>
+
+  <h3>Option C — Configure ts-node for ESM mode</h3>
+  <pre><code>// tsconfig.json — ts-node ESM configuration
+{
+  "compilerOptions": {
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "target": "ES2022"
+  },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"  // only if needed for legacy imports
+  }
+}
+
+// Run with:
+// node --loader ts-node/esm src/index.ts
+// or:
+// ts-node-esm src/index.ts</code></pre>
+
+  <h3>Option D — Compile with tsc and run compiled output</h3>
+  <pre><code># Build TypeScript to JavaScript
+npx tsc
+
+# Run the compiled output (Node.js reads dist/index.js with .js extensions intact)
+node dist/index.js</code></pre>
+
+  <h2>Cause 9 – Case Sensitivity on Linux / CI</h2>
+  <p>
+    macOS (HFS+/APFS default) and Windows (NTFS default) are case-insensitive. Linux is
+    case-sensitive. An import of <code>./Utils.js</code> when the file is <code>utils.js</code>
+    works locally but throws <code>ERR_MODULE_NOT_FOUND</code> in CI (usually Ubuntu) or in a
+    Docker container (usually Alpine/Debian Linux).
+  </p>
+  <pre><code>// File on disk: src/utils.js
+
+// Wrong — works on macOS/Windows, throws ERR_MODULE_NOT_FOUND on Linux
+import { helper } from './Utils.js';
+import { helper } from './UTILS.js';
+
+// Correct — matches the actual filename on disk exactly
+import { helper } from './utils.js';</code></pre>
+  <p>
+    Use <code>eslint-plugin-import</code> with the <code>import/no-unresolved</code> rule (or
+    TypeScript's <code>forceConsistentCasingInFileNames</code> compiler option) to catch
+    case mismatches at lint/compile time before they reach CI.
+  </p>
+
+  <h2>Safe ESM Import Patterns</h2>
+
+  <h3>Relative imports — always use <code>.js</code></h3>
+  <pre><code>// src/server.ts (TypeScript, compiled to dist/server.js)
+import { createApp } from './app.js';           // compiled: dist/app.js
+import { db } from './db/connection.js';        // compiled: dist/db/connection.js
+import { UserSchema } from './schemas/user.js'; // compiled: dist/schemas/user.js
+import type { Config } from './types.js';       // type-only import, erased at compile time</code></pre>
+
+  <h3>ESM entry point pattern with package.json exports</h3>
+  <pre><code>// package.json
+{
+  "name": "my-library",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./helpers": {
+      "import": "./dist/helpers.js",
+      "types": "./dist/helpers.d.ts"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js"
+}</code></pre>
+
+  <h3>ESM + CJS hybrid package (dual build)</h3>
+  <pre><code>// tsup.config.ts — build both ESM and CJS from TypeScript source
+import { defineConfig } from 'tsup';
+
+export default defineConfig({
+  entry: ['src/index.ts'],
+  format: ['cjs', 'esm'],    // produce both .cjs and .js
+  dts: true,                  // generate .d.ts files
+  splitting: false,
+  sourcemap: true,
+  clean: true,
+});</code></pre>
+
+  <h3>Using <code>import.meta.url</code> instead of <code>__dirname</code> in ESM</h3>
+  <pre><code>// In ESM, __dirname and __filename are not available
+// Use import.meta.url instead
+
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Now use __dirname as you would in CJS
+const configPath = join(__dirname, '../config/default.json');
+
+// Or use URL directly — often cleaner in ESM
+const configURL = new URL('../config/default.json', import.meta.url);
+import config from '../config/default.json' with { type: 'json' };</code></pre>
+
+  <h3>Dynamic <code>import()</code> for conditional loading</h3>
+  <pre><code>// Dynamic import works in both CJS and ESM files
+// Useful for loading ESM-only packages from CJS, or for lazy loading
+
+async function loadModule(name) {
+  try {
+    const mod = await import(name);
+    return mod.default ?? mod;
+  } catch (err) {
+    if (err.code === 'ERR_MODULE_NOT_FOUND') {
+      console.error(`Module '${name}' not found. Run: npm install ${name}`);
+      process.exit(1);
+    }
+    throw err;
+  }
+}
+
+// Example: load chalk (ESM-only) from a CJS file
+const chalk = await loadModule('chalk');</code></pre>
+
+  <h2>Debugging Checklist</h2>
+  <ol>
+    <li>Read the <strong>"imported from /path/to/file.js"</strong> part of the message — it tells you exactly which file has the bad import. Open that file and find the import statement.</li>
+    <li>Check if Node.js is hinting: <em>"Did you mean to import ./utils.js?"</em> — if yes, add the <code>.js</code> extension immediately.</li>
+    <li>Confirm the file actually exists on disk with the exact casing. On Linux/CI, case matters.</li>
+    <li>Check <code>package.json</code> for <code>"type": "module"</code> — without it, <code>.js</code> files run as CJS.</li>
+    <li>For TypeScript projects: check <code>tsconfig.json</code> — is <code>module</code> and <code>moduleResolution</code> set to <code>Node16</code> or <code>NodeNext</code>?</li>
+    <li>For TypeScript: is the compiled output in <code>dist/</code> missing the <code>.js</code> extension in imports? If so, the tsconfig settings are wrong.</li>
+    <li>Is it a package (not a relative file)? Run <code>npm ls &lt;package-name&gt;</code> to confirm it's installed locally.</li>
+    <li>Is it a subpath import like <code>pkg/lib/utils</code>? Check if that path is listed in the package's <code>"exports"</code> field.</li>
+    <li>Is it a directory import (<code>./models</code> pointing to a folder)? Rewrite as <code>./models/index.js</code>.</li>
+    <li>Run <code>node --input-type=module &lt;&lt;&lt; "import './your-file.js'"</code> to test ESM resolution in isolation.</li>
+  </ol>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <details class="faq-item">
+    <summary>What is ERR_MODULE_NOT_FOUND in Node.js?</summary>
+    <div class="faq-answer">
+      <p>
+        <code>ERR_MODULE_NOT_FOUND</code> is thrown exclusively by Node.js's native ESM
+        (<code>import</code>) loader when it cannot resolve a module specifier. It is the ESM
+        counterpart to the CommonJS <code>MODULE_NOT_FOUND</code> code. The full message reads:
+        <code>Error [ERR_MODULE_NOT_FOUND]: Cannot find module './utils' imported from /app/index.js</code>.
+        Unlike the CJS loader, the ESM loader requires exact specifiers — it never adds <code>.js</code>
+        or looks for <code>/index.js</code> automatically.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does ERR_MODULE_NOT_FOUND happen even when the file exists?</summary>
+    <div class="faq-answer">
+      <p>
+        The file exists, but the import path is missing the <code>.js</code> extension. The ESM
+        loader looks for a file literally named <code>utils</code> (no extension) and finds nothing.
+        Change <code>import { x } from './utils'</code> to <code>import { x } from './utils.js'</code>.
+        This is the #1 cause of this error.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_MODULE_NOT_FOUND in a TypeScript project?</summary>
+    <div class="faq-answer">
+      <p>
+        Set <code>"module": "Node16"</code> and <code>"moduleResolution": "Node16"</code> in
+        <code>tsconfig.json</code>. Then add <code>.js</code> extensions to all relative imports in
+        your <code>.ts</code> source files:
+      </p>
+      <pre style="margin: 0.5rem 0;"><code>// src/index.ts
+import { helper } from './utils.js'; // .js = compiled output, not source</code></pre>
+      <p>
+        TypeScript will resolve <code>./utils.js</code> to <code>./utils.ts</code> at compile time.
+        The emitted <code>dist/index.js</code> retains <code>./utils.js</code>, which correctly
+        references <code>dist/utils.js</code> at runtime.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does it work locally with ts-node but fail in production?</summary>
+    <div class="faq-answer">
+      <p>
+        <code>ts-node</code> (without <code>--esm</code>) uses the CJS hook, which silently resolves
+        missing extensions. In production, Node.js runs the compiled <code>.js</code> output through
+        the strict ESM loader, which does not add extensions. The fix is to ensure all imports in
+        <code>.ts</code> source files have <code>.js</code> extensions so the compiled output is
+        correct, then compile with <code>tsc</code> and run the compiled output.
+        Alternatively, switch the dev runner to <code>tsx</code> which behaves the same in both
+        environments.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>What is the difference between ERR_MODULE_NOT_FOUND and MODULE_NOT_FOUND?</summary>
+    <div class="faq-answer">
+      <p>
+        <code>MODULE_NOT_FOUND</code> is thrown by <code>require()</code> (CommonJS loader).
+        <code>ERR_MODULE_NOT_FOUND</code> is thrown by <code>import</code> (ESM loader).
+        The ESM error message includes <em>"imported from /path/to/file.js"</em>. The CJS error
+        includes a <code>requireStack</code> array. The key behavioral difference: the CJS loader
+        automatically tries <code>.js</code>, <code>.json</code>, <code>/index.js</code>; the ESM
+        loader does none of this.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I use a CJS-only package inside an ESM project?</summary>
+    <div class="faq-answer">
+      <p>
+        Most CJS packages work fine with a regular ESM <code>import</code> — Node.js handles CJS/ESM
+        interop automatically. If you get <code>ERR_MODULE_NOT_FOUND</code> for a CJS package, it is
+        usually not installed or its <code>"main"</code> field points to a missing file. For accessing
+        internal CJS paths that bypass the <code>exports</code> map, use <code>createRequire</code>:
+      </p>
+      <pre style="margin: 0.5rem 0;"><code>import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const internal = require('legacy-pkg/lib/internal');</code></pre>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Why does importing a directory cause ERR_MODULE_NOT_FOUND in ESM?</summary>
+    <div class="faq-answer">
+      <p>
+        The ESM loader does not resolve directories to <code>index.js</code> — that is a CJS-only
+        behavior. The proper ESM error for an existing directory is
+        <code>ERR_UNSUPPORTED_DIR_IMPORT</code>, but if the directory itself does not exist you get
+        <code>ERR_MODULE_NOT_FOUND</code>. Fix: always import the full file path including filename
+        and extension: <code>import './models/index.js'</code> instead of <code>import './models'</code>.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>How do I fix ERR_MODULE_NOT_FOUND in Docker or CI?</summary>
+    <div class="faq-answer">
+      <p>
+        If the error is for a package (bare specifier), <code>node_modules</code> was not installed
+        inside the container. Structure your Dockerfile correctly:
+      </p>
+      <pre style="margin: 0.5rem 0;"><code>FROM node:22-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+CMD ["node", "dist/index.js"]</code></pre>
+      <p>
+        If the error is for a relative file (<code>./utils</code>), the ESM extension rule applies
+        equally in Docker/CI — add <code>.js</code> to the import.
+      </p>
+    </div>
+  </details>
+
+  <details class="faq-item">
+    <summary>Should I use moduleResolution: bundler or nodenext for my TypeScript project?</summary>
+    <div class="faq-answer">
+      <p>
+        Use <code>moduleResolution: "NodeNext"</code> (or <code>"Node16"</code>) when your project
+        runs directly on Node.js — this mirrors actual Node.js ESM resolution and enforces
+        <code>.js</code> extensions at compile time, preventing runtime
+        <code>ERR_MODULE_NOT_FOUND</code>. Use <code>moduleResolution: "bundler"</code> when a
+        bundler (Vite, esbuild, tsup, webpack) processes your output — bundlers rewrite specifiers
+        and do not need explicit extensions. Never use <code>moduleResolution: "node"</code>
+        (legacy) for new ESM projects.
+      </p>
+    </div>
+  </details>
+
+  <h2>Related Errors</h2>
+  <ul>
+    <li><a href="https://nodejs-errors.dev/MODULE_NOT_FOUND/"><code>MODULE_NOT_FOUND</code></a> – the CommonJS <code>require()</code> counterpart; thrown when <code>require()</code> cannot find a module (extensions optional, index.js auto-resolved)</li>
+    <li><a href="https://nodejs-errors.dev/ERR_UNSUPPORTED_DIR_IMPORT/"><code>ERR_UNSUPPORTED_DIR_IMPORT</code></a> – thrown when an ESM import targets a directory that exists (as opposed to a path that doesn't exist at all)</li>
+    <li><a href="https://nodejs-errors.dev/ERR_PACKAGE_PATH_NOT_EXPORTED/"><code>ERR_PACKAGE_PATH_NOT_EXPORTED</code></a> – package is installed but the specific subpath is not in the exports map</li>
+    <li><a href="https://nodejs-errors.dev/ERR_REQUIRE_ESM/"><code>ERR_REQUIRE_ESM</code></a> – opposite direction: using <code>require()</code> on a file that is ESM-only</li>
+    <li><a href="https://nodejs-errors.dev/SyntaxError-Cannot-use-import-statement/"><code>SyntaxError: Cannot use import statement outside a module</code></a> – using <code>import</code> in a file that Node.js treats as CJS (missing <code>"type":"module"</code>)</li>
+    <li><a href="https://nodejs-errors.dev/ERR_UNKNOWN_FILE_EXTENSION/"><code>ERR_UNKNOWN_FILE_EXTENSION</code></a> – ESM loader encounters a <code>.ts</code> or other non-native extension it cannot execute</li>
+    <li><a href="https://nodejs-errors.dev/ERR_INVALID_PACKAGE_CONFIG/"><code>ERR_INVALID_PACKAGE_CONFIG</code></a> – malformed <code>package.json</code> causing module resolution to fail before the file lookup</li>
+  </ul>
+
+</main>
+
+<footer>
+  <address style="font-style:normal;">
+    <p>Last updated: 2026-07-29 &nbsp;·&nbsp; <a href="https://nodejs-errors.dev/">nodejs-errors.dev</a> &nbsp;·&nbsp; <a href="https://nodejs.org/api/esm.html">Official Node.js ESM docs</a></p>
+  </address>
+</footer>
+
+</body>
+</html>
